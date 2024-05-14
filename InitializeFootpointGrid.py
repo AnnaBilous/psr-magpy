@@ -84,23 +84,24 @@ if __name__ == "__main__":
 
 
     # Create the main parser
-    parser = ap.ArgumentParser(description='Initialize fiel line footpoint grid')
+    parser = ap.ArgumentParser(description='Initialize the grid of field line footpoints')
 
     # Create subparsers for different values of argument #1
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    subparsers = parser.add_subparsers(dest='command', help='Tesselation type')
 
     # Subparser for spherical
-    parser_spherical = subparsers.add_parser('spherical', help='Input parameters for spherical grid')
+    parser_spherical = subparsers.add_parser('spherical', help='Uniform division in longitude/latitude. \
+                                             Number of footpoints: nlat*(nlong-1)+1')
+    parser_spherical.add_argument('nlat', help='Number of latitude divisions')
     parser_spherical.add_argument('nlong', help='Number of longitude divisions')
-    parser_spherical.add_argument('nlat', help='Number of latiude divisions')
 
     # Subparser for random
-    parser_random = subparsers.add_parser('random', help='Unifom random distribution on a sphere')
-    parser_random.add_argument('nline', help='Number of lines for uniform random distribution')
+    parser_random = subparsers.add_parser('random', help='Random uniform distribution of points on sphere')
+    parser_random.add_argument('nline', help='Number of footpoints')
 
     # Subparser for healpix
     parser_healpix = subparsers.add_parser('healpix', help='Healpix tesselation')
-    parser_healpix.add_argument('nside', help='Nside for healpix distribution')
+    parser_healpix.add_argument('nside', help='Number of pixels per side. Number of footpoints: 12*nside^2.')
 
     # Parse the arguments
     args = parser.parse_args()
@@ -113,6 +114,4 @@ if __name__ == "__main__":
 
 
 # TODO: add visualization of points on 2D plane.
-# TODO: other stuff
-# TODO: even more stuff
-# TODO: even more stuff
+
