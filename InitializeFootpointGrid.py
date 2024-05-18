@@ -10,20 +10,20 @@ def cart2sph(a,b,c):
 def cart2sph_ar(a,b,c):
    return 0
 
-class grid:
+class FootpointGrid:
     ''' Grid of field line foopoints. 
         Parameters: 
-            kind: "spherical", "quasiuniform", "healpix"
-            nside: nside parameter for healpix grid
+            grid_type: "spherical", "quasiuniform", "healpix"
+            
             
     
     '''
-    def __init__(self, kind='', nside=None, nlon=None, nlat=None, n=None, rot=None):
-        if not(kind in ['spherical', 'healpix', 'quasiuniform']):
-            print("Grid kind must be 'spherical', 'quasiuniform', or 'healpix'")
+    def __init__(self, grid_type='', **kwargs):
+        if not(grid_type in ['spherical', 'healpix', 'quasiuniform']):
+            print("Grid grid_type must be 'spherical', 'quasiuniform', or 'healpix'")
             return
-        self.kind = kind
-        if self.kind=='spherical':
+        self.grid_type = grid_type
+        if self.grid_type=='spherical':
             self.nlon = nlon
             self.nlat = nlat
             self.nline = self.nlon*(self.nlat-2)+2
@@ -54,7 +54,7 @@ class grid:
              self.y = self.y_or
              self.z = self.z_or
          
-        if self.kind=='quasiuniform':  
+        if self.grid_type=='quasiuniform':  
             self.n = n
             self.nline = n
             self.ph = np.zeros(self.n)
@@ -66,7 +66,7 @@ class grid:
             for i in np.arange(1, self.n-1, 1):
              self.ph[i] = np.mod((self.ph[i-1] + 3.6/self.n**0.5/(1-h[i]**2)**0.5), 2*np.pi)
              
-        if self.kind=='healpix':
+        if self.grid_type=='healpix':
             self.nside = nside
             self.nline = hp.nside2npix(nside)
             print( " Approx res at NSIDE {} is {:.2} deg ({} points)". format(nside, hp.nside2resol(nside, arcmin=True)/60,self.nline ))
@@ -87,31 +87,49 @@ if __name__ == "__main__":
     parser = ap.ArgumentParser(description='Initialize the grid of field line footpoints')
 
     # Create subparsers for different values of argument #1
-    subparsers = parser.add_subparsers(dest='command', help='Tesselation type')
+    subparsers = parser.add_subparsers(dest='grid_type', help='Tesselation type')
 
     # Subparser for spherical
     parser_spherical = subparsers.add_parser('spherical', help='Uniform division in longitude/latitude. \
-                                             Number of footpoints: nlat*(nlong-1)+1')
+                                             Number of footpoints: nlat*(nlong-2)+2')
     parser_spherical.add_argument('nlat', help='Number of latitude divisions')
     parser_spherical.add_argument('nlong', help='Number of longitude divisions')
 
     # Subparser for random
     parser_random = subparsers.add_parser('random', help='Random uniform distribution of points on sphere')
-    parser_random.add_argument('nline', help='Number of footpoints')
+    parser_random.add_argument('parameters', nargs='*', help='Grid parameters: number of footpoints nline=<int>')
+    #parser_random.add_argument('--nline', help='Number of footpoints')
 
     # Subparser for healpix
     parser_healpix = subparsers.add_parser('healpix', help='Healpix tesselation')
     parser_healpix.add_argument('nside', help='Number of pixels per side. Number of footpoints: 12*nside^2.')
 
+    print("Hi! I'm here!")
+
     # Parse the arguments
     args = parser.parse_args()
+    items_dict = {}
 
+    if args.grid_type == 'random':    
+        for item in args.parameters:
+            if '=' in item:
+                key, value = item.split('=', 1)
+                items_dict[key] = value
+            else:
+                print(f"Invalid item format: {item}. Expected format: key=value")
+
+    grid = FootpointGrid(grid_kind=args.grid_type, **items_dict)
+
+    print("Some stuff")
+    """
     # Depending on the chosen command, handle the arguments accordingly
     if args.command == 'spherical':
         print(f'Option 1 chosen with argument #1: {args.nlat} and subseq argument #2: {args.nlong}')
     elif args.command == 'random':
         print(f'Option 2 chosen with argument #1: {args.grid_type} and required argument #2: {args.nside}')
 
+    """
+    #grid = FootpointGrid(args.grid_grid_type, *grid_parameters)
 
 # TODO: add visualization of points on 2D plane.
 
