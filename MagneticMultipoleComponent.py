@@ -288,7 +288,7 @@ class MultipoleField:
             header_main.set("NSIDE", footpoints_grid.nside, "Healpix parameter nside")
 
         magnetic_field_list = [
-            vars(component) for component in magnetic_field.multipole_components
+            vars(component) for component in self.multipole_components
         ]
         column_names = ["component_number", "moment_type", "B_magnitude"]
         column_formats = ["K", "10A", "D"]
