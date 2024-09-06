@@ -264,6 +264,8 @@ class MultipoleField:
     def write_to_fits(
         self, footpoints_grid, vars_to_save_dict, filename, field_lines=None
     ):
+        print(f"Saving {vars_to_save_dict.keys()}")
+        print(f"Saving field lines: {not(field_lines is None)}")
         hdu_main = pf.PrimaryHDU()
         header_main = hdu_main.header
         header_main.set("GRIDTYPE", footpoints_grid.grid_type, "Grid type")
@@ -330,6 +332,7 @@ class MultipoleField:
             col = pf.Column(name="field_lines", format="PE", array=field_lines)
             fits_columns.append(col)
         hdu = pf.BinTableHDU.from_columns(fits_columns, name="field_data")
+        print(f"Writing {filename}.")
         hdulist = pf.HDUList([hdu_main, hdu_field_components, hdu])
         hdulist.writeto(filename, overwrite=True)
         return 0
