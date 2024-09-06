@@ -58,12 +58,12 @@ class field_component:
             "quadrupole",
         ], "Multipole must be dipole or quadrupole"
 
-        default_values.update(kwargs)
         print("Setting up field components with the following vars:")
         for key in default_values:
             print(f"\t\t{key}: {default_values[key]}")
         print("--------------------------------------")
-        
+        default_values.update(kwargs)
+
         self.component_number = default_values["component_number"]
         self.moment_type = default_values["moment_type"]
         self.B_magnitude = default_values["B_magnitude"]
@@ -180,16 +180,19 @@ class MultipoleField:
     def hit_surface(self, t, r, K):
         r = np.sum(r**2) ** 0.5
         return r - 0.999 * self.R_NS
+
     hit_surface.terminal = True
 
     def hit_Rmax(self, t, r, K):
         r = np.sum(r**2) ** 0.5
         return r - self.R_max
+
     hit_Rmax.terminal = True
 
     def hit_Rmin(self, t, r, K):
         r = np.sum(r**2) ** 0.5
         return r - self.R_min
+
     hit_Rmin.terminal = True
 
     def get_field_lines(
@@ -260,10 +263,7 @@ class MultipoleField:
 
     def write_to_fits(
         self, footpoints_grid, vars_to_save_dict, filename, field_lines=None
-    ): 
-        print(f"Saving: {vars_to_save_dict.keys()}")
-        save_field_lines = not(field_lines is None)
-        print(f"Saving field lines: {save_field_lines}")
+    ):
         hdu_main = pf.PrimaryHDU()
         header_main = hdu_main.header
         header_main.set("GRIDTYPE", footpoints_grid.grid_type, "Grid type")
@@ -286,7 +286,7 @@ class MultipoleField:
             header_main.set("NSIDE", footpoints_grid.nside, "Healpix parameter nside")
 
         magnetic_field_list = [
-            vars(component) for component in self.multipole_components
+            vars(component) for component in magnetic_field.multipole_components
         ]
         column_names = ["component_number", "moment_type", "B_magnitude"]
         column_formats = ["K", "10A", "D"]
@@ -331,9 +331,7 @@ class MultipoleField:
             fits_columns.append(col)
         hdu = pf.BinTableHDU.from_columns(fits_columns, name="field_data")
         hdulist = pf.HDUList([hdu_main, hdu_field_components, hdu])
-        print(f"Writing {filename}...")
         hdulist.writeto(filename, overwrite=True)
-        print("Done")
         return 0
 
     def estimate_computing_time(self, footpoints_grid):
@@ -420,7 +418,7 @@ if __name__ == "__main__":
 
     grid = FootpointGrid()
     r0 = 1 * r_ns
-    grid.calculate_grid("healpix", {"nside": 64}, r0)
+    grid.calculate_grid("healpix", {"nside": 8}, r0)
     # grid.calculate_grid("spherical", {"pole_lat": 0, "nlon": 2, "nlat": 20}, r0)
     # grid.load_grid_from_fits("test.fits")
     # grid.plot_footpoint_coordinates()
@@ -443,4 +441,3 @@ if __name__ == "__main__":
     magnetic_field.get_field_lines(
         grid, "test_file", vars_to_save="all", save_field_lines=True, max_file_size_Mb=2
     )
-
