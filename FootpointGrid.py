@@ -1,4 +1,3 @@
-import argparse as ap
 import healpy as hp
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,9 +6,6 @@ from astropy.coordinates import PhysicsSphericalRepresentation
 from astropy.coordinates.representation import CartesianRepresentation
 from astropy.coordinates import Angle
 from scipy.spatial.transform import Rotation as rot
-from astropy.io import fits as pf
-from astropy.nddata import CCDData
-
 
 r_ns = u.def_unit("Neutron star radius, 10 km", 10 * u.km)
 u.add_enabled_units([r_ns])
@@ -29,7 +25,10 @@ class FootpointGrid:
             assert "nlat" in params.keys(), "Missing nlat"
             self.nlon = int(params["nlon"])
             self.nlat = int(params["nlat"])
-            self.pole_lat = params["pole_lat"]
+            if "pole_lat" in params.keys():
+                self.pole_lat = params["pole_lat"]
+            else:
+                self.pole_lat = 0
         if grid_type == "healpix":
             assert "nside" in params.keys(), "Missing nside"
             self.nside = int(params["nside"])

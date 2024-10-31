@@ -1,17 +1,13 @@
-import numpy as np
-from astropy import units as u
 from astropy.io import fits as pf
-from FieldComponent import FieldComponent
-from InitializeFootpointGrid import FootpointGrid
+from FootpointGrid import FootpointGrid
 
 
 def write_to_fits(
-    multipole_components, footpoints_grid, vars_to_save_dict, filename, field_lines=None,
-    save_footpoint_grid
+    multipole_components, footpoints_grid, vars_to_save_dict, filename, save_r_ini=False, field_lines=None
 ):
     print(f"Saving {vars_to_save_dict.keys()}")
     print(f"Saving field lines: {not(field_lines is None)}")
-    print(f"Saving footpoint grid: {save_footpoint_grid}")
+    print(f"Saving initial r: {save_r_ini}")
     hdu_main = pf.PrimaryHDU()
     header_main = hdu_main.header
     header_main.set("GRIDTYPE", footpoints_grid.grid_type, "Grid type")
@@ -60,7 +56,7 @@ def write_to_fits(
     value = [v["moment_offset_vector"].z for v in magnetic_field_list]
     col = pf.Column(name="offset_z_R_NS", format="D", array=value)
     magnetic_field_columns.append(col)
-    hdu_FieldComponents = pf.BinTableHDU.from_columns(
+    hdu_field_components = pf.BinTableHDU.from_columns(
         magnetic_field_columns, name="FLD_PRM"
     )
 
@@ -78,15 +74,8 @@ def write_to_fits(
     hdu_field_data = pf.BinTableHDU.from_columns(fits_columns, name="FLD_CLC")
     hdulist = [hdu_main, hdu_field_components, hdu_field_data]
 
-    if save_footpoint_grid:
-        data = CCDData(grid.footpoint_coordinates.xyz, unit=grid.footpoint_coordinates.xyz.unit)
-        hdu_footpoints = data.to_hdu(as_image_hdu=True)[0]
-        hdu_footpoints.name = 'FTP_CRD'
-        hdulist.append(hdu_footpoints)
-    
-
     print(f"Writing {filename}.")
-    hdulist = pf.HDUList()
+    hdulist = pf.HDUList(hdulist)
     hdulist.writeto(filename, overwrite=True)
     return 0
 

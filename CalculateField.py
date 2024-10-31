@@ -1,15 +1,11 @@
 import time
 import datetime
-import sys
 import numpy as np
 from tqdm import tqdm
 from astropy import units as u
-from astropy.io import fits as pf
 from scipy.integrate import solve_ivp
-from astropy.coordinates import PhysicsSphericalRepresentation
 from astropy.coordinates.representation import CartesianRepresentation
-from scipy.spatial.transform import Rotation as rot
-from InitializeFootpointGrid import FootpointGrid
+from FootpointGrid import FootpointGrid
 from FieldComponent import FieldComponent
 import InputOutput as io
 
@@ -31,28 +27,29 @@ class MultipoleField:
         self.R_min = R_min
         self.R_max = R_max
 
-    def load_from_file(self):
-        multipole_components = io.read_from_fits(filename)
-        return 
+    #def load_from_file(self, filename):
+    #    multipole_components = io.read_from_fits(filename)
+    #    return 
 
 
-    def set_saved_vars(self, vars: str):
+    def set_vars_to_save(self, vars: str):
         allowed_variables = set(
-            ("R_max", "R_cyl_max", "z_abs_max", "B_ini", "B_R_ini_angle")
+            ("R_max", "R_cyl_max", "z_abs_max", "B_ini", "B_R_ini_angle", "r_ini", "footpoint_id", "field_lines")
         )
-        if vars == "all":
+        if vars == "":
             vars_to_save = allowed_variables
         else:
-            vars = vars.replace(" ", "").split(",")
+            vars = set(vars.replace(" ", "").split(","))
             vars_to_save = vars & allowed_variables
             not_allowed_vars = vars - allowed_variables
             assert len(not_allowed_vars) == 0, print(
                 f"Following variables are not recognized: {not_allowed_vars}.\nPlease use the following: {allowed_variables}"
             )
-        if len(vars_to_save) == 0:
-            raise ValueError(f"No variables selected for saving. Aborting.")
+        vars_to_save_dict = {}
+        #if len(vars_to_save) == 0:
+        #    raise ValueError(f"No variables selected for saving. Aborting.")
         vars_to_save_dict = {var: [] for var in vars_to_save}
-        vars_to_save_dict["footpoint_id"] = []
+        
         return vars_to_save_dict
 
     def get_total_field(self, t, r, K, normalize=True):
@@ -86,33 +83,45 @@ class MultipoleField:
         self,
         footpoints_grid,
         filename,
-        vars_to_save="all",
-        save_footpoint_grid=True,
-        save_field_lines=True,
+        grid_indices=np.array([]),
+        vars_to_save="",
         dt=0.01,
         max_file_size_Mb=200,
     ):
-        self.estimate_computing_time(footpoints_grid)
+        all_grid_indices = np.arange(footpoints_grid.nline)
+        if len(grid_indices) == 0:
+            grid_indices = all_grid_indices
+        else:
+            not_allowed_indices = set(grid_indices) - set(all_grid_indices)
+            assert len(not_allowed_indices) == 0, print(
+                f"Following grid indices are not allowed: {not_allowed_indices}.\nPlease use the following: {all_grid_indices[0]}...{all_grid_indices[-1]}"
+            )
+            
+        self.estimate_computing_time(footpoints_grid, grid_indices)
 
-        grid_indices = np.arange(footpoints_grid.nline)
         r_initial_grid = footpoints_grid.footpoint_coordinates
 
-        vars_to_save_dict = self.set_saved_vars(vars_to_save)
+        vars_to_save_dict = self.set_vars_to_save(vars_to_save)
+        print(vars_to_save_dict)
         field_lines = []
+        save_r_ini = "r_ini" in vars_to_save_dict.keys
+        save_field_lines = "field_lines" in vars_to_save_dict.keys
+        
+        vars_to_save_size_increment = 100.*(1. + len(vars_to_save_dict) - 2 + save_r_ini * 3)/9.
         vars_to_save_size = 0
         field_lines_size = 0
         file_no = 0
         filename_cur = filename + "%03d.fits" % file_no
         print(f"Starting field line calculations at {datetime.datetime.now()}")
         for i in tqdm(grid_indices):
-            vars_to_save_size += 100.
-            r_initial = r_initial_grid[i].xyz.value
+            vars_to_save_size += vars_to_save_size_increment
+            r_initial = r_initial_grid[i]
             stat_dict = self.get_single_field_line(
-                r_initial, dt=dt, save_field_line=True
-            )
+                r_initial, vars_to_save_dict.keys, dt=dt)
             stat_dict["footpoint_id"] = i
             for key in vars_to_save_dict.keys():
                 vars_to_save_dict[key].append(stat_dict[key])
+                
             if save_field_lines:
                 if stat_dict["R_max"] >= self.R_min:
                     field_lines.append(stat_dict["field_line"].T)
@@ -125,9 +134,11 @@ class MultipoleField:
             file_size_Mb = (vars_to_save_size + field_lines_size) / 1.0e6 
             if file_size_Mb > max_file_size_Mb:
                 io.write_to_fits(
+                    self.multipole_components,
                     footpoints_grid,
                     vars_to_save_dict,
                     filename_cur,
+                    save_r_ini,
                     field_lines=field_lines,
                 )
                 file_no += 1
@@ -138,8 +149,8 @@ class MultipoleField:
                 vars_to_save_size = 0
                 field_lines_size = 0
 
-        io.write_to_fits(
-            footpoints_grid, vars_to_save_dict, filename_cur, field_lines=field_lines, save_footpoint_grid,
+        io.write_to_fits(self.multipole_components,
+            footpoints_grid, vars_to_save_dict, filename_cur, save_r_ini, field_lines=field_lines
         )
         file_no += 1
         filename_cur = filename + "%03d.fits" % file_no
@@ -150,17 +161,13 @@ class MultipoleField:
         return 0
 
 
-    def estimate_computing_time(self, footpoints_grid):
-        n_lines_total = footpoints_grid.nline
-        n_lines_estimate = 20
-        dt = 0.01
+    def estimate_computing_time(self, footpoints_grid, grid_indices, n_lines_estimate=20, dt=0.01):
+        n_lines_total = len(grid_indices)
         if n_lines_estimate >= n_lines_total:
-            trial_indices = np.arange(n_lines_total)
+            trial_indices = grid_indices
             n_lines_estimate = n_lines_total
         else:
-            trial_indices = np.linspace(0, n_lines_total - 1, n_lines_estimate).astype(
-                int
-            )
+            trial_indices = grid_indices[:n_lines_estimate]
         r_initial_grid = footpoints_grid.footpoint_coordinates
         print(
             f"Estimating completion time and file size using {n_lines_estimate} lines with dt = {dt}..."
@@ -189,13 +196,11 @@ class MultipoleField:
         return 0
 
     def get_single_field_line(
-        self, r_initial: CartesianRepresentation, dt=0.01, save_dR=False, save_field_line=False
+        self, r_initial: CartesianRepresentation, vars_to_save: list, dt=0.01, save_dR=False, 
     ):
-        theta_ini, phi_ini = r_initial. # Add spherical representation
         r_initial = r_initial.xyz.value
         B_initial = self.get_total_field(0, r_initial, 1, normalize=False)
         dotprod = np.dot(B_initial, r_initial)
-        chi = np.arccos(dotprod)
         K = np.sign(dotprod)
         field_line = solve_ivp(
             self.get_total_field,
@@ -210,23 +215,29 @@ class MultipoleField:
 
         t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
         r = field_line.sol(t)
-        R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
-        R_cyl_max = np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
-        z_abs_max = np.max(np.abs(r[2, :]))
+        
+        output_dict = {}
+        if "B_R_ini_angle" in vars_to_save:
+            output_dict["B_R_ini_angle"] = np.arccos(dotprod)
+        if "R_max" in vars_to_save:
+            output_dict["R_max"] = np.max(np.sum(r**2, axis=0) ** 0.5)
+        if "R_cyl_max" in vars_to_save:
+            output_dict["R_cyl_max"] = np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
+        if "z_abs_max" in vars_to_save:
+            output_dict["z_abs_max"] = np.max(np.abs(r[2, :]))
+        if "B_ini" in vars_to_save:
+            output_dict["B_ini"] = np.sum(B_initial**2) ** 0.5
 
         if save_dR:
             dr = r[:, 1:] - r[:, :-1]
             dR = np.median(np.sum(dr**2, axis=0) ** 0.5)
 
-        stat_dict = {"R_max": R_max, "R_cyl_max": R_cyl_max, "z_abs_max": z_abs_max}
-        stat_dict["B_R_ini_angle"] = chi
-        stat_dict["B_ini"] = np.sum(B_initial**2) ** 0.5
+        
         stat_dict["r_ini"] = r_initial
         if save_dR:
             stat_dict["dR"] = dR
         if save_field_line:
-            stat_dict["field_line"] = r #np.random.uniform(size=(3,2000))
-
+            stat_dict["field_line"] = r 
         return stat_dict
 
 
