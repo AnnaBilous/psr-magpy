@@ -1,13 +1,12 @@
 from astropy.io import fits as pf
+import numpy as np
 from FootpointGrid import FootpointGrid
 
 
 def write_to_fits(
-    multipole_components, footpoints_grid, vars_to_save_dict, filename, save_r_ini=False, field_lines=None
+    multipole_components, footpoints_grid, vars_to_save_dict, filename, Rmin, Rmax
 ):
     print(f"Saving {vars_to_save_dict.keys()}")
-    print(f"Saving field lines: {not(field_lines is None)}")
-    print(f"Saving initial r: {save_r_ini}")
     hdu_main = pf.PrimaryHDU()
     header_main = hdu_main.header
     header_main.set("GRIDTYPE", footpoints_grid.grid_type, "Grid type")
@@ -61,17 +60,20 @@ def write_to_fits(
     )
 
     fits_columns = []
+    col_formats = dict.fromkeys(vars_to_save_dict, "D")
+    col_formats["footpoint_id"] = "K"
+    col_formats["field_lines"] = "PE"
+    col_formats["r_ini"] = "3D"
+
     for key, value in vars_to_save_dict.items():
-        if key == "footpoint_id":
-            col_format = "K"
-        else:
-            col_format = "D"
-        col = pf.Column(name=key, format=col_format, array=value)
+        print(key)
+        col = pf.Column(name=key, format=col_formats[key], array=value)
+        
         fits_columns.append(col)
-    if field_lines is not None:
-        col = pf.Column(name="field_lines", format="PE", array=field_lines)
-        fits_columns.append(col)
+
     hdu_field_data = pf.BinTableHDU.from_columns(fits_columns, name="FLD_CLC")
+    hdu_field_data.header["R_MIN"] = Rmin
+    hdu_field_data.header["R_MAX"] = Rmax
     hdulist = [hdu_main, hdu_field_components, hdu_field_data]
 
     print(f"Writing {filename}.")
