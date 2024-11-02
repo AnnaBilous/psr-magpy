@@ -12,6 +12,7 @@ import InputOutput as io
 r_ns = u.def_unit("Neutron star radius, 10 km", 10 * u.km)
 u.add_enabled_units([r_ns])
 
+
 class MultipoleField:
     def initialize(self, component_params_list: list, R_max: float, R_min: float):
         """
@@ -27,14 +28,22 @@ class MultipoleField:
         self.R_min = R_min
         self.R_max = R_max
 
-    #def load_from_file(self, filename):
+    # def load_from_file(self, filename):
     #    multipole_components = io.read_from_fits(filename)
-    #    return 
-
+    #    return
 
     def set_vars_to_save(self, vars: str):
         allowed_variables = set(
-            ("R_max", "R_cyl_max", "z_abs_max", "B_ini", "B_R_ini_angle", "r_ini", "footpoint_id", "field_lines")
+            (
+                "R_max",
+                "R_cyl_max",
+                "z_abs_max",
+                "B_ini",
+                "B_R_ini_angle",
+                "r_ini",
+                "footpoint_id",
+                "field_lines",
+            )
         )
         if vars == "":
             vars_to_save = allowed_variables
@@ -47,7 +56,7 @@ class MultipoleField:
             )
         vars_to_save_dict = {}
         vars_to_save_dict = {var: [] for var in vars_to_save}
-        
+
         return vars_to_save_dict
 
     def get_total_field(self, t, r, K, normalize=True):
@@ -86,38 +95,43 @@ class MultipoleField:
         max_file_size_Mb=200,
     ):
         if max_file_size_Mb < 0.02:
-            print("Max file size is smaller than the size of header. Setting it to 20 kB.")
+            print(
+                "Max file size is smaller than the size of header. Setting it to 20 kB."
+            )
             max_file_size_Mb = 0.02
         r_initial_grid = footpoints_grid.footpoint_coordinates
         grid_indices = footpoints_grid.indices
         vars_to_save_dict = self.set_vars_to_save(vars_to_save)
-        
+
         self.estimate_computing_time(footpoints_grid, vars_to_save_dict)
 
         save_r_ini = "r_ini" in vars_to_save_dict.keys()
         save_field_lines = "field_lines" in vars_to_save_dict.keys()
-        
-        vars_to_save_size_increment = 100.*(len(vars_to_save_dict) - 1 + save_r_ini * 3)/9.
-        vars_to_save_size = 15000 # Size of header
+
+        vars_to_save_size_increment = (
+            100.0 * (len(vars_to_save_dict) - 1 + save_r_ini * 3) / 9.0
+        )
+        vars_to_save_size = 15000  # Size of header
         field_lines_size = 0
         file_no = 0
         filename_cur = filename + "%03d.fits" % file_no
-        
+
         print(f"Starting field line calculations at {datetime.datetime.now()}")
         for i in tqdm(np.arange(footpoints_grid.nline)):
             vars_to_save_size += vars_to_save_size_increment
             r_initial = r_initial_grid[i]
             stat_dict = self.get_single_field_line(
-                r_initial, vars_to_save_dict.keys(), dt=dt)
+                r_initial, vars_to_save_dict.keys(), dt=dt
+            )
             stat_dict["footpoint_id"] = grid_indices[i]
             for key in vars_to_save_dict.keys():
                 vars_to_save_dict[key].append(stat_dict[key])
-            
+
             if save_field_lines:
                 if len(stat_dict["field_lines"]) > 0:
-                    field_lines_size += len(stat_dict["field_lines"][0,:]) * 12.
-                
-            file_size_Mb = (vars_to_save_size + field_lines_size) / 1.0e6 
+                    field_lines_size += len(stat_dict["field_lines"][0, :]) * 12.0
+
+            file_size_Mb = (vars_to_save_size + field_lines_size) / 1.0e6
             if file_size_Mb > max_file_size_Mb:
                 io.write_to_fits(
                     self.multipole_components,
@@ -125,7 +139,7 @@ class MultipoleField:
                     vars_to_save_dict,
                     filename_cur,
                     self.R_min,
-                    self.R_max
+                    self.R_max,
                 )
                 file_no += 1
                 filename_cur = filename + "%03d.fits" % file_no
@@ -134,10 +148,14 @@ class MultipoleField:
                 vars_to_save_size = 0
                 field_lines_size = 0
 
-        io.write_to_fits(self.multipole_components,
-            footpoints_grid, vars_to_save_dict, filename_cur,
-                    self.R_min,
-                    self.R_max)
+        io.write_to_fits(
+            self.multipole_components,
+            footpoints_grid,
+            vars_to_save_dict,
+            filename_cur,
+            self.R_min,
+            self.R_max,
+        )
         file_no += 1
         filename_cur = filename + "%03d.fits" % file_no
         del vars_to_save_dict
@@ -165,9 +183,9 @@ class MultipoleField:
         t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
         r = field_line.sol(t)
         R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
-        
+
         output_dict = {}
-        if "B_R_ini_angle" in vars_to_save:   
+        if "B_R_ini_angle" in vars_to_save:
             output_dict["B_R_ini_angle"] = np.arccos(dotprod)
         if "R_max" in vars_to_save:
             output_dict["R_max"] = R_max
@@ -191,7 +209,9 @@ class MultipoleField:
             output_dict["dR"] = dR
         return output_dict
 
-    def estimate_computing_time(self, footpoints_grid, vars_to_save_dict: dict, n_lines_estimate=20, dt=0.01):
+    def estimate_computing_time(
+        self, footpoints_grid, vars_to_save_dict: dict, n_lines_estimate=20, dt=0.01
+    ):
         n_lines_total = footpoints_grid.nline
         if n_lines_estimate >= n_lines_total:
             n_lines_estimate = n_lines_total
@@ -201,7 +221,9 @@ class MultipoleField:
         )
         for i in [0]:
             r_initial = r_initial_grid[i]
-            stat_dict = self.get_single_field_line(r_initial, vars_to_save_dict.keys(), dt=dt, save_dR=True)
+            stat_dict = self.get_single_field_line(
+                r_initial, vars_to_save_dict.keys(), dt=dt, save_dR=True
+            )
             dR = stat_dict["dR"]
             R_span = 3 * (self.R_max - self.R_NS)
             n_points_max = int(R_span / dR)
@@ -222,11 +244,12 @@ class MultipoleField:
         )
         return 0
 
+
 if __name__ == "__main__":
 
-    #grid_type = "spherical"
+    # grid_type = "spherical"
     r0 = 1 * r_ns
-    #parameters_dict = {"nlon": 2, "nlat": 20}
+    # parameters_dict = {"nlon": 2, "nlat": 20}
     grid_type = "random"
     parameters_dict = {"nline_ori": 500}
     grid = FootpointGrid(grid_type, parameters_dict, r0)
@@ -247,10 +270,8 @@ if __name__ == "__main__":
             },
         ],
         R_max=1.1,
-        R_min=1.,
+        R_min=1.0,
     )
     magnetic_field.get_field_lines(
         grid, "test_file", vars_to_save="", max_file_size_Mb=100
     )
-
-

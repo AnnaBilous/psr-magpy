@@ -35,8 +35,7 @@ def get_parameters_from_command_line():
     )
 
     r0 = parser.add_parser(
-        "r0",
-        help="Radial distance of footpoint in R_NS. Default value: 1."
+        "r0", help="Radial distance of footpoint in R_NS. Default value: 1."
     )
 
     # Subparser for random
@@ -80,6 +79,7 @@ def get_parameters_from_command_line():
 
     return grid_type, parameters_dict, r0
 
+
 def get_parameters_from_fits(fitsname):
     print("Retrieving grid parameters from %s" % fitsname)
     hdulist = pf.open(fitsname)
@@ -94,9 +94,10 @@ def get_parameters_from_fits(fitsname):
     if grid_type == "healpix":
         parameters_dict["nside"] = header_main["NSIDE"]
     if grid_type == "random":
-        parameters_dict["nline"] = header_main["NLINE"]        
+        parameters_dict["nline"] = header_main["NLINE"]
 
     return grid_type, parameters_dict, r0
+
 
 def save_grid_to_fits(grid: FootpointGrid, fitsname: str) -> None:
     hdu_main = pf.PrimaryHDU()
@@ -110,9 +111,7 @@ def save_grid_to_fits(grid: FootpointGrid, fitsname: str) -> None:
     if grid.grid_type == "spherical":
         header_main.set("NLON", grid.nlon, "Number of longitude divisions")
         header_main.set("NLAT", grid.nlat, "Number of latitude divisions")
-        header_main.set(
-            "POLELAT", grid.pole_lat, "Latitude of grid pole, degree"
-        )
+        header_main.set("POLELAT", grid.pole_lat, "Latitude of grid pole, degree")
     if grid.grid_type == "healpix":
         header_main.set("NSIDE", grid.nside, "Healpix parameter nside")
 
@@ -120,24 +119,27 @@ def save_grid_to_fits(grid: FootpointGrid, fitsname: str) -> None:
         grid.footpoint_coordinates.xyz, unit=grid.footpoint_coordinates.xyz.unit
     )
     hdu_footpoints = data.to_hdu(as_image_hdu=True)[0]
-    hdu_footpoints.name = 'FTP_CRD'
+    hdu_footpoints.name = "FTP_CRD"
     print("HERE")
     print(grid.indices)
-    col = pf.Column(name='footpoint_id', format='K', array=grid.indices)
+    col = pf.Column(name="footpoint_id", format="K", array=grid.indices)
     hdu_indices = pf.BinTableHDU.from_columns([col], name="FTP_ID")
     hdul = pf.HDUList([hdu_main, hdu_indices, hdu_footpoints])
     print(f"Saving footpoints to {fitsname}")
     hdul.writeto(fitsname, overwrite=True)
     return
 
+
 def load_grid_from_fits(fitsname: str) -> FootpointGrid:
     print("Retrieving grid parameters and coordinates from %s" % fitsname)
     grid_type, parameters_dict, r0 = get_parameters_from_fits(fitsname)
     grid = FootpointGrid(grid_type, parameters_dict, r0)
     hdulist = pf.open(fitsname)
-    footpoint_coordinates = hdulist['FTP_CRD'].data
-    grid.footpoint_coordinates = CartesianRepresentation(footpoint_coordinates, unit=r0.unit)
+    footpoint_coordinates = hdulist["FTP_CRD"].data
+    grid.footpoint_coordinates = CartesianRepresentation(
+        footpoint_coordinates, unit=r0.unit
+    )
     # There shouldn't be a need for this conversion. Investigate later.
-    grid.indices = np.array([row[0] for row in hdulist['FTP_ID'].data])
+    grid.indices = np.array([row[0] for row in hdulist["FTP_ID"].data])
     grid.partial = hdulist[0].header["PARTIAL"]
     return grid

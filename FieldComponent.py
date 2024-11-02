@@ -7,6 +7,7 @@ from scipy.spatial.transform import Rotation as rot
 r_ns = u.def_unit("Neutron star radius, 10 km", 10 * u.km)
 u.add_enabled_units([r_ns])
 
+
 class FieldComponent:
     def __init__(self, **kwargs):
 
@@ -122,4 +123,3 @@ class FieldComponent:
         B_spin_frame = self.rotate_magn_to_spin_frame.apply(B_magnetic_frame)
 
         return B_spin_frame
-

@@ -36,8 +36,6 @@ class FootpointGrid:
             assert "nline_ori" in params.keys(), "Missing nline_ori for random grid"
             self.nline_ori = int(params["nline_ori"])
         self.partial = False
-    
-
 
     def calculate_grid(self) -> None:
         if self.grid_type == "spherical":
@@ -55,7 +53,7 @@ class FootpointGrid:
         self.indices = np.arange(self.nline_ori)
         self.nline = self.nline_ori
         return
-    
+
     def subset_grid(self, grid_indices: np.array) -> None:
         not_allowed_indices = set(grid_indices) - set(self.indices)
         assert len(not_allowed_indices) == 0, print(
@@ -66,9 +64,7 @@ class FootpointGrid:
         self.indices = grid_indices
         self.nline = len(grid_indices)
         print(f"Subsetting grid from {self.nline_ori} to {self.nline} indices")
-        return 
-            
-        
+        return
 
     def plot_footpoint_coordinates(self) -> None:
         footpoints_sph = self.footpoint_coordinates.represent_as(
@@ -94,7 +90,9 @@ class FootpointGrid:
                 nside, hp.nside2resol(nside, arcmin=True) / 60, self.nline_ori
             )
         )
-        theta_val, phi_val = hp.pix2ang(nside=self.nside, ipix=np.arange(self.nline_ori))
+        theta_val, phi_val = hp.pix2ang(
+            nside=self.nside, ipix=np.arange(self.nline_ori)
+        )
         phi = Angle(phi_val * u.rad)
         theta = Angle(theta_val * u.rad)
         r = r0 * np.ones(self.nline_ori)
@@ -142,5 +140,3 @@ class FootpointGrid:
         (x, y, z) = u / norm * r0
         footpoints_cart = CartesianRepresentation(x, y, z)
         return footpoints_cart
-
-

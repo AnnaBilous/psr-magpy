@@ -16,21 +16,15 @@ def write_to_fits(
     )
     header_main.set("R0UNITS", footpoints_grid.r0.unit.name, "Unit of r0")
     if footpoints_grid.grid_type == "spherical":
-        header_main.set(
-            "NLON", footpoints_grid.nlon, "Number of longitude divisions"
-        )
-        header_main.set(
-            "NLAT", footpoints_grid.nlat, "Number of latitude divisions"
-        )
+        header_main.set("NLON", footpoints_grid.nlon, "Number of longitude divisions")
+        header_main.set("NLAT", footpoints_grid.nlat, "Number of latitude divisions")
         header_main.set(
             "POLELAT", footpoints_grid.pole_lat, "Latitude of grid pole, degree"
         )
     if footpoints_grid.grid_type == "healpix":
         header_main.set("NSIDE", footpoints_grid.nside, "Healpix parameter nside")
 
-    magnetic_field_list = [
-        vars(component) for component in multipole_components
-    ]
+    magnetic_field_list = [vars(component) for component in multipole_components]
     column_names = ["component_number", "moment_type", "B_magnitude"]
     column_formats = ["K", "10A", "D"]
     magnetic_field_columns = []
@@ -68,7 +62,7 @@ def write_to_fits(
     for key, value in vars_to_save_dict.items():
         print(key)
         col = pf.Column(name=key, format=col_formats[key], array=value)
-        
+
         fits_columns.append(col)
 
     hdu_field_data = pf.BinTableHDU.from_columns(fits_columns, name="FLD_CLC")
@@ -89,11 +83,9 @@ def read_from_fits(filename):
     parameters_dict = {}
 
     if grid_type == "spherical":
-        parameters_dict['nlon'] = header_data["NLON"]
-        parameters_dict['nlon'] = header_data["NLON"]
-        header_main.set(
-            "NLAT", footpoints_grid.nlat, "Number of latitude divisions"
-        )
+        parameters_dict["nlon"] = header_data["NLON"]
+        parameters_dict["nlon"] = header_data["NLON"]
+        header_main.set("NLAT", footpoints_grid.nlat, "Number of latitude divisions")
         header_main.set(
             "POLELAT", footpoints_grid.pole_lat, "Latitude of grid pole, degree"
         )
@@ -105,6 +97,5 @@ def read_from_fits(filename):
     r0 = 1 * r_ns
 
     footpoints_grid.calculate_grid(grid_type, parameters_dict, r0)
-    
 
     return footpoints_grid, magnetic_field, vars_dict, field_lines
