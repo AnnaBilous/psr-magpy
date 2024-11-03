@@ -7,14 +7,14 @@ from scipy.integrate import solve_ivp
 from astropy.coordinates.representation import CartesianRepresentation
 from FootpointGrid import FootpointGrid
 from FieldComponent import FieldComponent
-import InputOutput as io
+import WriteToFits as io
 
 r_ns = u.def_unit("Neutron star radius, 10 km", 10 * u.km)
 u.add_enabled_units([r_ns])
 
 
 class MultipoleField:
-    def initialize(self, component_params_list: list, R_max: float, R_min: float):
+    def initialize(self, component_params_list: list):
         """
         Gets list of dictionaries
         """
@@ -25,12 +25,7 @@ class MultipoleField:
 
         self.multipole_components = multipole_components
         self.R_NS = 1
-        self.R_min = R_min
-        self.R_max = R_max
 
-    # def load_from_file(self, filename):
-    #    multipole_components = io.read_from_fits(filename)
-    #    return
 
     def set_vars_to_save(self, vars: str):
         allowed_variables = set(
@@ -91,9 +86,13 @@ class MultipoleField:
         footpoints_grid,
         filename,
         vars_to_save="",
+        R_max = 10.,
+        R_min = 1.,
         dt=0.01,
         max_file_size_Mb=200,
     ):
+        self.R_min = R_min
+        self.R_max = R_max
         if max_file_size_Mb < 0.02:
             print(
                 "Max file size is smaller than the size of header. Setting it to 20 kB."
