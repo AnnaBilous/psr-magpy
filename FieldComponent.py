@@ -15,7 +15,7 @@ class FieldComponent:
             "component_number": 0,
             "moment_type": "dipole",
             "B_magnitude": 1,
-            "moment_orientation_latitude_degree": 45.0,
+            "moment_orientation_latitude_degree": 0.0,
             "moment_orientation_longitude_degree": 0,
             "offset_x_r_ns": 0,
             "offset_y_r_ns": 0,
@@ -49,11 +49,11 @@ class FieldComponent:
             "quadrupole",
         ], "Multipole must be dipole or quadrupole"
 
+        default_values.update(kwargs)
         print("Setting up field components with the following vars:")
         for key in default_values:
             print(f"\t\t{key}: {default_values[key]}")
         print("--------------------------------------")
-        default_values.update(kwargs)
 
         self.component_number = default_values["component_number"]
         self.moment_type = default_values["moment_type"]

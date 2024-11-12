@@ -26,7 +26,6 @@ class MultipoleField:
         self.multipole_components = multipole_components
         self.R_NS = 1
 
-
     def set_vars_to_save(self, vars: str):
         allowed_variables = set(
             (
@@ -84,11 +83,12 @@ class MultipoleField:
     def get_field_lines(
         self,
         footpoints_grid,
-        filename,
+        filename="",
         vars_to_save="",
-        R_max = 10.,
-        R_min = 1.,
+        R_max=10.0,
+        R_min=1.0,
         dt=0.01,
+        save_file=True,
         max_file_size_Mb=200,
     ):
         self.R_min = R_min
@@ -102,7 +102,14 @@ class MultipoleField:
         grid_indices = footpoints_grid.indices
         vars_to_save_dict = self.set_vars_to_save(vars_to_save)
 
-        self.estimate_computing_time(footpoints_grid, vars_to_save_dict)
+        completion_time_sec = self.estimate_computing_time(
+            footpoints_grid, vars_to_save_dict
+        )
+        too_long_sec = 300.0
+        if (completion_time_sec > too_long_sec) & (save_file == False):
+            print(
+                f"Warning: calculations will take {completion_time_sec/60.} min. According to input parameters, files will not be saved to disk. Are you sure?"
+            )
 
         save_r_ini = "r_ini" in vars_to_save_dict.keys()
         save_field_lines = "field_lines" in vars_to_save_dict.keys()
@@ -131,34 +138,37 @@ class MultipoleField:
                     field_lines_size += len(stat_dict["field_lines"][0, :]) * 12.0
 
             file_size_Mb = (vars_to_save_size + field_lines_size) / 1.0e6
-            if file_size_Mb > max_file_size_Mb:
-                io.write_to_fits(
-                    self.multipole_components,
-                    footpoints_grid,
-                    vars_to_save_dict,
-                    filename_cur,
-                    self.R_min,
-                    self.R_max,
-                )
-                file_no += 1
-                filename_cur = filename + "%03d.fits" % file_no
-                # initialize columns
-                vars_to_save_dict = self.set_vars_to_save(vars_to_save)
-                vars_to_save_size = 0
-                field_lines_size = 0
+            if save_file:
+                if file_size_Mb > max_file_size_Mb:
+                    io.write_to_fits(
+                        self.multipole_components,
+                        footpoints_grid,
+                        vars_to_save_dict,
+                        filename_cur,
+                        self.R_min,
+                        self.R_max,
+                    )
+                    file_no += 1
+                    filename_cur = filename + "%03d.fits" % file_no
+                    # initialize columns
+                    vars_to_save_dict = self.set_vars_to_save(vars_to_save)
+                    vars_to_save_size = 0
+                    field_lines_size = 0
 
-        io.write_to_fits(
-            self.multipole_components,
-            footpoints_grid,
-            vars_to_save_dict,
-            filename_cur,
-            self.R_min,
-            self.R_max,
-        )
-        file_no += 1
-        filename_cur = filename + "%03d.fits" % file_no
-        del vars_to_save_dict
-        return 0
+        if save_file:
+            io.write_to_fits(
+                self.multipole_components,
+                footpoints_grid,
+                vars_to_save_dict,
+                filename_cur,
+                self.R_min,
+                self.R_max,
+            )
+            file_no += 1
+            filename_cur = filename + "%03d.fits" % file_no
+
+        # del vars_to_save_dict
+        return footpoints_grid, self.multipole_components, vars_to_save_dict
 
     def get_single_field_line(
         self, r_initial: CartesianRepresentation, vars_to_save, dt=0.01, save_dR=False
@@ -175,12 +185,13 @@ class MultipoleField:
             args=[K],
             dense_output=True,
             events=(self.hit_surface, self.hit_Rmax),
-            rtol=5.0e-8,
-            atol=5.0e-8,
+            rtol=1.0e-8,
+            atol=1.0e-8,
         )
 
         t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
         r = field_line.sol(t)
+        # Change to Cartesian representation
         R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
 
         output_dict = {}
@@ -241,7 +252,7 @@ class MultipoleField:
         print(
             f"Based on {n_lines_estimate} line calculations, computing {n_lines_total} lines will take:\n{estimated_duration: .0f} s\nor\n{estimated_duration/3600.: .1f} hr."
         )
-        return 0
+        return estimated_duration
 
 
 if __name__ == "__main__":

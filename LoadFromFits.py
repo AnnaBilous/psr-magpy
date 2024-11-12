@@ -5,52 +5,73 @@ from CalculateField import MultipoleField
 import FootpointGrid_InputOutput as fp_io
 from astropy.coordinates.representation import CartesianRepresentation
 
-    
+
+def read_from_fits(fitsname, vars_to_retrieve=""):
+    grid = retrieve_grid(fitsname)
+    magnetic_field_components = retrieve_field_components(fitsname)
+    stat_dict = retrieve_field_data(fitsname, vars_to_retrieve)
+    return grid, magnetic_field_components, stat_dict
+
+
 def retrieve_grid(fitsname):
     print("Retrieving grid parameters and coordinates from %s" % fitsname)
     grid_type, parameters_dict, r0 = fp_io.get_parameters_from_fits(fitsname)
     grid = FootpointGrid(grid_type, parameters_dict, r0)
-    hdu_header, _, hdu_field_data = pf.open(fitsname)
+    hdu, _, hdu_field_data = pf.open(fitsname)
+    hdu_header = hdu.header
     grid.nline_ori = hdu_header["NLINE_ORI"]
     grid.nline = hdu_header["NLINE"]
-    grid.partial = hdu_header.header["PARTIAL"]
-    
+    grid.partial = hdu_header["PARTIAL"]
+
     if "footpoint_id" in hdu_field_data.columns.names:
-        # There shouldn't be a need for this conversion. Investigate later.
-        grid.indices = np.array([row[0] for row in hdu_field_data.data["footpoint_id"]])
-    
+        grid.indices = hdu_field_data.data["footpoint_id"]
+
     if "r_ini" in hdu_field_data.columns.names:
         footpoint_coordinates = hdu_field_data.data["r_ini"]
-        grid.footpoint_coordinates = CartesianRepresentation(footpoint_coordinates, unit=r0.unit)
+        grid.footpoint_coordinates = CartesianRepresentation(
+            footpoint_coordinates.T, unit=r0.unit
+        )
     else:
         print("Recalculating footpoint coordinates...")
-        assert (grid.grid_type != "random"), print("Footpoint coordinates for random grid can not be recovered")
+        assert grid.grid_type != "random", print(
+            "Footpoint coordinates for random grid can not be recovered"
+        )
         grid.calculate_grid()
         grid.subset_grid(footpoint_coordinates)
     return grid
+
 
 def retrieve_field_components(fitsname):
     _, hdu_field_components, _ = pf.open(fitsname)
 
     data = hdu_field_components.data
-    components_data = []
+    n_components = np.shape(data)[0]
+    names_dict = {
+        "component_number": "component_number",
+        "moment_type": "moment_type",
+        "B_magnitude": "B_magnitude",
+        "moment_orientation_latitude_degree": "orientation_theta_deg",
+        "moment_orientation_longitude_degree": "orientation_phi_deg",
+        "offset_x_r_ns": "offset_x_R_NS",
+        "offset_y_r_ns": "offset_y_R_NS",
+        "offset_z_r_ns": "offset_z_R_NS",
+    }
+    components_data = [
+        {key: None for key in names_dict.keys()} for _ in range(n_components)
+    ]
 
-    for row in data:
-        component_data = {
-            "component_number": row["component_number"],
-            "moment_type": row['moment_type'],
-            "B_magnitude": row['B_magnitude'],
-            "moment_orientation_latitude_degree": row['orientation_theta_deg'],
-            "moment_orientation_longitude_degree": row['orientation_phi_deg'],
-            "offset_x_r_ns": row['offset_x_R_NS'],
-            "offset_y_r_ns": row['offset_y_R_NS'],
-            "offset_z_r_ns": row['offset_z_R_NS']
-            }
-        components_data.append(component_data)
+    for key, val in names_dict.items():
+        curr_val = data[val]
+        for i in range(n_components):
+            components_data[i][key] = curr_val[i]
+            # Some weird mismatch in integer types
+            if key == "component_number":
+                components_data[i][key] = int(curr_val[i])
 
     magnetic_field_components = MultipoleField()
     magnetic_field_components.initialize(components_data)
     return magnetic_field_components
+
 
 def retrieve_field_data(fitsname, vars_to_retrieve=""):
     _, _, hdu_field_data = pf.open(fitsname)
@@ -65,10 +86,15 @@ def retrieve_field_data(fitsname, vars_to_retrieve=""):
         assert len(not_allowed_vars) == 0, print(
             f"Following variables are not recognized: {not_allowed_vars}.\nPlease use the following: {existing_variables}"
         )
-    stat_dict = []
+    stat_dict = {}
     for key in vars_to_retrieve:
         stat_dict[key] = hdu_field_data.data[key]
-        
+
+    for i in range(len(stat_dict["field_lines"])):
+        field_line_points = len(stat_dict["field_lines"][i])
+        if field_line_points > 0:
+            stat_dict["field_lines"][i] = stat_dict["field_lines"][i].reshape(
+                (field_line_points // 3, 3)
+            )
+
     return stat_dict
-    
-        

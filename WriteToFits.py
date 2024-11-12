@@ -1,5 +1,6 @@
 from astropy.io import fits as pf
 
+
 def write_to_fits(
     multipole_components, footpoints_grid, vars_to_save_dict, filename, Rmin, Rmax
 ):
@@ -13,15 +14,18 @@ def write_to_fits(
     print(f"Writing {filename}.")
     hdulist = pf.HDUList(hdulist)
     hdulist.writeto(filename, overwrite=True)
-    return 
+    return
+
 
 def update_main_header(hdu_main, footpoints_grid):
     header_main = hdu_main.header
     header_main.set("GRIDTYPE", footpoints_grid.grid_type, "Grid type")
-    header_main.set("NLINE_ORI", footpoints_grid.nline_ori, "Original number of footpoints")
+    header_main.set(
+        "NLINE_ORI", footpoints_grid.nline_ori, "Original number of footpoints"
+    )
     header_main.set("NLINE", footpoints_grid.nline, "Number of footpoints")
-    header_main.set("PARTIAL", footpoints_grid.partial , "Partial grid")
-    
+    header_main.set("PARTIAL", footpoints_grid.partial, "Partial grid")
+
     header_main.set(
         "R0", footpoints_grid.r0.value, "Radius of the sphere with footpoints"
     )
@@ -35,6 +39,7 @@ def update_main_header(hdu_main, footpoints_grid):
     if footpoints_grid.grid_type == "healpix":
         header_main.set("NSIDE", footpoints_grid.nside, "Healpix parameter nside")
     return hdu_main
+
 
 def create_hdu_field_components(multipole_components):
     magnetic_field_list = [vars(component) for component in multipole_components]
@@ -67,17 +72,18 @@ def create_hdu_field_components(multipole_components):
     )
     return hdu_field_components
 
+
 def create_hdu_field_data(vars_to_save_dict, Rmin, Rmax):
     fits_columns = []
     col_formats = dict.fromkeys(vars_to_save_dict, "D")
     col_formats["footpoint_id"] = "K"
-    col_formats["field_lines"] = "PE"
+    col_formats["field_lines"] = "PE()"
     col_formats["r_ini"] = "3D"
 
     for key, value in vars_to_save_dict.items():
         col = pf.Column(name=key, format=col_formats[key], array=value)
         fits_columns.append(col)
-        
+
     hdu_field_data = pf.BinTableHDU.from_columns(fits_columns, name="FLD_CLC")
     hdu_field_data.header["R_MIN"] = Rmin
     hdu_field_data.header["R_MAX"] = Rmax
