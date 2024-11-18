@@ -37,7 +37,7 @@ def retrieve_grid(fitsname):
             "Footpoint coordinates for random grid can not be recovered"
         )
         grid.calculate_grid()
-        grid.subset_grid(footpoint_coordinates)
+        #grid.subset_grid(footpoint_coordinates)
     return grid
 
 
@@ -81,20 +81,20 @@ def retrieve_field_data(fitsname, vars_to_retrieve=""):
         vars_to_retrieve = existing_variables
     else:
         vars_to_retrieve = set(vars_to_retrieve.replace(" ", "").split(","))
-        vars_to_retrieve = vars & existing_variables
-        not_allowed_vars = vars - existing_variables
+        not_allowed_vars = vars_to_retrieve - existing_variables
+        vars_to_retrieve = vars_to_retrieve & existing_variables
         assert len(not_allowed_vars) == 0, print(
             f"Following variables are not recognized: {not_allowed_vars}.\nPlease use the following: {existing_variables}"
         )
     stat_dict = {}
     for key in vars_to_retrieve:
         stat_dict[key] = hdu_field_data.data[key]
-
-    for i in range(len(stat_dict["field_lines"])):
-        field_line_points = len(stat_dict["field_lines"][i])
-        if field_line_points > 0:
-            stat_dict["field_lines"][i] = stat_dict["field_lines"][i].reshape(
-                (field_line_points // 3, 3)
-            )
+    if "field_lines" in stat_dict.keys():
+        for i in range(len(stat_dict["field_lines"])):
+            field_line_points = len(stat_dict["field_lines"][i])
+            if field_line_points > 0:
+                stat_dict["field_lines"][i] = stat_dict["field_lines"][i].reshape(
+                    (field_line_points // 3, 3)
+                )
 
     return stat_dict

@@ -64,7 +64,7 @@ class MultipoleField:
 
     def hit_surface(self, t, r, K):
         r = np.sum(r**2) ** 0.5
-        return r - 0.999 * self.R_NS
+        return r - 0.999999*self.R_NS
 
     hit_surface.terminal = True
 
@@ -185,8 +185,8 @@ class MultipoleField:
             args=[K],
             dense_output=True,
             events=(self.hit_surface, self.hit_Rmax),
-            rtol=1.0e-8,
-            atol=1.0e-8,
+            rtol=5.0e-8,
+            atol=5.0e-8,
         )
 
         t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
@@ -225,6 +225,11 @@ class MultipoleField:
         n_lines_total = footpoints_grid.nline
         if n_lines_estimate >= n_lines_total:
             n_lines_estimate = n_lines_total
+            indices_estimate = np.arange(n_lines_estimate)
+        else:
+            indices_estimate = np.arange(n_lines_total)
+            np.random.shuffle(indices_estimate)                    
+            indices_estimate = indices_estimate[:n_lines_estimate]
         r_initial_grid = footpoints_grid.footpoint_coordinates
         print(
             f"Estimating completion time and file size using {n_lines_estimate} lines with dt = {dt}..."
@@ -243,7 +248,7 @@ class MultipoleField:
             )
 
         start_time = time.time()
-        for i in range(n_lines_estimate):
+        for i in indices_estimate:
             stat_dict = self.get_single_field_line(
                 r_initial_grid[i], vars_to_save_dict.keys(), dt=dt
             )

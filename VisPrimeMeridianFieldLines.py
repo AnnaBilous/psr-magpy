@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 from FootpointGrid import FootpointGrid
@@ -19,10 +18,13 @@ def plot_prime_meridian_field_lines(
     field_components: dict,
     ax: mpl.axes.Axes,
     R_max=10.0,
-    arrows_loc=[3.0, 7.0],
+    arrows_loc=[2.0, 3.0],
     lc="k",
     lw=0.2,
     arrow_width=0.1,
+    plot_footpoints=False,
+    ms=1,
+    mc='r'
 ):
 
     grid_type = "spherical"
@@ -47,11 +49,13 @@ def plot_prime_meridian_field_lines(
         fl_sph = PhysicsSphericalRepresentation.from_cartesian(fl_cart)
         r = fl_sph.r
         K = int(np.sign(np.cos(stat_dict["B_R_ini_angle"][i])))
-
         # Plotting field lines
         ax.plot(fl_cart.x, fl_cart.z, color=lc, lw=lw)
+        if plot_footpoints:
+            ax.plot([fl_cart.x[0]], [fl_cart.z[0]], color=mc, marker='.', ms=ms, zorder=10)
+               
+               
         # Plotting arrows
-
         for r_arr in arrows_loc:
             eps = np.mean(np.abs(np.diff(r)))
             ind = np.arange(len(r))

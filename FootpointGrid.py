@@ -105,6 +105,7 @@ class FootpointGrid:
     ) -> CartesianRepresentation:
         phi_grid = np.linspace(0, 2 * np.pi, nlon, endpoint=False)
         theta_grid = np.linspace(0, np.pi, nlat)
+        print(f"Latitude respolution {np.rad2deg(theta_grid[1] - theta_grid[0])} degrees")
 
         phi_mesh, theta_mesh = np.meshgrid(phi_grid, theta_grid)
         phi_mesh = np.ravel(phi_mesh)
