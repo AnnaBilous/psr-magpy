@@ -39,7 +39,7 @@ class MultipoleField:
                 "field_lines",
             )
         )
-        if vars == "":
+        if vars == "all":
             vars_to_save = allowed_variables
         else:
             vars = set(vars.replace(" ", "").split(","))
@@ -64,7 +64,7 @@ class MultipoleField:
 
     def hit_surface(self, t, r, K):
         r = np.sum(r**2) ** 0.5
-        return r - 0.999999*self.R_NS
+        return r - 0.999999 * self.R_NS
 
     hit_surface.terminal = True
 
@@ -228,7 +228,7 @@ class MultipoleField:
             indices_estimate = np.arange(n_lines_estimate)
         else:
             indices_estimate = np.arange(n_lines_total)
-            np.random.shuffle(indices_estimate)                    
+            np.random.shuffle(indices_estimate)
             indices_estimate = indices_estimate[:n_lines_estimate]
         r_initial_grid = footpoints_grid.footpoint_coordinates
         print(

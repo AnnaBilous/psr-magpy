@@ -37,7 +37,7 @@ def retrieve_grid(fitsname):
             "Footpoint coordinates for random grid can not be recovered"
         )
         grid.calculate_grid()
-        #grid.subset_grid(footpoint_coordinates)
+        # grid.subset_grid(footpoint_coordinates)
     return grid
 
 
