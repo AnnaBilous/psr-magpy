@@ -149,7 +149,7 @@ class MultipoleField:
                         self.R_max,
                     )
                     file_no += 1
-                    filename_cur = filename + "%03d.fits" % file_no
+                    filename_cur = filename + "_%03d.fits" % file_no
                     # initialize columns
                     vars_to_save_dict = self.set_vars_to_save(vars_to_save)
                     vars_to_save_size = 0

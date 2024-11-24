@@ -24,14 +24,24 @@ def trim_field_line(field_line, R_LC, h_LC_coeff=3**1.5 / 2.0):
     ind = np.arange(len(z_abs))
     if len(ind[outside_LC]) > 0:
         first_LC_penetration_point = ind[outside_LC][0]
-        field_line_trimmed = CartesianRepresentation(
+        field_line_before_LC = CartesianRepresentation(
             x=field_line.x[:first_LC_penetration_point],
             y=field_line.y[:first_LC_penetration_point],
             z=field_line.z[:first_LC_penetration_point],
         )
-        return field_line_trimmed
+        field_line_after_LC = CartesianRepresentation(
+            x=field_line.x[first_LC_penetration_point:],
+            y=field_line.y[first_LC_penetration_point:],
+            z=field_line.z[first_LC_penetration_point:],
+        )
     else:
-        return field_line
+        field_line_before_LC = field_line
+        field_line_after_LC = CartesianRepresentation(
+            x=[],
+            y=[],
+            z=[],
+        )
+    return field_line_before_LC, field_line_after_LC
 
 
 def healpix_grid_get_single_OFL_edge(grid, ftp_ids, ftp_ids_inner=[]):
