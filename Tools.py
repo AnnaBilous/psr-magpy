@@ -1,5 +1,6 @@
 import numpy as np
 import healpy as hp
+import colorsys as cl
 from astropy.coordinates.representation import CartesianRepresentation
 
 
@@ -18,6 +19,8 @@ def get_OFL_footpoints(stat_dict, R_LC, h_LC_coeff=3**1.5 / 2.0):
 
 
 def trim_field_line(field_line, R_LC, h_LC_coeff=3**1.5 / 2.0):
+    if isinstance(field_line, np.ndarray):
+        field_line = CartesianRepresentation(field_line.T)
     z_abs = np.abs(field_line.z)
     R_cyl = (field_line.x**2 + field_line.y**2) ** 0.5
     outside_LC = (R_cyl > R_LC) | ((R_cyl < R_LC) & (z_abs > (h_LC_coeff * R_LC)))
@@ -91,4 +94,37 @@ def healpix_grid_get_OFL_edges(grid, P_grid, stat_dict, h_LC_coeff=3**1.5 / 2.0)
             grid, ftp_ids[i], ftp_ids_inner=inner_ftp_ids[i]
         )
         edge_ftp_ids.append(cur_edge_ftp_ids)
-    return edge_ftp_ids
+    return P_grid, edge_ftp_ids
+
+def group_by_parameter(run_parameters, prm_name):
+    grouped = {}
+    group_keys = [key for key in run_parameters[0].keys() if ((key != prm_name) & ( key != "filename"))]
+    print("Grouping by keys:", group_keys)
+    
+    for item in run_parameters:
+        # Create the grouping key as a tuple of the values of group_keys
+        group_key = tuple(item[key] for key in group_keys)
+        if group_key not in grouped:
+            grouped[group_key] = []
+        grouped[group_key].append(item)
+    
+    # Convert grouped dictionaries into a list of sublists
+    result = list(grouped.values())
+    return result
+
+def shift_color_by_saturation_value(colors, saturation_shift, value_shift):
+    colors_shifted = []
+    for color in colors:
+        h, s, v = cl.rgb_to_hsv(color[0], color[1], color[2])
+        s -= saturation_shift #0.7  # 0.3
+        v += value_shift  # 0.2
+        if s < 0:
+            s = 0
+        if v > 1:
+            v = 1
+        r, g, b = cl.hsv_to_rgb(h, s, v)
+        colors_shifted.append((r, g, b, 1.0))
+    return colors_shifted
+
+
+            

@@ -188,8 +188,10 @@ class MultipoleField:
             rtol=5.0e-8,
             atol=5.0e-8,
         )
-
-        t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
+        if isinstance(dt, int):
+            t = np.linspace(field_line.t[0], field_line.t[-1] + dt, dt)
+        else:
+            t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
         r = field_line.sol(t)
         # Change to Cartesian representation
         R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
