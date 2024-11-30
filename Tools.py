@@ -8,14 +8,17 @@ def get_R_LC(P_ms: float):
     return 4.77 * P_ms
 
 
-def get_OFL_footpoints(stat_dict, R_LC, h_LC_coeff=3**1.5 / 2.0):
+def get_OFL_footpoints(stat_dict, R_LC, OFL_mask=False, h_LC_coeff=3**1.5 / 2.0):
     R_cyl_max = np.array(stat_dict["R_cyl_max"])
     z_abs_max = np.array(stat_dict["z_abs_max"])
     footpoint_ids = np.array(stat_dict["footpoint_id"])
-    open_fl = (R_cyl_max > R_LC) | (
+    open_fl_crit = (R_cyl_max > R_LC) | (
         (R_cyl_max < R_LC) & (np.abs(z_abs_max) > (h_LC_coeff * R_LC))
     )
-    return footpoint_ids[open_fl]
+    if OFL_mask:
+        return open_fl_crit
+    else:
+        return footpoint_ids[open_fl_crit]
 
 
 def trim_field_line(field_line, R_LC, h_LC_coeff=3**1.5 / 2.0):
@@ -96,27 +99,33 @@ def healpix_grid_get_OFL_edges(grid, P_grid, stat_dict, h_LC_coeff=3**1.5 / 2.0)
         edge_ftp_ids.append(cur_edge_ftp_ids)
     return P_grid, edge_ftp_ids
 
+
 def group_by_parameter(run_parameters, prm_name):
     grouped = {}
-    group_keys = [key for key in run_parameters[0].keys() if ((key != prm_name) & ( key != "filename"))]
+    group_keys = [
+        key
+        for key in run_parameters[0].keys()
+        if ((key != prm_name) & (key != "filename"))
+    ]
     print("Grouping by keys:", group_keys)
-    
+
     for item in run_parameters:
         # Create the grouping key as a tuple of the values of group_keys
         group_key = tuple(item[key] for key in group_keys)
         if group_key not in grouped:
             grouped[group_key] = []
         grouped[group_key].append(item)
-    
+
     # Convert grouped dictionaries into a list of sublists
     result = list(grouped.values())
     return result
+
 
 def shift_color_by_saturation_value(colors, saturation_shift, value_shift):
     colors_shifted = []
     for color in colors:
         h, s, v = cl.rgb_to_hsv(color[0], color[1], color[2])
-        s -= saturation_shift #0.7  # 0.3
+        s -= saturation_shift  # 0.7  # 0.3
         v += value_shift  # 0.2
         if s < 0:
             s = 0
@@ -125,6 +134,3 @@ def shift_color_by_saturation_value(colors, saturation_shift, value_shift):
         r, g, b = cl.hsv_to_rgb(h, s, v)
         colors_shifted.append((r, g, b, 1.0))
     return colors_shifted
-
-
-            
