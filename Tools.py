@@ -1,6 +1,9 @@
 import numpy as np
 import healpy as hp
 import colorsys as cl
+import re
+import sys
+import matplotlib as mpl
 from astropy.coordinates.representation import CartesianRepresentation
 
 
@@ -122,11 +125,19 @@ def group_by_parameter(run_parameters, prm_name):
 
 
 def shift_color_by_saturation_value(colors, saturation_shift, value_shift):
+    hex_pattern = re.compile(r'^#(?:[0-9a-fA-F]{3}){1,2}$')
     colors_shifted = []
     for color in colors:
-        h, s, v = cl.rgb_to_hsv(color[0], color[1], color[2])
-        s -= saturation_shift  # 0.7  # 0.3
-        v += value_shift  # 0.2
+        if bool(hex_pattern.match(color)):
+            color_rgb = mpl.colors.hex2color(color)
+        elif isinstance(color, tuple):
+            color_rgb = color
+        else:
+            print("Wrong color format")
+            sys.exit(1)
+        h, s, v = cl.rgb_to_hsv(color_rgb[0], color_rgb[1], color_rgb[2])
+        s -= saturation_shift  
+        v += value_shift  
         if s < 0:
             s = 0
         if v > 1:

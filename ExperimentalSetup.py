@@ -47,4 +47,3 @@ class ExperimentSetup:
             for values in combinations
         ]
         return run_parameters
-    
