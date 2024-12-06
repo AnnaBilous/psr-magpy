@@ -39,7 +39,7 @@ class MultipoleField:
                 "field_lines",
             )
         )
-        if vars == "all":
+        if vars == "":
             vars_to_save = allowed_variables
         else:
             vars = set(vars.replace(" ", "").split(","))
@@ -50,7 +50,6 @@ class MultipoleField:
             )
         vars_to_save_dict = {}
         vars_to_save_dict = {var: [] for var in vars_to_save}
-
         return vars_to_save_dict
 
     def get_total_field(self, t, r, K, normalize=True):
@@ -111,20 +110,17 @@ class MultipoleField:
                 f"Warning: calculations will take {completion_time_sec/60.} min. According to input parameters, files will not be saved to disk. Are you sure?"
             )
 
-        save_r_ini = "r_ini" in vars_to_save_dict.keys()
         save_field_lines = "field_lines" in vars_to_save_dict.keys()
 
-        vars_to_save_size_increment = (
-            100.0 * (len(vars_to_save_dict) - 1 + save_r_ini * 3) / 9.0
-        )
-        vars_to_save_size = 15000  # Size of header
-        field_lines_size = 0
+        vars_to_save_size_increment_kB = 0.06
+        vars_to_save_size_kB = 12  # Size of header
+        field_lines_size_kB = 0
         file_no = 0
-        filename_cur = filename + "%03d.fits" % file_no
+        filename_cur = filename + "_%03d.fits" % file_no
 
         print(f"Starting field line calculations at {datetime.datetime.now()}")
         for i in tqdm(np.arange(footpoints_grid.nline)):
-            vars_to_save_size += vars_to_save_size_increment
+            vars_to_save_size_kB += vars_to_save_size_increment_kB
             r_initial = r_initial_grid[i]
             stat_dict = self.get_single_field_line(
                 r_initial, vars_to_save_dict.keys(), dt=dt
@@ -135,9 +131,9 @@ class MultipoleField:
 
             if save_field_lines:
                 if len(stat_dict["field_lines"]) > 0:
-                    field_lines_size += len(stat_dict["field_lines"][0, :]) * 12.0
+                    field_lines_size_kB += len(stat_dict["field_lines"][:, 0]) * 0.012
 
-            file_size_Mb = (vars_to_save_size + field_lines_size) / 1.0e6
+            file_size_Mb = (vars_to_save_size_kB + field_lines_size_kB) / 1.0e3
             if save_file:
                 if file_size_Mb > max_file_size_Mb:
                     io.write_to_fits(
@@ -152,8 +148,8 @@ class MultipoleField:
                     filename_cur = filename + "_" + "%03d.fits" % file_no
                     # initialize columns
                     vars_to_save_dict = self.set_vars_to_save(vars_to_save)
-                    vars_to_save_size = 0
-                    field_lines_size = 0
+                    vars_to_save_size_kB = 0
+                    field_lines_size_kB = 0
 
         if save_file:
             io.write_to_fits(
@@ -211,6 +207,7 @@ class MultipoleField:
             output_dict["r_ini"] = r_initial
         if "field_lines" in vars_to_save:
             if R_max >= self.R_min:
+                #r = np.random.normal(size=(3,1000))
                 output_dict["field_lines"] = r.T
             else:
                 output_dict["field_lines"] = []
@@ -268,7 +265,7 @@ if __name__ == "__main__":
     r0 = 1 * r_ns
     # parameters_dict = {"nlon": 2, "nlat": 20}
     grid_type = "random"
-    parameters_dict = {"nline_ori": 500}
+    parameters_dict = {"nline_ori": 1500}
     grid = FootpointGrid(grid_type, parameters_dict, r0)
     grid.calculate_grid()
 
@@ -286,9 +283,11 @@ if __name__ == "__main__":
                 "moment_orientation_longitude_degree": 0.0,
             },
         ],
-        R_max=1.1,
-        R_min=1.0,
     )
     magnetic_field.get_field_lines(
-        grid, "test_file", vars_to_save="", max_file_size_Mb=100
+        grid, "test_file", 
+        vars_to_save="footpoint_id,R_max,R_cyl_max,z_abs_max,r_ini,field_lines", #"footpoint_id, field_lines", 
+        R_max=3.0,
+        R_min=1.0,
+        max_file_size_Mb=2
     )
