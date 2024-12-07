@@ -124,17 +124,17 @@ def group_by_parameter(run_parameters, prm_name):
     return result
 
 
-def shift_color_by_saturation_value(colors, saturation_shift, value_shift):
-    hex_pattern = re.compile(r'^#(?:[0-9a-fA-F]{3}){1,2}$')
+def shift_color_by_saturation_value(colors, saturation_shift, value_shift, hex=False):
+
     colors_shifted = []
     for color in colors:
-        if bool(hex_pattern.match(color)):
+        if hex:
             color_rgb = mpl.colors.hex2color(color)
-        elif isinstance(color, tuple):
-            color_rgb = color
         else:
-            print("Wrong color format")
-            sys.exit(1)
+            color_rgb = color
+        #else:
+        #    print("Wrong color format")
+        #    sys.exit(1)
         h, s, v = cl.rgb_to_hsv(color_rgb[0], color_rgb[1], color_rgb[2])
         s -= saturation_shift  
         v += value_shift  
