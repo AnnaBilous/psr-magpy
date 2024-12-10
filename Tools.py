@@ -24,12 +24,18 @@ def get_OFL_footpoints(stat_dict, R_LC, OFL_mask=False, h_LC_coeff=3**1.5 / 2.0)
         return footpoint_ids[open_fl_crit]
 
 
-def trim_field_line(field_line, R_LC, h_LC_coeff=3**1.5 / 2.0):
+def trim_field_line(field_line, R_LC, h_LC_coeff=3**1.5 / 2.0, trim_type='cylinder'):
+    assert trim_type in ['cylinder', 'sphere'], "trim_type should be cylinder or sphere"
     if isinstance(field_line, np.ndarray):
         field_line = CartesianRepresentation(field_line.T)
-    z_abs = np.abs(field_line.z)
-    R_cyl = (field_line.x**2 + field_line.y**2) ** 0.5
-    outside_LC = (R_cyl > R_LC) | ((R_cyl < R_LC) & (z_abs > (h_LC_coeff * R_LC)))
+
+    if trim_type == "cylinder":
+        z_abs = np.abs(field_line.z)
+        R_cyl = (field_line.x**2 + field_line.y**2) ** 0.5
+        outside_LC = (R_cyl > R_LC) | ((R_cyl < R_LC) & (z_abs > (h_LC_coeff * R_LC)))
+    elif trim_type == "sphere":
+        R_sph = (field_line.x**2 + field_line.y**2 + field_line.z**2) ** 0.5
+        outside_LC = R_sph > R_LC
     ind = np.arange(len(z_abs))
     if len(ind[outside_LC]) > 0:
         first_LC_penetration_point = ind[outside_LC][0]
