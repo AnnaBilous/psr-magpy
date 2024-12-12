@@ -98,7 +98,7 @@ def healpix_grid_get_OFL_edges(grid, P_grid, stat_dict, h_LC_coeff=3**1.5 / 2.0)
     edge_ftp_ids = []
     inner_ftp_ids = [[]]
     for i, R_LC in enumerate(R_LC_grid):
-        cur_ftp_ids = get_OFL_footpoints(stat_dict, R_LC, h_LC_coeff)
+        cur_ftp_ids = get_OFL_footpoints(stat_dict, R_LC, OFL_mask=False, h_LC_coeff=h_LC_coeff)
         ftp_ids.append(cur_ftp_ids)
         inner_ftp_ids.append(cur_ftp_ids)
     for i in range(n_P):
