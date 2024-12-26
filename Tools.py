@@ -24,8 +24,8 @@ def get_OFL_footpoints(stat_dict, R_LC, OFL_mask=False, h_LC_coeff=3**1.5 / 2.0)
         return footpoint_ids[open_fl_crit]
 
 
-def trim_field_line(field_line, R_LC, h_LC_coeff=3**1.5 / 2.0, trim_type='cylinder'):
-    assert trim_type in ['cylinder', 'sphere'], "trim_type should be cylinder or sphere"
+def trim_field_line(field_line, R_LC, h_LC_coeff=3**1.5 / 2.0, trim_type="cylinder"):
+    assert trim_type in ["cylinder", "sphere"], "trim_type should be cylinder or sphere"
     if isinstance(field_line, np.ndarray):
         field_line = CartesianRepresentation(field_line.T)
 
@@ -98,7 +98,9 @@ def healpix_grid_get_OFL_edges(grid, P_grid, stat_dict, h_LC_coeff=3**1.5 / 2.0)
     edge_ftp_ids = []
     inner_ftp_ids = [[]]
     for i, R_LC in enumerate(R_LC_grid):
-        cur_ftp_ids = get_OFL_footpoints(stat_dict, R_LC, OFL_mask=False, h_LC_coeff=h_LC_coeff)
+        cur_ftp_ids = get_OFL_footpoints(
+            stat_dict, R_LC, OFL_mask=False, h_LC_coeff=h_LC_coeff
+        )
         ftp_ids.append(cur_ftp_ids)
         inner_ftp_ids.append(cur_ftp_ids)
     for i in range(n_P):
@@ -138,12 +140,12 @@ def shift_color_by_saturation_value(colors, saturation_shift, value_shift, hex=F
             color_rgb = mpl.colors.hex2color(color)
         else:
             color_rgb = color
-        #else:
+        # else:
         #    print("Wrong color format")
         #    sys.exit(1)
         h, s, v = cl.rgb_to_hsv(color_rgb[0], color_rgb[1], color_rgb[2])
-        s -= saturation_shift  
-        v += value_shift  
+        s -= saturation_shift
+        v += value_shift
         if s < 0:
             s = 0
         if v > 1:

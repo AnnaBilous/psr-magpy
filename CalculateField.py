@@ -207,7 +207,7 @@ class MultipoleField:
             output_dict["r_ini"] = r_initial
         if "field_lines" in vars_to_save:
             if R_max >= self.R_min:
-                #r = np.random.normal(size=(3,1000))
+                # r = np.random.normal(size=(3,1000))
                 output_dict["field_lines"] = r.T
             else:
                 output_dict["field_lines"] = []
@@ -285,9 +285,10 @@ if __name__ == "__main__":
         ],
     )
     magnetic_field.get_field_lines(
-        grid, "test_file", 
-        vars_to_save="footpoint_id,R_max,R_cyl_max,z_abs_max,r_ini,field_lines", #"footpoint_id, field_lines", 
+        grid,
+        "test_file",
+        vars_to_save="footpoint_id,R_max,R_cyl_max,z_abs_max,r_ini,field_lines",  # "footpoint_id, field_lines",
         R_max=3.0,
         R_min=1.0,
-        max_file_size_Mb=2
+        max_file_size_Mb=2,
     )
