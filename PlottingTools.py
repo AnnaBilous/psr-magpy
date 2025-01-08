@@ -17,7 +17,9 @@ def initialize_subplot(XZview, ZtoX):
     ax.set_ylim(-ZtoX * XZview, ZtoX * XZview)
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.axis("off")
+    
+    #ax.set_facecolor("k")
+    #ax.axis("off")
     return ax
 
 
@@ -71,20 +73,15 @@ def prepare_lines_for_plotting(FLs, phi_rot, theta_rot, XZview, YtoX, K):
 
 def compute_fraction_of_line_length(FLs):
     l_all = np.array([])
- 
+    
     for FL in FLs:
- 
-        X,Y,Z = FL.T
-        R = (X[:2]**2 + Y[:2]**2 + Z[:2]**2)**0.5
-        dR = R[1] - R[0]
-        if dR > 0:
-            l_min = 0
-            l_max = 1
-        else:
-            l_min = 1
-            l_max = 0
-        # Compute segments and midpoints
-        l_all = np.append(l_all, np.linspace(l_min, l_max, len(Y[:-1]), endpoint=True))
+        X, Y, Z = FL.T
+        R = np.sqrt(X[0]**2 + Y[0]**2 + Z[0]**2)  # Only need first point
+        R_next = np.sqrt(X[1]**2 + Y[1]**2 + Z[1]**2)  # And second point
+        
+        # Determine direction based on radial distance
+        l_min, l_max = (0, 1) if R_next > R else (1, 0)
+        l_all = np.append(l_all, np.linspace(l_min, l_max, len(Y)-1))
 
     return l_all
 

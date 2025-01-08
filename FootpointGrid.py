@@ -1,146 +1,246 @@
-import healpy as hp
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
+from typing import Union, Optional, Any
+
 import numpy as np
+import healpy as hp
 import matplotlib.pyplot as plt
 from astropy import units as u
-from astropy.coordinates import PhysicsSphericalRepresentation
+from astropy.coordinates import Angle, PhysicsSphericalRepresentation
 from astropy.coordinates.representation import CartesianRepresentation
-from astropy.coordinates import Angle
 from scipy.spatial.transform import Rotation as rot
-
-r_ns = u.def_unit("Neutron star radius, 10 km", 10 * u.km)
-u.add_enabled_units([r_ns])
+import logging
 
 
-class FootpointGrid:
-    """Grid of field line foopoints.
-    Parameters:
-        grid_type: "spherical", "random", "healpix"
-    """
+# Setup logger at the top of the file
+logger = logging.getLogger(__name__)
 
-    def __init__(self, grid_type: str, params: dict, r0: u.Quantity):
-        self.grid_type = grid_type
-        self.r0 = r0
-        if grid_type == "spherical":
-            assert "nlon" in params.keys(), "Missing nlon for spherical grid"
-            assert "nlat" in params.keys(), "Missing nlat for spherical grid"
-            self.nlon = int(params["nlon"])
-            self.nlat = int(params["nlat"])
-            if "pole_lat" in params.keys():
-                self.pole_lat = params["pole_lat"]
-            else:
-                self.pole_lat = 0
-        if grid_type == "healpix":
-            assert "nside" in params.keys(), "Missing nside for healpix grid"
-            self.nside = int(params["nside"])
-        if grid_type == "random":
-            assert "nline_ori" in params.keys(), "Missing nline_ori for random grid"
-            self.nline_ori = int(params["nline_ori"])
-        self.partial = False
+class GridType(Enum):
+    SPHERICAL = "spherical"
+    HEALPIX = "healpix"
+    RANDOM = "random"
 
-    def calculate_grid(self) -> None:
-        if self.grid_type == "spherical":
-            footpoints = self.__prepare_spherical_footpoints(
-                self.nlon, self.nlat, self.r0, self.pole_lat
-            )
-            print("Calculating footpoints for spherical grid")
-        if self.grid_type == "healpix":
-            footpoints = self.__prepare_healpix_footpoints(self.nside, self.r0)
-            print("Calculating footpoints for healpix grid")
-        if self.grid_type == "random":
-            footpoints = self.__prepare_random_footpoints(self.nline_ori, self.r0)
-            print("Calculating footpoints for random grid")
-        self.footpoint_coordinates = footpoints
-        self.indices = np.arange(self.nline_ori)
-        self.nline = self.nline_ori
-        return
+@dataclass
+class SphericalGridParams:
+    nlon: int
+    nlat: int
+    pole_lat: float = 0  # optional with default
 
-    def subset_grid(self, grid_indices: np.array) -> None:
-        not_allowed_indices = set(grid_indices) - set(self.indices)
-        assert len(not_allowed_indices) == 0, print(
-            f"Following indices are not present in this grid: {not_allowed_indices}."
-        )
-        self.partial = True
-        self.footpoint_coordinates = self.footpoint_coordinates[grid_indices]
-        self.indices = grid_indices
-        self.nline = len(grid_indices)
-        print(f"Subsetting grid from {self.nline_ori} to {self.nline} indices")
-        return
+@dataclass
+class HealpixGridParams:
+    nside: int
 
-    def plot_footpoint_coordinates(self) -> None:
-        # Rename footpoint_coordinates to just coordinates
-        footpoints_sph = self.footpoint_coordinates.represent_as(
-            PhysicsSphericalRepresentation
-        )
-        plt.plot(footpoints_sph.phi.degree, footpoints_sph.theta.degree, "r.")
+@dataclass
+class RandomGridParams:
+    nline_ori: int
 
-        plt.xlim(0, 360)
-        plt.xlabel("Longitude, deg")
-        plt.ylim(180, 0)
-        plt.ylabel("Latitude, deg")
-        plt.show()
+# Type alias for parameter types
+GridParams = Union[SphericalGridParams, HealpixGridParams, RandomGridParams]
 
-        return
+class BaseGrid(ABC):
+    @abstractmethod
+    def prepare_footpoints(self) -> CartesianRepresentation:
+        pass
 
-    def __prepare_healpix_footpoints(
-        self, nside: int, r0: u.Quantity
-    ) -> CartesianRepresentation:
-        self.nside = nside
-        self.nline_ori = hp.nside2npix(nside)
-        print(
-            " Approx res at NSIDE {} is {:.2} deg ({} points)".format(
-                nside, hp.nside2resol(nside, arcmin=True) / 60, self.nline_ori
-            )
-        )
-        theta_val, phi_val = hp.pix2ang(
-            nside=self.nside, ipix=np.arange(self.nline_ori)
-        )
-        phi = Angle(phi_val * u.rad)
-        theta = Angle(theta_val * u.rad)
-        r = r0 * np.ones(self.nline_ori)
-        footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=r)
-        footpoints_cart = footpoints.represent_as(CartesianRepresentation)
-        return footpoints_cart
+class SphericalGrid(BaseGrid):
+    def __init__(self, params: SphericalGridParams):
+        self.nlon = params.nlon
+        self.nlat = params.nlat
+        self.pole_lat = Angle(params.pole_lat * u.deg)
 
-    def __prepare_spherical_footpoints(
-        self, nlon: int, nlat: int, r0: u.Quantity, pole_lat: Angle
-    ) -> CartesianRepresentation:
-        phi_grid = np.linspace(0, 2 * np.pi, nlon, endpoint=False)
-        theta_grid = np.linspace(0, np.pi, nlat)
-        print(
-            f"Latitude respolution {np.rad2deg(theta_grid[1] - theta_grid[0])} degrees"
-        )
+    def prepare_footpoints(self) -> CartesianRepresentation:
+        phi_grid = np.linspace(0, 2 * np.pi, self.nlon, endpoint=False)
+        theta_grid = np.linspace(0, np.pi, self.nlat)
+        print(f"Latitude resolution {np.rad2deg(theta_grid[1] - theta_grid[0])} degrees")
 
         phi_mesh, theta_mesh = np.meshgrid(phi_grid, theta_grid)
         phi_mesh = np.ravel(phi_mesh)
         theta_mesh = np.ravel(theta_mesh)
-        duplicate = np.where(
-            (phi_mesh > 0) & ((theta_mesh == 0) | (theta_mesh == np.pi))
-        )
+        
+        # Remove duplicate points at poles
+        duplicate = np.where((phi_mesh > 0) & ((theta_mesh == 0) | (theta_mesh == np.pi)))
         theta_pruned = np.delete(theta_mesh, duplicate)
         phi_pruned = np.delete(phi_mesh, duplicate)
+        
         theta = Angle(theta_pruned * u.rad)
-        self.nline_ori = len(theta_pruned)
-
         phi = Angle(phi_pruned * u.rad)
-        r = r0 * np.ones(self.nline_ori)
-        footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=r)
-
+        
+        footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=1)
         footpoints_cart = footpoints.represent_as(CartesianRepresentation)
-        if not (pole_lat == 0):
-            rotation_operator = rot.from_euler("yzx", [pole_lat.rad, 0, 0])
-            xyz = rotation_operator.apply(footpoints_cart.xyz.T) * r_ns
-            footpoints_cart_rot = CartesianRepresentation(xyz.T)
-            return footpoints_cart_rot
-        else:
-            return footpoints_cart
-
-    def __prepare_random_footpoints(
-        self, nline_ori: int, r0: u.Quantity
-    ) -> CartesianRepresentation:
-        # Muller method
-        self.nline_ori = nline_ori
-        u = np.random.normal(loc=0, scale=1, size=(3, nline_ori))
-        norm = (np.sum(u**2, axis=0)) ** 0.5
-        (x, y, z) = u / norm * r0
-        footpoints_cart = CartesianRepresentation(x, y, z)
+        
+        if not (self.pole_lat == 0):
+            rotation_operator = rot.from_euler("yzx", [self.pole_lat.rad, 0, 0])
+            xyz = rotation_operator.apply(footpoints_cart.xyz.T) 
+            return CartesianRepresentation(xyz.T)
+        
         return footpoints_cart
+
+    def __repr__(self) -> str:
+        return (
+            f"SphericalGrid(nlon={self.nlon}, nlat={self.nlat}, "
+            f"pole_lat={self.pole_lat.deg:.1f} deg)"
+        )
+
+class HealpixGrid(BaseGrid):
+    def __init__(self, params: HealpixGridParams):
+        self.nside = params.nside
+
+    def prepare_footpoints(self) -> CartesianRepresentation:
+        npix = hp.nside2npix(self.nside)
+        print(
+            f" Approx res at NSIDE {self.nside} is {hp.nside2resol(self.nside, arcmin=True) / 60:.2f} deg ({npix} points)"
+        )
+        
+        theta_val, phi_val = hp.pix2ang(nside=self.nside, ipix=np.arange(npix))
+        phi = Angle(phi_val * u.rad)
+        theta = Angle(theta_val * u.rad)
+        
+        footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=1)
+        return footpoints.represent_as(CartesianRepresentation)
+
+    def __repr__(self) -> str:
+        return f"HealpixGrid(nside={self.nside})"
+
+class RandomGrid(BaseGrid):
+    def __init__(self, params: RandomGridParams):
+        self.nline_ori = params.nline_ori
+
+    def prepare_footpoints(self) -> CartesianRepresentation:
+        # Muller method for random points on a sphere
+        u = np.random.normal(loc=0, scale=1, size=(3, self.nline_ori))
+        norm = (np.sum(u**2, axis=0)) ** 0.5
+        (x, y, z) = u / norm 
+        return CartesianRepresentation(x, y, z)
+
+    def __repr__(self) -> str:
+        return f"RandomGrid(nline_ori={self.nline_ori})"
+
+
+class FootpointGrid:
+    """A class for managing grids of footpoints on a sphere."""
+    
+    def __init__(self, grid_type: GridType, params: GridParams) -> None:
+        logger.info(f"Initializing FootpointGrid with type {grid_type}")
+        self.grid_type: GridType = grid_type
+        try:
+            self.grid: BaseGrid = self.__create_grid(grid_type, params)
+        except Exception as e:
+            logger.error(f"Failed to create grid: {e}")
+            raise
+        self.partial: bool = False
+        self.calculate_grid()
+
+    def __create_grid(self, grid_type: GridType, params: GridParams) -> BaseGrid:
+        grid_classes: dict[GridType, type[BaseGrid]] = {
+            GridType.SPHERICAL: SphericalGrid,
+            GridType.HEALPIX: HealpixGrid,
+            GridType.RANDOM: RandomGrid
+        }
+        grid_class = grid_classes.get(grid_type)
+        if not grid_class:
+            logger.error(f"Unknown grid type: {grid_type}")
+            raise ValueError(f"Unknown grid type: {grid_type}")
+        logger.debug(f"Creating grid of type {grid_class.__name__}")
+        return grid_class(params)
+
+    def calculate_grid(self) -> None:
+        logger.info("Calculating grid points")
+        try:
+            self.footpoint_coordinates: CartesianRepresentation = self.grid.prepare_footpoints()
+            self.nline_ori: int = len(self.footpoint_coordinates.x)
+            self.indices: np.ndarray = np.arange(self.nline_ori)
+            self.nline: int = self.nline_ori
+            logger.info(f"Successfully created grid with {self.nline} points")
+        except Exception as e:
+            logger.error(f"Failed to calculate grid points: {e}")
+            raise
+
+    def subset_grid(self, grid_indices: np.ndarray) -> None:
+        logger.info(f"Subsetting grid from {self.nline_ori} points")
+        invalid_indices: set[int] = set(grid_indices) - set(self.indices)
+        if invalid_indices:
+            error_msg = (
+                f"Invalid indices found: {invalid_indices}. "
+                f"Indices must be between 0 and {len(self.indices)-1}"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        try:
+            self.partial = True
+            self.footpoint_coordinates = self.footpoint_coordinates[grid_indices]
+            self.indices = grid_indices
+            self.nline = len(grid_indices)
+            logger.info(f"Successfully subset grid to {self.nline} points")
+        except Exception as e:
+            logger.error(f"Failed to subset grid: {e}")
+            raise
+
+    def plot_footpoint_coordinates(
+        self,
+        ax: Optional[plt.Axes] = None,
+        marker: str = ".",
+        color: str = "r",
+        **kwargs: Any
+    ) -> plt.Axes:
+        logger.debug("Plotting footpoint coordinates")
+        try:
+            if ax is None:
+                _, ax = plt.subplots()
+
+            ax.plot(self.longitude, self.colatitude, marker, color=color, **kwargs)
+            
+            ax.set_xlim(0, 360)
+            ax.set_xlabel("Longitude, deg")
+            ax.set_ylim(180, 0)
+            ax.set_ylabel("Latitude, deg")
+            
+            logger.debug("Successfully plotted footpoint coordinates")
+            return ax
+        except Exception as e:
+            logger.error(f"Failed to plot footpoint coordinates: {e}")
+            raise
+
+    @property
+    def colatitude(self) -> np.ndarray:
+        """Latitude of footpoints in degrees.
+        
+        Returns:
+            np.ndarray: Array of latitude values from 0 to 180 degrees
+        """
+        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
+        return spherical.theta.to(u.deg)
+
+    @property
+    def longitude(self) -> np.ndarray:
+        """Longitude of footpoints in degrees.
+        
+        Returns:
+            np.ndarray: Array of longitude values from 0 to 360 degrees
+        """
+        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
+        return spherical.phi.to(u.deg)
+    """
+    @property
+    def xyz(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        Cartesian coordinates of footpoints.
+        
+        Returns:
+            tuple[np.ndarray, np.ndarray, np.ndarray]: x, y, z coordinates
+        
+        return (
+            self.footpoint_coordinates.x.value,
+            self.footpoint_coordinates.y.value,
+            self.footpoint_coordinates.z.value
+        )
+    """
+
+    def __repr__(self) -> str:
+        status = "partial" if self.partial else "full"
+        points = f"{self.nline}/{self.nline_ori}" if self.partial else str(self.nline)
+        return (
+            f"FootpointGrid(type={self.grid_type.value}, "
+            f"points={points}, "
+            f"status={status})"
+        )
