@@ -9,11 +9,12 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 from astropy.coordinates import Angle, PhysicsSphericalRepresentation
 from astropy.coordinates.representation import CartesianRepresentation
+from astropy.io import fits as pf
+from astropy.nddata import CCDData
 from scipy.spatial.transform import Rotation as rot
 import logging
 
 
-# Setup logger at the top of the file
 logger = logging.getLogger(__name__)
 
 class GridType(Enum):
@@ -43,8 +44,27 @@ class BaseGrid(ABC):
     def prepare_footpoints(self) -> CartesianRepresentation:
         pass
 
+class GridConfigValidator:
+    @staticmethod
+    def validate_spherical_params(params: SphericalGridParams) -> None:
+        if params.nlon <= 0 or params.nlat <= 0:
+            raise ValueError("Grid dimensions must be positive")
+        if not -90 <= params.pole_lat <= 90:
+            raise ValueError("Pole latitude must be between -90 and 90 degrees")
+
+    @staticmethod
+    def validate_healpix_params(params: HealpixGridParams) -> None:
+        if params.nside <= 0 or not (params.nside & (params.nside - 1) == 0):
+            raise ValueError("NSIDE must be a positive power of 2")
+
+    @staticmethod
+    def validate_random_params(params: RandomGridParams) -> None:
+        if params.nline_ori <= 0:
+            raise ValueError("Number of random points must be positive")
+
 class SphericalGrid(BaseGrid):
     def __init__(self, params: SphericalGridParams):
+        GridConfigValidator.validate_spherical_params(params)
         self.nlon = params.nlon
         self.nlat = params.nlat
         self.pole_lat = Angle(params.pole_lat * u.deg)
@@ -115,7 +135,6 @@ class RandomGrid(BaseGrid):
 
     def __repr__(self) -> str:
         return f"RandomGrid(nline_ori={self.nline_ori})"
-
 
 class FootpointGrid:
     """A class for managing grids of footpoints on a sphere."""
@@ -244,3 +263,130 @@ class FootpointGrid:
             f"points={points}, "
             f"status={status})"
         )
+        
+    def save_to_fits(self, fitsname: str) -> None:
+        """Save grid to a FITS file.
+        
+        Args:
+            fitsname: Path to the output FITS file
+            
+        Raises:
+            OSError: If file cannot be written
+        """
+        logger.info(f"Saving grid to {fitsname}")
+        try:
+            hdu_main = pf.PrimaryHDU()
+            header_main = hdu_main.header
+            header_main.set("GRIDTYPE", self.grid_type.value, "Grid type")
+            header_main.set("NLINE", self.nline_ori, "Number of field lines in a full grid")
+            header_main.set("PARTIAL", self.partial, "Partial grid")
+
+            # Add grid-specific parameters
+            if self.grid_type == GridType.SPHERICAL:
+                header_main.set("NLON", self.grid.nlon, "Number of longitude divisions")
+                header_main.set("NLAT", self.grid.nlat, "Number of latitude divisions")
+                header_main.set("POLELAT", self.grid.pole_lat.deg, "Latitude of grid pole, degree")
+            elif self.grid_type == GridType.HEALPIX:
+                header_main.set("NSIDE", self.grid.nside, "Healpix parameter nside")
+
+            # Save coordinates
+            data = CCDData(self.footpoint_coordinates.xyz, unit=self.footpoint_coordinates.xyz.unit)
+            hdu_footpoints = data.to_hdu(as_image_hdu=True)[0]
+            hdu_footpoints.name = "FTP_CRD"
+
+            # Save indices
+            col = pf.Column(name="footpoint_id", format="K", array=self.indices)
+            hdu_indices = pf.BinTableHDU.from_columns([col], name="FTP_ID")
+            
+            # Write file
+            hdul = pf.HDUList([hdu_main, hdu_indices, hdu_footpoints])
+            hdul.writeto(fitsname, overwrite=True)
+            logger.info(f"Successfully saved grid to {fitsname}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save grid to {fitsname}: {e}")
+            raise
+
+    def _load_coordinates(self, data: np.ndarray) -> CartesianRepresentation:
+        """Convert array data to CartesianRepresentation.
+        
+        Args:
+            data: Array of coordinate data from FITS file
+            
+        Returns:
+            CartesianRepresentation: Coordinates in Cartesian form
+        """
+        try:
+            return CartesianRepresentation(data)
+        except Exception as e:
+            logger.error(f"Failed to convert coordinates: {e}")
+            raise ValueError("Invalid coordinate data in FITS file") from e
+
+    @classmethod
+    def from_fits(cls, fitsname: str) -> 'FootpointGrid':
+        """Load grid from a FITS file.
+        
+        Args:
+            fitsname: Path to the FITS file
+            
+        Returns:
+            FootpointGrid: Loaded grid object
+            
+        Raises:
+            OSError: If file cannot be read
+            ValueError: If file format is invalid
+        """
+        logger.info(f"Loading grid from {fitsname}")
+        try:
+            with pf.open(fitsname) as hdulist:
+                header_main = hdulist[0].header
+                
+                try:
+                    grid_type = GridType(header_main["GRIDTYPE"])
+                except ValueError as e:
+                    logger.error(f"Invalid grid type in {fitsname}: {header_main['GRIDTYPE']}")
+                    raise ValueError(f"Invalid grid type in FITS file: {header_main['GRIDTYPE']}") from e
+                
+                # Create parameters dictionary based on grid type
+                parameters_dict = {}
+                if grid_type == GridType.SPHERICAL:
+                    parameters_dict = {
+                        "nlon": header_main["NLON"],
+                        "nlat": header_main["NLAT"],
+                        "pole_lat": header_main["POLELAT"]
+                    }
+                elif grid_type == GridType.HEALPIX:
+                    parameters_dict = {
+                        "nside": header_main["NSIDE"]
+                    }
+                else:  # GridType.RANDOM
+                    parameters_dict = {
+                        "nline_ori": header_main["NLINE"]
+                    }
+
+                # Create appropriate parameter object
+                if grid_type == GridType.SPHERICAL:
+                    params = SphericalGridParams(**parameters_dict)
+                elif grid_type == GridType.HEALPIX:
+                    params = HealpixGridParams(**parameters_dict)
+                else:  # random
+                    params = RandomGridParams(**parameters_dict)
+
+                # Create grid instance
+                grid = cls(grid_type, params)
+                
+                # Load coordinates using helper method
+                footpoint_coordinates = hdulist["FTP_CRD"].data
+                grid.footpoint_coordinates = grid._load_coordinates(footpoint_coordinates)
+                
+                # Load indices
+                # There shouldn't be a need for this conversion. Investigate later.
+                grid.indices = np.array([row[0] for row in hdulist["FTP_ID"].data])
+                grid.partial = header_main["PARTIAL"]
+                
+                logger.info(f"Successfully loaded grid from {fitsname}")
+                return grid
+                
+        except Exception as e:
+            logger.error(f"Failed to load grid from {fitsname}: {e}")
+            raise

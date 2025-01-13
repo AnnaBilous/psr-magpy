@@ -56,6 +56,7 @@ def setup_logging(
             print(f"Error creating log file: {e}", file=sys.stderr)
             raise
     
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.WARNING)
     # Configure logging
     try:
         logging.basicConfig(
