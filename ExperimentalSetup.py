@@ -26,7 +26,6 @@ class ExperimentSetup:
     def get_parameters_dict(self):
         not_expandable = set(["path", "saved_vars"])
         expandable = set(vars(self).keys()) - not_expandable
-        # attribute_values = [getattr(self, attr_name) for attr_name in expandable]
         attribute_values = [
             (
                 value

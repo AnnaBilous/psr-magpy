@@ -1,30 +1,19 @@
 import time
 import datetime
+
 import numpy as np
-from tqdm import tqdm
-from astropy import units as u
-from scipy.integrate import solve_ivp
 from astropy.coordinates.representation import CartesianRepresentation
-from FootpointGrid import FootpointGrid
-from FieldComponent import FieldComponent
+from scipy.integrate import solve_ivp
+from tqdm import tqdm
+
+from FieldComponent import *
+from FootpointGrid import *
+from Constants import R_NS
 import WriteToFits as io
 
-r_ns = u.def_unit("Neutron star radius, 10 km", 10 * u.km)
-u.add_enabled_units([r_ns])
-
-
 class MultipoleField:
-    def initialize(self, component_params_list: list):
-        """
-        Gets list of dictionaries
-        """
-        multipole_components = []
-        for component_params in component_params_list:
-            multipole_component = FieldComponent(**component_params)
-            multipole_components.append(multipole_component)
-
-        self.multipole_components = multipole_components
-        self.R_NS = 1
+    def __init__(self, field_components: list):
+        self.field_components = field_components
 
     def set_vars_to_save(self, vars: str):
         allowed_variables = set(
@@ -54,7 +43,7 @@ class MultipoleField:
 
     def get_total_field(self, t, r, K, normalize=True):
         F = np.array([0.0, 0.0, 0.0])
-        for multipole in self.multipole_components:
+        for multipole in self.field_components:
             F += multipole.get_field(r)
         F = F * K
         if normalize:
@@ -63,7 +52,7 @@ class MultipoleField:
 
     def hit_surface(self, t, r, K):
         r = np.sum(r**2) ** 0.5
-        return r - 0.999999 * self.R_NS
+        return r - 0.999999 * R_NS
 
     hit_surface.terminal = True
 
@@ -90,6 +79,32 @@ class MultipoleField:
         save_file=True,
         max_file_size_Mb=200,
     ):
+        """Calculate field lines starting from given footpoints.
+
+        Parameters
+        ----------
+        footpoints_grid : FootpointGrid
+            Grid of initial points for field line tracing
+        filename : str, optional
+            Base filename to save results, by default ""
+        vars_to_save : str, optional
+            Comma-separated list of variables to save, by default ""
+        R_max : float, optional
+            Maximum radius to trace field lines to (in NS radii), by default 10.0
+        R_min : float, optional
+            Minimum radius to trace field lines to (in NS radii), by default 1.0
+        dt : float, optional
+            Integration time step, by default 0.01
+        save_file : bool, optional
+            Whether to save results to file, by default True
+        max_file_size_Mb : float, optional
+            Maximum size of output files in MB, by default 200.0
+
+        Returns
+        -------
+        dict
+            Dictionary containing requested variables for each field line
+        """
         self.R_min = R_min
         self.R_max = R_max
         if max_file_size_Mb < 0.02:
@@ -137,7 +152,7 @@ class MultipoleField:
             if save_file:
                 if file_size_Mb > max_file_size_Mb:
                     io.write_to_fits(
-                        self.multipole_components,
+                        self.field_components,
                         footpoints_grid,
                         vars_to_save_dict,
                         filename_cur,
@@ -153,7 +168,7 @@ class MultipoleField:
 
         if save_file:
             io.write_to_fits(
-                self.multipole_components,
+                self.field_components,
                 footpoints_grid,
                 vars_to_save_dict,
                 filename_cur,
@@ -164,7 +179,7 @@ class MultipoleField:
             filename_cur = filename + "_" + "%03d.fits" % file_no
 
         # del vars_to_save_dict
-        return footpoints_grid, self.multipole_components, vars_to_save_dict
+        return footpoints_grid, self.field_components, vars_to_save_dict
 
     def get_single_field_line(
         self, r_initial: CartesianRepresentation, vars_to_save, dt=0.01, save_dR=False
@@ -239,7 +254,7 @@ class MultipoleField:
                 r_initial, vars_to_save_dict.keys(), dt=dt, save_dR=True
             )
             dR = stat_dict["dR"]
-            R_span = 3 * (self.R_max - self.R_NS)
+            R_span = 3 * (self.R_max - R_NS)
             n_points_max = int(R_span / dR)
             print(f"Distance between points on a field line: {dR: .1e}")
             print(
@@ -260,14 +275,27 @@ class MultipoleField:
 
 
 if __name__ == "__main__":
+    
+    params = SphericalGridParams(nlon=36, nlat=18, pole_lat=70.)
+    grid = FootpointGrid(GridType.SPHERICAL, params)
+        
+    component1 = FieldComponent(
+        moment_type=MultipoleType.DIPOLE  # Only required parameter
+    )
 
-    # grid_type = "spherical"
-    r0 = 1 * r_ns
-    # parameters_dict = {"nlon": 2, "nlat": 20}
-    grid_type = "random"
-    parameters_dict = {"nline_ori": 1500}
-    grid = FootpointGrid(grid_type, parameters_dict, r0)
-    grid.calculate_grid()
+    # Full usage with all parameters
+    component2 = FieldComponent(
+        moment_type=MultipoleType.QUADRUPOLE,
+        B_magnitude=2.0,
+        moment_orientation_latitude_degree=45.0,
+        moment_orientation_longitude_degree=90.0,
+        offset_x_r_ns=0.1,
+        offset_y_r_ns=0.2,
+        offset_z_r_ns=0.3,
+        component_number=1
+    )
+
+    component_list = [component1, component2]
 
     magnetic_field = MultipoleField()
     magnetic_field.initialize(

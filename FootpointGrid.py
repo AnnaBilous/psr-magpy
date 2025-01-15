@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Union, Optional, Any
+import logging
 
 import numpy as np
 import healpy as hp
@@ -12,8 +13,6 @@ from astropy.coordinates.representation import CartesianRepresentation
 from astropy.io import fits as pf
 from astropy.nddata import CCDData
 from scipy.spatial.transform import Rotation as rot
-import logging
-
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +48,6 @@ class GridConfigValidator:
     def validate_spherical_params(params: SphericalGridParams) -> None:
         if params.nlon <= 0 or params.nlat <= 0:
             raise ValueError("Grid dimensions must be positive")
-        if not -90 <= params.pole_lat <= 90:
-            raise ValueError("Pole latitude must be between -90 and 90 degrees")
 
     @staticmethod
     def validate_healpix_params(params: HealpixGridParams) -> None:
@@ -139,8 +136,17 @@ class RandomGrid(BaseGrid):
 class FootpointGrid:
     """A class for managing grids of footpoints on a sphere."""
     
-    def __init__(self, grid_type: GridType, params: GridParams) -> None:
+    def __init__(self, grid_type: Union[GridType, str], params: GridParams) -> None:
         logger.info(f"Initializing FootpointGrid with type {grid_type}")
+        
+        # Convert string to GridType if needed
+        if isinstance(grid_type, str):
+            try:
+                grid_type = GridType(grid_type.lower())
+            except ValueError:
+                logger.error(f"Invalid grid type: {grid_type}")
+                raise ValueError(f"Invalid grid type: {grid_type}. Must be one of {[t.value for t in GridType]}")
+                
         self.grid_type: GridType = grid_type
         try:
             self.grid: BaseGrid = self.__create_grid(grid_type, params)
