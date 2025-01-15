@@ -5,6 +5,8 @@ import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
 from scipy.integrate import solve_ivp
 from tqdm import tqdm
+from enum import Enum
+from typing import Sequence, Union, Optional, Dict, List, Tuple
 
 from FieldComponent import *
 from FootpointGrid import *
@@ -275,48 +277,5 @@ class MultipoleField:
 
 
 if __name__ == "__main__":
+    pass
     
-    params = SphericalGridParams(nlon=36, nlat=18, pole_lat=70.)
-    grid = FootpointGrid(GridType.SPHERICAL, params)
-        
-    component1 = FieldComponent(
-        moment_type=MultipoleType.DIPOLE  # Only required parameter
-    )
-
-    # Full usage with all parameters
-    component2 = FieldComponent(
-        moment_type=MultipoleType.QUADRUPOLE,
-        B_magnitude=2.0,
-        moment_orientation_latitude_degree=45.0,
-        moment_orientation_longitude_degree=90.0,
-        offset_x_r_ns=0.1,
-        offset_y_r_ns=0.2,
-        offset_z_r_ns=0.3,
-        component_number=1
-    )
-
-    component_list = [component1, component2]
-
-    magnetic_field = MultipoleField()
-    magnetic_field.initialize(
-        [
-            {
-                "moment_type": "quadrupole",
-                "moment_orientation_latitude_degree": 0.0,
-                "moment_orientation_longitude_degree": 0.0,
-            },
-            {
-                "moment_type": "dipole",
-                "moment_orientation_latitude_degree": 90.0,
-                "moment_orientation_longitude_degree": 0.0,
-            },
-        ],
-    )
-    magnetic_field.get_field_lines(
-        grid,
-        "test_file",
-        vars_to_save="footpoint_id,R_max,R_cyl_max,z_abs_max,r_ini,field_lines",  # "footpoint_id, field_lines",
-        R_max=3.0,
-        R_min=1.0,
-        max_file_size_Mb=2,
-    )
