@@ -1,15 +1,12 @@
-# Standard library
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Type, Union, Optional, Any
 import logging
 
-# Third-party libraries
 import numpy as np
 from scipy.spatial.transform import Rotation as rot
 
-# Astropy specific imports
 from astropy import units as u
 from astropy.coordinates import PhysicsSphericalRepresentation
 from astropy.coordinates.representation import CartesianRepresentation

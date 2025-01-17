@@ -12,6 +12,7 @@ from FieldComponent import *
 from FootpointGrid import *
 from Constants import R_NS
 import WriteToFits as io
+from FieldLineTracer import FieldLineTracer
 
 class MultipoleField:
     def __init__(self, field_components: list):
@@ -43,7 +44,23 @@ class MultipoleField:
         vars_to_save_dict = {var: [] for var in vars_to_save}
         return vars_to_save_dict
 
-    def get_total_field(self, t, r, K, normalize=True):
+    def get_total_field(self, r, K=1, normalize=True):
+        """Calculate total magnetic field at position r.
+        
+        Parameters
+        ----------
+        r : ndarray
+            Position vector
+        K : float, optional
+            Field direction multiplier, by default 1
+        normalize : bool, optional
+            Whether to normalize the field vector, by default True
+            
+        Returns
+        -------
+        ndarray
+            Magnetic field vector
+        """
         F = np.array([0.0, 0.0, 0.0])
         for multipole in self.field_components:
             F += multipole.get_field(r)
@@ -52,23 +69,16 @@ class MultipoleField:
             F /= np.sum(F**2) ** 0.5
         return F
 
-    def hit_surface(self, t, r, K):
-        r = np.sum(r**2) ** 0.5
-        return r - 0.999999 * R_NS
-
-    hit_surface.terminal = True
-
-    def hit_Rmax(self, t, r, K):
-        r = np.sum(r**2) ** 0.5
-        return r - self.R_max
-
-    hit_Rmax.terminal = True
-
-    def hit_Rmin(self, t, r, K):
-        r = np.sum(r**2) ** 0.5
-        return r - self.R_min
-
-    hit_Rmin.terminal = True
+    def get_single_field_line(
+        self, r_initial: CartesianRepresentation, vars_to_save, dt=0.01, save_dR=False, R_max=2.0, R_min=1.0
+    ):
+        # Create field line tracer if not already created
+        if not hasattr(self, '_field_line_tracer'):
+            self._field_line_tracer = FieldLineTracer(self, R_max, R_min)
+        
+        return self._field_line_tracer.trace_single_line(
+            r_initial, vars_to_save, dt, save_dR
+        )
 
     def get_field_lines(
         self,
@@ -183,57 +193,7 @@ class MultipoleField:
         # del vars_to_save_dict
         return footpoints_grid, self.field_components, vars_to_save_dict
 
-    def get_single_field_line(
-        self, r_initial: CartesianRepresentation, vars_to_save, dt=0.01, save_dR=False
-    ):
-        r_initial = r_initial.xyz.value
-        B_initial = self.get_total_field(0, r_initial, 1, normalize=False)
-        B_initial_norm = self.get_total_field(0, r_initial, 1, normalize=True)
-        dotprod = np.dot(B_initial_norm, r_initial)
-        K = np.sign(dotprod)
-        field_line = solve_ivp(
-            self.get_total_field,
-            [0, 1e8],
-            r_initial,
-            args=[K],
-            dense_output=True,
-            events=(self.hit_surface, self.hit_Rmax),
-            rtol=5.0e-8,
-            atol=5.0e-8,
-        )
-        if isinstance(dt, int):
-            t = np.linspace(field_line.t[0], field_line.t[-1] + dt, dt)
-        else:
-            t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
-        r = field_line.sol(t)
-        # Change to Cartesian representation
-        R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
 
-        output_dict = {}
-        if "B_R_ini_angle" in vars_to_save:
-            output_dict["B_R_ini_angle"] = np.arccos(dotprod)
-        if "R_max" in vars_to_save:
-            output_dict["R_max"] = R_max
-        if "R_cyl_max" in vars_to_save:
-            output_dict["R_cyl_max"] = np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
-        if "z_abs_max" in vars_to_save:
-            output_dict["z_abs_max"] = np.max(np.abs(r[2, :]))
-        if "B_ini" in vars_to_save:
-            output_dict["B_ini"] = np.sum(B_initial**2) ** 0.5
-        if "r_ini" in vars_to_save:
-            output_dict["r_ini"] = r_initial
-        if "field_lines" in vars_to_save:
-            if R_max >= self.R_min:
-                # r = np.random.normal(size=(3,1000))
-                output_dict["field_lines"] = r.T
-            else:
-                output_dict["field_lines"] = []
-
-        if save_dR:
-            dr = r[:, 1:] - r[:, :-1]
-            dR = np.median(np.sum(dr**2, axis=0) ** 0.5)
-            output_dict["dR"] = dR
-        return output_dict
 
     def estimate_computing_time(
         self, footpoints_grid, vars_to_save_dict: dict, n_lines_estimate=20, dt=0.01
@@ -277,5 +237,40 @@ class MultipoleField:
 
 
 if __name__ == "__main__":
-    pass
+    # Example: Create and visualize a dipole field
+    from FieldComponent import *
+    from astropy.coordinates import CartesianRepresentation
+    import matplotlib.pyplot as plt
+    
+    # Create a dipole field aligned with z-axis
+    dipole = FieldComponent(moment_type=MultipoleType.DIPOLE, moment_orientation_latitude_degree=45.0)
+    quadrupole = FieldComponent(moment_type=MultipoleType.QUADRUPOLE, B_magnitude=3.0)
+    field = MultipoleField([dipole, quadrupole])
+    
+    # Set up parameters for field line tracing
+    R_max = 5.0
+    R_min = 1.0
+    
+    # Create some starting points in the x-z plane
+    params_standard = SphericalGridParams(nlon=2, nlat=90)
+    grid_standard = FootpointGrid(GridType.SPHERICAL, params_standard)
+    start_points = grid_standard.footpoint_coordinates
+    # Plot the field lines
+    plt.figure(figsize=(8, 8))
+    for point in start_points:
+        result = field.get_single_field_line(point, vars_to_save={"field_lines"})
+        if len(result["field_lines"]) > 0:
+            field_line = result["field_lines"]
+            plt.plot(field_line[:, 0], field_line[:, 2], 'b-')
+    
+    # Plot neutron star surface
+    circle = plt.Circle((0, 0), R_NS, color='k', fill=True)
+    plt.gca().add_patch(circle)
+    
+    plt.axis('equal')
+    plt.xlabel('x [R_NS]')
+    plt.ylabel('z [R_NS]')
+    plt.title('Dipole Field Lines')
+    plt.grid(True)
+    plt.show()
     
