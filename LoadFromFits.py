@@ -1,7 +1,7 @@
 from astropy.io import fits as pf
 import numpy as np
 from FootpointGrid import FootpointGrid
-from CalculateField import MultipoleField
+from MultipoleField import MultipoleField
 import FootpointGrid_InputOutput as fp_io
 from astropy.coordinates.representation import CartesianRepresentation
 

@@ -3,7 +3,7 @@ import matplotlib as mpl
 import matplotlib.patches as patches
 
 from FootpointGrid import FootpointGrid
-from CalculateField import MultipoleField
+from MultipoleField import MultipoleField
 from astropy import units as u
 from astropy.coordinates import PhysicsSphericalRepresentation
 from astropy.coordinates.representation import CartesianRepresentation

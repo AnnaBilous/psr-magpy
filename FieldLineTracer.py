@@ -130,3 +130,56 @@ class FieldLineTracer:
             output_dict["dR"] = dR
             
         return output_dict 
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    from MultipoleField import MultipoleField
+    from FootpointGrid import FootpointGrid, GridType, SphericalGridParams
+    from FieldComponent import FieldComponent, MultipoleType
+    
+    # Create magnetic field (example with dipole)
+    dipole = FieldComponent(moment_type=MultipoleType.QUADRUPOLE, B_magnitude=3.0)
+    field = MultipoleField([dipole])  
+    
+    # Initialize field line tracer
+    tracer = FieldLineTracer(field, R_max=5.0)
+    
+    # Create footpoints using FootpointGrid
+    params_standard = SphericalGridParams(nlon=5, nlat=15)
+    grid = FootpointGrid(grid_type=GridType.SPHERICAL, params=params_standard)
+    footpoints = grid.footpoint_coordinates
+    
+    # Variables to save
+    vars_to_save = {"field_lines": True}
+    
+    # Trace field lines
+    field_lines = []
+    for footpoint in footpoints:
+        result = tracer.trace_single_line(footpoint, vars_to_save)
+        if "field_lines" in result and len(result["field_lines"]) > 0:
+            field_lines.append(result["field_lines"])
+    
+    # Plot results
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Plot field lines
+    for line in field_lines:
+        ax.plot(line[:, 0], line[:, 1], line[:, 2], 'b-', alpha=0.5)
+    
+    # Plot NS surface
+    u = np.linspace(0, 2 * np.pi, 100)
+    v = np.linspace(0, np.pi, 100)
+    x = np.outer(np.cos(u), np.sin(v))
+    y = np.outer(np.sin(u), np.sin(v))
+    z = np.outer(np.ones(np.size(u)), np.cos(v))
+    ax.plot_surface(x, y, z, color='r', alpha=0.1)
+    
+    # Set equal aspect ratio
+    ax.set_box_aspect([1,1,1])
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    
+    plt.show() 
