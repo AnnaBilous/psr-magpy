@@ -3,6 +3,9 @@ from astropy.coordinates.representation import CartesianRepresentation
 from scipy.integrate import solve_ivp
 from typing import Dict
 from Constants import R_NS
+import cProfile
+import pstats
+from pstats import SortKey
 
 class FieldLineTracer:
     def __init__(self, field_calculator, R_max=10.0, R_min=1.0):
@@ -141,6 +144,9 @@ if __name__ == "__main__":
     # Create magnetic field (example with dipole)
     dipole = FieldComponent(moment_type=MultipoleType.QUADRUPOLE, B_magnitude=3.0)
     field = MultipoleField([dipole])  
+    # Create profiler
+    profiler = cProfile.Profile()
+    profiler.enable()
     
     # Initialize field line tracer
     tracer = FieldLineTracer(field, R_max=5.0)
@@ -153,7 +159,6 @@ if __name__ == "__main__":
     # Variables to save
     vars_to_save = {"field_lines": True}
     
-    # Trace field lines
     field_lines = []
     for footpoint in footpoints:
         result = tracer.trace_single_line(footpoint, vars_to_save)
@@ -182,4 +187,15 @@ if __name__ == "__main__":
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     
-    plt.show() 
+    plt.show()
+    
+    # Disable profiler and print stats
+    profiler.disable()
+    
+    # Print stats sorted by cumulative time
+    stats = pstats.Stats(profiler).sort_stats(SortKey.CUMULATIVE)
+    stats.print_stats(20)  # Show top 20 time-consuming functions
+    
+    # Print stats sorted by total time
+    print("\nStats sorted by total time:")
+    stats.sort_stats(SortKey.TIME).print_stats(20) 
