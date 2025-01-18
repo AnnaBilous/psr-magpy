@@ -6,6 +6,7 @@ from Constants import R_NS
 import cProfile
 import pstats
 from pstats import SortKey
+from multiprocessing import Pool
 
 class FieldLineTracer:
     def __init__(self, field_calculator, R_max=10.0, R_min=1.0):
@@ -140,10 +141,15 @@ if __name__ == "__main__":
     from MultipoleField import MultipoleField
     from FootpointGrid import FootpointGrid, GridType, SphericalGridParams
     from FieldComponent import FieldComponent, MultipoleType
+    from multiprocessing import Pool
     
     # Create magnetic field (example with dipole)
     dipole = FieldComponent(moment_type=MultipoleType.QUADRUPOLE, B_magnitude=3.0)
     field = MultipoleField([dipole])  
+    def trace_wrapper(footpoint, vars_to_save):
+        """Wrapper function for parallel processing"""
+        return tracer.trace_single_line(footpoint, vars_to_save)
+
     # Create profiler
     profiler = cProfile.Profile()
     profiler.enable()
@@ -152,19 +158,33 @@ if __name__ == "__main__":
     tracer = FieldLineTracer(field, R_max=5.0)
     
     # Create footpoints using FootpointGrid
-    params_standard = SphericalGridParams(nlon=5, nlat=15)
+    params_standard = SphericalGridParams(nlon=100, nlat=10)
     grid = FootpointGrid(grid_type=GridType.SPHERICAL, params=params_standard)
     footpoints = grid.footpoint_coordinates
     
     # Variables to save
     vars_to_save = {"field_lines": True}
     
+    """
     field_lines = []
     for footpoint in footpoints:
         result = tracer.trace_single_line(footpoint, vars_to_save)
         if "field_lines" in result and len(result["field_lines"]) > 0:
             field_lines.append(result["field_lines"])
+    """
     
+    # Create list of arguments for each footpoint
+    args = [(footpoint, vars_to_save) for footpoint in footpoints]
+    
+    # Parallel processing of field lines
+    with Pool() as pool:
+        results = pool.starmap(trace_wrapper, args)
+    
+    # Filter and collect results
+    field_lines = [r["field_lines"] for r in results 
+                  if "field_lines" in r and len(r["field_lines"]) > 0]
+    
+    """
     # Plot results
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
@@ -188,14 +208,15 @@ if __name__ == "__main__":
     ax.set_zlabel('Z')
     
     plt.show()
+    """
     
     # Disable profiler and print stats
     profiler.disable()
     
     # Print stats sorted by cumulative time
     stats = pstats.Stats(profiler).sort_stats(SortKey.CUMULATIVE)
-    stats.print_stats(20)  # Show top 20 time-consuming functions
+    stats.print_stats(10)  # Show top 20 time-consuming functions
     
     # Print stats sorted by total time
-    print("\nStats sorted by total time:")
-    stats.sort_stats(SortKey.TIME).print_stats(20) 
+    print("\nStats sorted by cumulative time:")
+    stats.sort_stats(SortKey.CUMULATIVE).print_stats(20) 
