@@ -7,6 +7,7 @@ import cProfile
 import pstats
 from pstats import SortKey
 from multiprocessing import Pool
+from field_line_types import FieldLine
 
 class FieldLineTracer:
     def __init__(self, field_calculator, R_max=10.0, R_min=1.0):
@@ -63,16 +64,16 @@ class FieldLineTracer:
         return self.field_calculator.get_total_field(r, K, normalize=True)
 
     def trace_single_line(
-        self, r_initial: CartesianRepresentation, vars_to_save: Dict, dt=0.01, save_dR=False
-    ) -> Dict:
+        self, r_initial: CartesianRepresentation, template: FieldLine, dt=0.01, save_dR=False
+    ) -> FieldLine:
         """Trace a single field line from the given initial position.
         
         Parameters
         ----------
         r_initial : CartesianRepresentation
             Initial position for field line tracing
-        vars_to_save : Dict
-            Dictionary specifying which variables to save
+        template : FieldLine
+            Template specifying which properties to save
         dt : float
             Integration time step
         save_dR : bool
@@ -80,15 +81,16 @@ class FieldLineTracer:
             
         Returns
         -------
-        Dict
-            Dictionary containing requested variables for the field line
+        FieldLine
+            FieldLine object containing requested variables for the field line
         """
+        output = template.copy_structure()
         r_initial = r_initial.xyz.value
         B_initial = self.field_calculator.get_total_field(r_initial, K=1, normalize=False)
         B_initial_norm = self.field_calculator.get_total_field(r_initial, K=1, normalize=True)
         dotprod = np.dot(B_initial_norm, r_initial)
         K = np.sign(dotprod)
-        if K==0: K = 1.0
+        if K == 0: K = 1.0
         
         field_line = solve_ivp(
             self._field_for_integration,
@@ -109,31 +111,31 @@ class FieldLineTracer:
         r = field_line.sol(t)
         R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
 
-        output_dict = {}
-        if "B_R_ini_angle" in vars_to_save:
-            output_dict["B_R_ini_angle"] = np.arccos(dotprod)
-        if "R_max" in vars_to_save:
-            output_dict["R_max"] = R_max
-        if "R_cyl_max" in vars_to_save:
-            output_dict["R_cyl_max"] = np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
-        if "z_abs_max" in vars_to_save:
-            output_dict["z_abs_max"] = np.max(np.abs(r[2, :]))
-        if "B_ini" in vars_to_save:
-            output_dict["B_ini"] = np.sum(B_initial**2) ** 0.5
-        if "r_ini" in vars_to_save:
-            output_dict["r_ini"] = r_initial
-        if "field_lines" in vars_to_save:
+        # Directly write properties into output
+        if template.b_r_ini_angle is not None:
+            output.b_r_ini_angle = np.arccos(dotprod)
+        if template.r_max is not None   :
+            output.r_max = R_max
+        if template.r_cyl_max is not None:
+            output.r_cyl_max = np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
+        if template.z_abs_max is not None:
+            output.z_abs_max = np.max(np.abs(r[2, :]))
+        if template.b_ini is not None:
+            output.b_ini = np.sum(B_initial**2) ** 0.5
+        if template.r_ini is not None   :
+            output.r_ini = r_initial
+        if template.r_line is not None:
             if R_max >= self.R_min:
-                output_dict["field_lines"] = r.T
+                output.r_line = r.T
             else:
-                output_dict["field_lines"] = []
+                output.r_line = []
 
         if save_dR:
             dr = r[:, 1:] - r[:, :-1]
             dR = np.median(np.sum(dr**2, axis=0) ** 0.5)
-            output_dict["dR"] = dR
+            output.dR = dR
             
-        return output_dict 
+        return output
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
@@ -144,8 +146,10 @@ if __name__ == "__main__":
     from multiprocessing import Pool
     
     # Create magnetic field (example with dipole)
-    dipole = FieldComponent(moment_type=MultipoleType.QUADRUPOLE, B_magnitude=3.0)
-    field = MultipoleField([dipole])  
+    dipole = FieldComponent(moment_type=MultipoleType.DIPOLE, B_magnitude=1.0, moment_orientation_latitude_degree=45.0)
+    quadrupole = FieldComponent(moment_type=MultipoleType.QUADRUPOLE, B_magnitude=3.0)
+    field = MultipoleField([dipole, quadrupole])  
+    
     def trace_wrapper(footpoint, vars_to_save):
         """Wrapper function for parallel processing"""
         return tracer.trace_single_line(footpoint, vars_to_save)
@@ -158,33 +162,25 @@ if __name__ == "__main__":
     tracer = FieldLineTracer(field, R_max=5.0)
     
     # Create footpoints using FootpointGrid
-    params_standard = SphericalGridParams(nlon=100, nlat=10)
+    params_standard = SphericalGridParams(nlon=4, nlat=11)
     grid = FootpointGrid(grid_type=GridType.SPHERICAL, params=params_standard)
     footpoints = grid.footpoint_coordinates
     
     # Variables to save
-    vars_to_save = {"field_lines": True}
-    
-    """
-    field_lines = []
-    for footpoint in footpoints:
-        result = tracer.trace_single_line(footpoint, vars_to_save)
-        if "field_lines" in result and len(result["field_lines"]) > 0:
-            field_lines.append(result["field_lines"])
-    """
+    template = FieldLine.create_template(save_r_line=True)
     
     # Create list of arguments for each footpoint
-    args = [(footpoint, vars_to_save) for footpoint in footpoints]
+    args = [(footpoint, template) for footpoint in footpoints]
     
     # Parallel processing of field lines
     with Pool() as pool:
         results = pool.starmap(trace_wrapper, args)
     
     # Filter and collect results
-    field_lines = [r["field_lines"] for r in results 
-                  if "field_lines" in r and len(r["field_lines"]) > 0]
+    field_lines = [a.r_line for a in results] # if a.r_line # is not None and len(a.r_line) > 0]
     
-    """
+    
+    
     # Plot results
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
@@ -208,7 +204,7 @@ if __name__ == "__main__":
     ax.set_zlabel('Z')
     
     plt.show()
-    """
+    
     
     # Disable profiler and print stats
     profiler.disable()
