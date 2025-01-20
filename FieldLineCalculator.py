@@ -3,8 +3,9 @@ import datetime
 import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
 from tqdm import tqdm
-from typing import Dict, Tuple, Set, Optional
+from typing import Dict, Tuple, Set, Optional, Sequence, NDArray
 from enum import Enum
+from dataclasses import dataclass
 
 from Constants import R_NS
 import WriteToFits as io
@@ -21,6 +22,38 @@ class Var(Enum):
     R_INI = "r_ini"
     FOOTPOINT_ID = "footpoint_id"
     FIELD_LINES = "field_lines"
+
+@dataclass
+class FieldLine:
+    """Single field line and its properties."""
+    # Required property
+    footpoint_id: int
+    
+    # Optional path of the field line in 3D space
+    points: Optional[NDArray[np.float64]] = None  # Shape: (n_points, 3)
+    
+    # Optional scalar properties at the initial point
+    r_max: Optional[float] = None
+    r_cyl_max: Optional[float] = None
+    z_abs_max: Optional[float] = None
+    b_ini: Optional[float] = None
+    b_r_ini_angle: Optional[float] = None
+    r_ini: Optional[float] = None
+
+@dataclass
+class FieldLineSet:
+    """Collection of field lines."""
+    lines: Sequence[FieldLine]
+
+    @property
+    def n_lines(self) -> int:
+        return len(self.lines)
+
+    # Perhaps not needed
+    @property
+    def footpoint_ids(self) -> NDArray[np.int64]:
+        return np.array([line.footpoint_id for line in self.lines])
+
 
 class FieldLineCalculator:
     def __init__(self, field):
@@ -81,51 +114,43 @@ class FieldLineCalculator:
             self._field_line_tracer = FieldLineTracer(self.field, R_max, R_min)
         return self._field_line_tracer.trace_single_line(r_initial, {var.value for var in variables}, dt, save_dR)
 
-    def get_field_lines(self, footpoints_grid: FootpointGrid, filename="", 
-                       variables: Optional[Set[Var]] = None, R_max=10.0, R_min=1.0, 
-                       dt=0.01, save_file=True, max_file_size_Mb=200) -> Tuple[FootpointGrid, list, Dict]:
-        """Calculate field lines starting from given footpoints.
-
+    def get_field_lines(self, footpoints_grid: FootpointGrid, 
+                       template: FieldLine,
+                       filename: str = "", 
+                       R_max: float = 10.0, 
+                       R_min: float = 1.0, 
+                       dt: float = 0.01) -> FieldLineSet:
+        """Calculate field lines based on template.
+        
         Parameters
         ----------
         footpoints_grid : FootpointGrid
-            Grid of initial points for field line tracing
-        filename : str, optional
-            Base filename to save results, by default ""
-        variables : Set[Var], optional
-            Set of variables to save. If None, saves all variables.
-        R_max : float, optional
-            Maximum radius to trace field lines to (in NS radii), by default 10.0
-        R_min : float, optional
-            Minimum radius to trace field lines to (in NS radii), by default 1.0
-        dt : float, optional
-            Integration time step, by default 0.01
-        save_file : bool, optional
-            Whether to save results to file, by default True
-        max_file_size_Mb : float, optional
-            Maximum size of output files in MB, by default 200.0
-
-        Returns
-        -------
-        Tuple[FootpointGrid, list, Dict]
-            Footpoint grid, field components, and calculated variables
+            Grid of initial points
+        template : FieldLine
+            Template specifying which properties to calculate
         """
+        # Properties to calculate are those that are not None in template
+        properties_to_calculate = {
+            name for name, value in vars(template).items() 
+            if value is not None and name != 'footpoint_id'
+        }
+
         if max_file_size_Mb < 0.02:
             print("Max file size is smaller than the size of header. Setting it to 20 kB.")
             max_file_size_Mb = 0.02
 
         r_initial_grid = footpoints_grid.footpoint_coordinates
         grid_indices = footpoints_grid.indices
-        vars_to_save_dict = self.prepare_variables_dict(variables)
+        vars_to_save_dict = self.prepare_variables_dict(properties_to_calculate)
 
-        completion_time_sec = self.estimate_computing_time(footpoints_grid, variables)
+        completion_time_sec = self.estimate_computing_time(footpoints_grid, properties_to_calculate)
         too_long_sec = 300.0
         if (completion_time_sec > too_long_sec) & (save_file == False):
             print(
                 f"Warning: calculations will take {completion_time_sec/60.} min. According to input parameters, files will not be saved to disk. Are you sure?"
             )
 
-        save_field_lines = Var.FIELD_LINES in (variables or set(Var))
+        save_field_lines = Var.FIELD_LINES in (properties_to_calculate or set(Var))
         vars_to_save_size_increment_kB = 0.06
         vars_to_save_size_kB = 12  # Size of header
         field_lines_size_kB = 0
@@ -133,11 +158,12 @@ class FieldLineCalculator:
         filename_cur = filename + "_%03d.fits" % file_no
 
         print(f"Starting field line calculations at {datetime.datetime.now()}")
+        field_lines = []
         for i in tqdm(np.arange(footpoints_grid.nline)):
             vars_to_save_size_kB += vars_to_save_size_increment_kB
             r_initial = r_initial_grid[i]
             stat_dict = self.get_single_field_line(
-                r_initial, variables or set(Var), dt=dt, R_max=R_max, R_min=R_min
+                r_initial, properties_to_calculate, dt=dt, R_max=R_max, R_min=R_min
             )
             stat_dict[Var.FOOTPOINT_ID.value] = grid_indices[i]
             for key in vars_to_save_dict:
@@ -158,9 +184,11 @@ class FieldLineCalculator:
                 )
                 file_no += 1
                 filename_cur = filename + "_" + "%03d.fits" % file_no
-                vars_to_save_dict = self.prepare_variables_dict(variables)
+                vars_to_save_dict = self.prepare_variables_dict(properties_to_calculate)
                 vars_to_save_size_kB = 0
                 field_lines_size_kB = 0
+
+            field_lines.append(FieldLine(**stat_dict))
 
         if save_file:
             io.write_to_fits(
@@ -172,7 +200,7 @@ class FieldLineCalculator:
                 R_max,
             )
 
-        return footpoints_grid, self.field.field_components, vars_to_save_dict
+        return FieldLineSet(field_lines)
 
     def estimate_computing_time(self, footpoints_grid: FootpointGrid, 
                               variables: Set[Var], n_lines_estimate=20, 
