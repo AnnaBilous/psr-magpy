@@ -139,7 +139,6 @@ class FieldLineTracer:
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D
     from MultipoleField import MultipoleField
     from FootpointGrid import FootpointGrid, GridType, SphericalGridParams
     from FieldComponent import FieldComponent, MultipoleType
