@@ -9,7 +9,6 @@ from FieldComponent import FieldComponent  # Adjust the import based on your pro
 from MultipoleField import MultipoleField, MultipoleType  # Adjust the import based on your project structure
 
 
-
 if __name__ == "__main__":
     
     dipole = FieldComponent(moment_type=MultipoleType.DIPOLE, B_magnitude=1.0, moment_orientation_latitude_degree=0.0)

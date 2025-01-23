@@ -15,11 +15,11 @@ class FitsIO:
         hdu_field_components.writeto(filename, overwrite=True)
 
     def create_hdu_field_components(self):
-        field_component_param_names = [field.name for field in FieldComponentParams.__dataclass_fields__.values()]
+        #field_component_param_names = [field.name for field in FieldComponentParams.__dataclass_fields__.values()]
         column_info = self.generate_column_info()
 
         magnetic_field_columns = [
-            self.create_column(key, field_component_param_names, column_info[key]) 
+            self.create_column(key, column_info[key]) 
             for key in column_info.keys()
         ]
 
@@ -39,7 +39,7 @@ class FitsIO:
             for field in FieldComponentParams.__dataclass_fields__.values()
         }
 
-    def create_column(self, key: str, field_component_param_names: list, format: str):
+    def create_column(self, key: str, format: str):
         # Custom extraction
         value_extraction = {
             "moment_type": lambda: [v.params.moment_type.value for v in self.field_components],
@@ -50,35 +50,19 @@ class FitsIO:
 
         return pf.Column(name=key, format=format, array=value)
 
-    def retrieve_field_components(hdu):
-
+    @classmethod
+    def retrieve_field_components(cls, hdu):
         data = hdu.data
         n_components = np.shape(data)[0]
-        names_dict = {
-            "component_number": "component_number",
-            "moment_type": "moment_type",
-            "B_magnitude": "B_magnitude",
-            "moment_orientation_latitude_degree": "orientation_theta_deg",
-            "moment_orientation_longitude_degree": "orientation_phi_deg",
-            "offset_x_r_ns": "offset_x_R_NS",
-            "offset_y_r_ns": "offset_y_R_NS",
-            "offset_z_r_ns": "offset_z_R_NS",
-        }
-        components_data = [
-            {key: None for key in names_dict.keys()} for _ in range(n_components)
+
+        field_components = [
+            FieldComponent(**{key: hdu.data[key][i] for key in hdu.columns.names})
+            for i in range(n_components)
         ]
-
-        for key, val in names_dict.items():
-            curr_val = data[val]
-            for i in range(n_components):
-                components_data[i][key] = curr_val[i]
-                # Some weird mismatch in integer types
-                if key == "component_number":
-                    components_data[i][key] = int(curr_val[i])
-
-        magnetic_field_components = MultipoleField()
-        magnetic_field_components.initialize(components_data)
-        return magnetic_field_components
+        
+        field = cls(field_components)  
+        
+        return field
 
 
 class MultipoleField:
