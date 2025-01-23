@@ -19,7 +19,6 @@ class MultipoleType(Enum):
     QUADRUPOLE = "quadrupole"
     
     
-
 @dataclass
 class FieldComponentParams:
     moment_type: Union[MultipoleType, str]
