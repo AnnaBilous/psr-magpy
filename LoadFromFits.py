@@ -41,36 +41,7 @@ def retrieve_grid(fitsname):
     return grid
 
 
-def retrieve_field_components(fitsname):
-    _, hdu_field_components, _ = pf.open(fitsname)
 
-    data = hdu_field_components.data
-    n_components = np.shape(data)[0]
-    names_dict = {
-        "component_number": "component_number",
-        "moment_type": "moment_type",
-        "B_magnitude": "B_magnitude",
-        "moment_orientation_latitude_degree": "orientation_theta_deg",
-        "moment_orientation_longitude_degree": "orientation_phi_deg",
-        "offset_x_r_ns": "offset_x_R_NS",
-        "offset_y_r_ns": "offset_y_R_NS",
-        "offset_z_r_ns": "offset_z_R_NS",
-    }
-    components_data = [
-        {key: None for key in names_dict.keys()} for _ in range(n_components)
-    ]
-
-    for key, val in names_dict.items():
-        curr_val = data[val]
-        for i in range(n_components):
-            components_data[i][key] = curr_val[i]
-            # Some weird mismatch in integer types
-            if key == "component_number":
-                components_data[i][key] = int(curr_val[i])
-
-    magnetic_field_components = MultipoleField()
-    magnetic_field_components.initialize(components_data)
-    return magnetic_field_components
 
 
 def retrieve_field_data(fitsname, vars_to_retrieve=""):

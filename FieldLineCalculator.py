@@ -16,6 +16,7 @@ from FieldComponent import FieldComponent, MultipoleType
 from multiprocessing import Pool
 import cProfile
 
+
 class FieldLineCalculator:
     def __init__(self, field: MultipoleField, grid: FootpointGrid):
         """Initialize field line calculator.
@@ -46,7 +47,7 @@ class FieldLineCalculator:
         # Parallel processing of field lines
         with Pool() as pool:
             results = pool.starmap(tracer.trace_single_line, args)
-    
+
         #field_line_tracer = FieldLineTracer(self.field, R_max, R_min)
         #args = [(footpoint, template) for footpoint in footpoints]
         return results
