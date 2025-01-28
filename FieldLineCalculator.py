@@ -2,12 +2,13 @@ import time
 import datetime
 import numpy as np
 from dataclasses import dataclass
+import pickle
 
 from Constants import R_NS
 import WriteToFits as io
 from FieldLineTracer import FieldLineTracer
 from FootpointGrid import FootpointGrid
-from field_line_types import FieldLine
+from FieldLineDefinition import FieldLine, FieldLineSet
 
 import matplotlib.pyplot as plt
 from MultipoleField import MultipoleField
@@ -40,9 +41,10 @@ class FieldLineCalculator:
         tracer = FieldLineTracer(self.field, R_max=R_max, R_min=R_min)
      
         footpoints = self.grid.footpoint_coordinates
+        footpoint_ids = self.grid.indices
         
         # Create list of arguments for each footpoint
-        args = [(footpoint, template) for footpoint in footpoints]
+        args = [(footpoint, footpoint_id, template) for footpoint, footpoint_id in zip(footpoints, footpoint_ids)]
     
         # Parallel processing of field lines
         with Pool() as pool:
@@ -50,6 +52,7 @@ class FieldLineCalculator:
 
         #field_line_tracer = FieldLineTracer(self.field, R_max, R_min)
         #args = [(footpoint, template) for footpoint in footpoints]
+        results = FieldLineSet(results)
         return results
 
 if __name__ == "__main__":
@@ -58,8 +61,8 @@ if __name__ == "__main__":
     # Create magnetic field (example with dipole)
     dipole = FieldComponent(moment_type=MultipoleType.DIPOLE, B_magnitude=1.0, moment_orientation_latitude_degree=0.0)
     quadrupole = FieldComponent(moment_type=MultipoleType.QUADRUPOLE, B_magnitude=3.0)
-    field = MultipoleField([dipole]) #, quadrupole])  
-
+    field = MultipoleField([dipole, quadrupole]) 
+    #print(FieldComponent.parameters)
    
     # Create footpoints using FootpointGrid
     params_standard = SphericalGridParams(nlon=4, nlat=11)
@@ -67,11 +70,19 @@ if __name__ == "__main__":
     footpoints = grid.footpoint_coordinates
     
     # Variables to save
-    template = FieldLine.create_template(save_r_line=True)
-    
+    template = FieldLine(save_r_max=True,save_b_r_ini_angle=True, save_r_line=True)
+    #print(template.parameters)
+
     calculator = FieldLineCalculator(field, grid)
-    results =calculator.get_field_lines(template, R_max=2.0)
+    results = calculator.get_field_lines(template, R_max=2.0)
     
+    # Specify the output FITS file name
+    output_filename = "field_lines.fits"
+    results.write_to_fits(output_filename)
+    
+    #print(results)
+    
+    #exit(1)
     # Create list of arguments for each footpoint
     args = [(footpoint, template) for footpoint in footpoints]
 
@@ -102,5 +113,7 @@ if __name__ == "__main__":
     ax.set_zlabel('Z')
     
     plt.show()
+    
+
     
     

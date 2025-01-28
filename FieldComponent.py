@@ -29,6 +29,10 @@ class FieldComponentParams:
     offset_y_r_ns: float = 0.0
     offset_z_r_ns: float = 0.0
     component_number: int = 0
+    
+    @classmethod
+    def get_parameter_names(self):
+        return self.__dataclass_fields__.values()
 
     def __post_init__(self):
         if isinstance(self.moment_type, str):
