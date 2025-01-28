@@ -17,4 +17,7 @@ if __name__ == "__main__":
     
     # Specify the output FITS file name
     output_filename = "multipole_field.fits"
-    field.fits_io.write_to_fits(output_filename)
+    field.save_to_fits(output_filename)
+    
+    #hdu = pf.open(output_filename)
+    #field_new = MultipoleField.load_from_fits(hdu[1], FieldComponent)

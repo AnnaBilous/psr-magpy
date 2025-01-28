@@ -7,7 +7,7 @@ import cProfile
 import pstats
 from pstats import SortKey
 from multiprocessing import Pool
-from field_line_types import FieldLine
+from FieldLineDefinition import FieldLine
 
 class FieldLineTracer:
     def __init__(self, field_calculator, R_max=10.0, R_min=1.0):
@@ -64,7 +64,7 @@ class FieldLineTracer:
         return self.field_calculator.get_total_field(r, K, normalize=True)
 
     def trace_single_line(
-        self, r_initial: CartesianRepresentation, template: FieldLine, dt=0.01, save_dR=False
+        self, r_initial: CartesianRepresentation, footpoint_id: int, template: FieldLine, dt=0.01, save_dR=False
     ) -> FieldLine:
         """Trace a single field line from the given initial position.
         
@@ -85,6 +85,7 @@ class FieldLineTracer:
             FieldLine object containing requested variables for the field line
         """
         output = template.copy_structure()
+        output.footpoint_id = footpoint_id
         r_initial = r_initial.xyz.value
         B_initial = self.field_calculator.get_total_field(r_initial, K=1, normalize=False)
         B_initial_norm = self.field_calculator.get_total_field(r_initial, K=1, normalize=True)
@@ -122,8 +123,6 @@ class FieldLineTracer:
             output.z_abs_max = np.max(np.abs(r[2, :]))
         if template.b_ini is not None:
             output.b_ini = np.sum(B_initial**2) ** 0.5
-        if template.r_ini is not None   :
-            output.r_ini = r_initial
         if template.r_line is not None:
             if R_max >= self.R_min:
                 output.r_line = r.T
@@ -134,7 +133,7 @@ class FieldLineTracer:
             dr = r[:, 1:] - r[:, :-1]
             dR = np.median(np.sum(dr**2, axis=0) ** 0.5)
             output.dR = dR
-            
+        print(output)
         return output
 
 if __name__ == "__main__":
@@ -166,7 +165,7 @@ if __name__ == "__main__":
     footpoints = grid.footpoint_coordinates
     
     # Variables to save
-    template = FieldLine.create_template(save_r_line=True)
+    template = FieldLine(save_r_line=True)
     
     # Create list of arguments for each footpoint
     args = [(footpoint, template) for footpoint in footpoints]
