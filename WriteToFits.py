@@ -6,7 +6,9 @@ class Field:
         self.multipole_components = multipole_components
 
     def create_hdu_field_components(self):
-        magnetic_field_list = [vars(component) for component in self.multipole_components]
+        magnetic_field_list = [
+            vars(component) for component in self.multipole_components
+        ]
         column_names = ["component_number", "moment_type", "B_magnitude"]
         column_formats = ["K", "10A", "D"]
         magnetic_field_columns = []
@@ -43,11 +45,11 @@ def write_to_fits(
     print(f"Saving {vars_to_save_dict.keys()}")
     hdu_main = pf.PrimaryHDU()
     hdu_main = update_main_header(hdu_main, footpoints_grid)
-    
+
     # Create Field instance and use its method
     field = Field(multipole_components)
     hdu_field_components = field.create_hdu_field_components()
-    
+
     hdu_field_data = create_hdu_field_data(vars_to_save_dict, Rmin, Rmax)
 
     hdulist = [hdu_main, hdu_field_components, hdu_field_data]

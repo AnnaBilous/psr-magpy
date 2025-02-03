@@ -41,9 +41,6 @@ def retrieve_grid(fitsname):
     return grid
 
 
-
-
-
 def retrieve_field_data(fitsname, vars_to_retrieve=""):
     _, _, hdu_field_data = pf.open(fitsname)
     existing_variables = set(hdu_field_data.columns.names)

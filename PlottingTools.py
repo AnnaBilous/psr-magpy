@@ -4,6 +4,7 @@ from matplotlib.collections import LineCollection
 from scipy.spatial.transform import Rotation as R
 import matplotlib
 
+
 def get_Nlayers(XZview, YtoX, K):
     Yview = XZview * YtoX
     Nlayers = int(2 * Yview * K)
@@ -17,9 +18,9 @@ def initialize_subplot(XZview, ZtoX):
     ax.set_ylim(-ZtoX * XZview, ZtoX * XZview)
     ax.set_xticks([])
     ax.set_yticks([])
-    
-    #ax.set_facecolor("k")
-    #ax.axis("off")
+
+    # ax.set_facecolor("k")
+    # ax.axis("off")
     return ax
 
 
@@ -28,7 +29,7 @@ def initialize_lines(ax, linewidth_func, zorder_layer, Nlayers):
     for k in zorder_layer:
         line_layer = LineCollection(
             np.empty((0, 2, 2)),
-            #color=linecolor_func(k, Nlayers),
+            # color=linecolor_func(k, Nlayers),
             zorder=zorder_layer[k],
             linewidths=linewidth_func(k, Nlayers),
             antialiaseds=1,
@@ -51,44 +52,47 @@ def get_line_projection(FLs, phi_rot, theta_rot):
 
     return FLs_proj
 
+
 def prepare_lines_for_plotting(FLs, phi_rot, theta_rot, XZview, YtoX, K):
     # Project all field lines
     FLs_proj = get_line_projection(FLs, phi_rot, theta_rot)
-    
+
     segments_list = []
     y_all = np.array([])
-        
+
     for Xproj, Yproj, Zproj in FLs_proj:
         # Compute segments and midpoints
         points = np.stack([Xproj, Zproj], axis=1).reshape(-1, 1, 2)
         segments_list.append(np.concatenate([points[:-1], points[1:]], axis=1))
         y_all = np.append(y_all, 0.5 * (Yproj[1:] + Yproj[:-1]))
-  
+
     # Combine segments and compute z-order
     segments_all = np.vstack(segments_list)
     zorder_all = ((y_all + XZview * YtoX) * K).astype(int)
-    
+
     return segments_all, zorder_all
 
 
 def compute_fraction_of_line_length(FLs):
     l_all = np.array([])
-    
+
     for FL in FLs:
         X, Y, Z = FL.T
-        R = np.sqrt(X[0]**2 + Y[0]**2 + Z[0]**2)  # Only need first point
-        R_next = np.sqrt(X[1]**2 + Y[1]**2 + Z[1]**2)  # And second point
-        
+        R = np.sqrt(X[0] ** 2 + Y[0] ** 2 + Z[0] ** 2)  # Only need first point
+        R_next = np.sqrt(X[1] ** 2 + Y[1] ** 2 + Z[1] ** 2)  # And second point
+
         # Determine direction based on radial distance
         l_min, l_max = (0, 1) if R_next > R else (1, 0)
-        l_all = np.append(l_all, np.linspace(l_min, l_max, len(Y)-1))
+        l_all = np.append(l_all, np.linspace(l_min, l_max, len(Y) - 1))
 
     return l_all
 
 
-def fill_lines(lines, segments_all, zorder_all, color_param_all, zorder_layer, colormap):
-    colors =  colormap(color_param_all)
-    
+def fill_lines(
+    lines, segments_all, zorder_all, color_param_all, zorder_layer, colormap
+):
+    colors = colormap(color_param_all)
+
     # Update line collection data
     for k in zorder_layer:
         mask = zorder_all == k
