@@ -236,28 +236,32 @@ class SphericalGrid(FootpointGrid):
     def prepare_footpoints(self) -> CartesianRepresentation:
         phi_grid = np.linspace(0, 2 * np.pi, self.nlon, endpoint=False)
         theta_grid = np.linspace(0, np.pi, self.nlat)
-        print(f"Latitude resolution {np.rad2deg(theta_grid[1] - theta_grid[0])} degrees")
+        print(
+            f"Latitude resolution {np.rad2deg(theta_grid[1] - theta_grid[0])} degrees"
+        )
 
         phi_mesh, theta_mesh = np.meshgrid(phi_grid, theta_grid)
         phi_mesh = np.ravel(phi_mesh)
         theta_mesh = np.ravel(theta_mesh)
-        
+
         # Remove duplicate points at poles
-        duplicate = np.where((phi_mesh > 0) & ((theta_mesh == 0) | (theta_mesh == np.pi)))
+        duplicate = np.where(
+            (phi_mesh > 0) & ((theta_mesh == 0) | (theta_mesh == np.pi))
+        )
         theta_pruned = np.delete(theta_mesh, duplicate)
         phi_pruned = np.delete(phi_mesh, duplicate)
-        
+
         theta = Angle(theta_pruned * u.rad)
         phi = Angle(phi_pruned * u.rad)
-        
+
         footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=1)
         footpoints_cart = footpoints.represent_as(CartesianRepresentation)
-        
+
         if not (self.pole_lat == 0):
             rotation_operator = rot.from_euler("yzx", [self.pole_lat.rad, 0, 0])
-            xyz = rotation_operator.apply(footpoints_cart.xyz.T) 
+            xyz = rotation_operator.apply(footpoints_cart.xyz.T)
             return CartesianRepresentation(xyz.T)
-        
+
         return footpoints_cart
 
     def __repr__(self) -> str:
@@ -293,11 +297,11 @@ class HealpixGrid(FootpointGrid):
         print(
             f" Approx res at NSIDE {self.nside} is {hp.nside2resol(self.nside, arcmin=True) / 60:.2f} deg ({npix} points)"
         )
-        
+
         theta_val, phi_val = hp.pix2ang(nside=self.nside, ipix=np.arange(npix))
         phi = Angle(phi_val * u.rad)
         theta = Angle(theta_val * u.rad)
-        
+
         footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=1)
         return footpoints.represent_as(CartesianRepresentation)
 
@@ -326,7 +330,7 @@ class RandomGrid(FootpointGrid):
         # Muller method for random points on a sphere
         u = np.random.normal(loc=0, scale=1, size=(3, self.nline_ori))
         norm = (np.sum(u**2, axis=0)) ** 0.5
-        (x, y, z) = u / norm 
+        (x, y, z) = u / norm
         return CartesianRepresentation(x, y, z)
 
     def __repr__(self) -> str:

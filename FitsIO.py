@@ -11,9 +11,10 @@ FITS_TYPE_MAPPING = {
     int: "I",
     str: "10A",
     ndarray: "PE",  # Variable-length array of doubles
-    integer: "I",   # numpy integers
-    floating: "D"   # numpy floats
+    integer: "I",  # numpy integers
+    floating: "D",  # numpy floats
 }
+
 
 def get_fits_format(value):
     """Helper function to determine FITS format for a value."""
@@ -34,8 +35,7 @@ class FitsIO:
     def create_hdu(self):
         column_info = self.generate_column_info()
         columns = [
-            self.create_column(key, column_info[key]) 
-            for key in column_info.keys()
+            self.create_column(key, column_info[key]) for key in column_info.keys()
         ]
         hdu = pf.BinTableHDU.from_columns(columns, name="TEST")
         return hdu
@@ -56,18 +56,27 @@ class FitsIO:
         ]
         return cls(components)
 
+
 class FieldComponentFitsIO(FitsIO):
     def generate_column_info(self):
         first_component = self.data[0]
         if not isinstance(first_component, FieldComponent):
-            raise TypeError(f"Expected FieldComponent, got {type(first_component).__name__}")
-            
+            raise TypeError(
+                f"Expected FieldComponent, got {type(first_component).__name__}"
+            )
+
         params_dict = vars(first_component.params)
-        
+
         return {
-            param_name: FITS_TYPE_MAPPING[str] if param_name == "moment_type" 
-                       else FITS_TYPE_MAPPING[ndarray] if param_name == "field_lines"
-                       else get_fits_format(param_value)
+            param_name: (
+                FITS_TYPE_MAPPING[str]
+                if param_name == "moment_type"
+                else (
+                    FITS_TYPE_MAPPING[ndarray]
+                    if param_name == "field_lines"
+                    else get_fits_format(param_value)
+                )
+            )
             for param_name, param_value in params_dict.items()
             if param_value is not None
         }
@@ -79,14 +88,16 @@ class FieldComponentFitsIO(FitsIO):
             value = [getattr(v.params, key) for v in self.data]
         return pf.Column(name=key, format=format, array=value)
 
+
 class FieldLineFitsIO(FitsIO):
     def generate_column_info(self):
+
         first_line = self.data[0]
         if not isinstance(first_line, FieldLine):
             raise TypeError(f"Expected FieldLine, got {type(first_line).__name__}")
-            
+
         params_dict = vars(first_line)
-        
+
         return {
             param_name: get_fits_format(param_value)
             for param_name, param_value in params_dict.items()
@@ -95,4 +106,4 @@ class FieldLineFitsIO(FitsIO):
 
     def create_column(self, key: str, format: str):
         value = [getattr(v, key) for v in self.data]
-        return pf.Column(name=key, format=format, array=value)  
+        return pf.Column(name=key, format=format, array=value)
