@@ -123,9 +123,9 @@ class HealpixGrid(BaseGrid):
 
     def prepare_footpoints(self) -> CartesianRepresentation:
         npix = hp.nside2npix(self.nside)
-        print(
-            f" Approx res at NSIDE {self.nside} is {hp.nside2resol(self.nside, arcmin=True) / 60:.2f} deg ({npix} points)"
-        )
+        #print(
+        #    f" Approx res at NSIDE {self.nside} is {hp.nside2resol(self.nside, arcmin=True) / 60:.2f} deg ({npix} points)"
+        #)
 
         theta_val, phi_val = hp.pix2ang(nside=self.nside, ipix=np.arange(npix))
         phi = Angle(phi_val * u.rad)
