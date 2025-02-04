@@ -4,6 +4,8 @@ import psutil
 import numpy as np
 from FieldLineDefinition import FieldLine, FieldLineSet
 from FieldLineTracer import FieldLineTracer
+import os
+import glob
 
 
 @dataclass
@@ -55,7 +57,7 @@ class ResultsManager:
         Args:
             config: Memory management configuration
         """
-        self.config = config
+        self.memory_config = config
         self._total_memory = psutil.virtual_memory().total
         self._results: List[FieldLine] = []
         self._result_size = 0
@@ -106,16 +108,16 @@ class ResultsManager:
         # Check available system memory
         available_memory_mb = psutil.virtual_memory().available / (1024 * 1024)
         print(f"Available memory: {available_memory_mb:.1f} MB")
-        print(f"Number of CPU cores to use: {self.config.n_cores}")
+        print(f"Number of CPU cores to use: {self.memory_config.n_cores}")
 
         # Adjust max memory to account for multiprocessing
-        max_memory_total = self.config.max_memory_mb * self.config.n_cores
+        max_memory_total = self.memory_config.max_memory_mb * self.memory_config.n_cores
         print(f"Max memory total: {max_memory_total:.1f} MB")
 
-        if max_memory_total > self.config.safety_factor * available_memory_mb:
+        if max_memory_total > self.memory_config.safety_factor * available_memory_mb:
             raise ValueError(
                 f"Requested memory ({max_memory_total:.1f} MB) exceeds "
-                f"{self.config.safety_factor*100:.1f}% of available system memory "
+                f"{self.memory_config.safety_factor*100:.1f}% of available system memory "
                 f"({available_memory_mb:.1f} MB)"
             )
 
@@ -126,7 +128,7 @@ class ResultsManager:
 
         # Calculate max batch size based on memory constraints
         max_batch_size = int(
-            (self.config.max_memory_mb * 1024 * 1024) / estimated_line_size
+            (self.memory_config.max_memory_mb * 1024 * 1024) / estimated_line_size
         )
         print(f"Max batch size based on memory limit: {max_batch_size}")
 
@@ -135,8 +137,8 @@ class ResultsManager:
     def should_write_batch(self, current_size_mb: float) -> bool:
         """Determine if current batch should be written to disk."""
         return (
-            current_size_mb >= self.config.max_memory_mb
-            or self.available_memory < self.config.max_memory_mb
+            current_size_mb >= self.memory_config.max_memory_mb
+            or self.available_memory < self.memory_config.max_memory_mb
         )
 
     def add_results(
@@ -162,9 +164,9 @@ class ResultsManager:
         self._result_size += current_size
 
         current_result_size_mb = self._result_size / (1024 * 1024)
-        print(f"Current size: {current_result_size_mb:.2f} MB")
+        #print(f"Current size: {current_result_size_mb:.2f} MB")
         if self.should_write_batch(current_result_size_mb):
-            print(f"Writing batch {batch_idx} to disk")
+            #print(f"Writing batch {batch_idx} to disk")
             self._write_intermediate_results(filename, batch_idx)
             self._results = []
             self._result_size = 0
@@ -175,7 +177,7 @@ class ResultsManager:
         """Write intermediate results to disk."""
         if self._results:
             intermediate_set = FieldLineSet(self._results)
-            intermediate_set.write_to_fits(f"{filename}_batch_{batch_idx}")
+            intermediate_set.write_to_fits(f"{filename}_batch_{batch_idx}.fits")
 
     def get_memory_stats(self) -> dict:
         """Get current memory statistics."""
@@ -187,3 +189,41 @@ class ResultsManager:
             "percent_used": vm.percent,
             "results_size_mb": self._result_size / (1024 * 1024),
         }
+
+    def rename_batch_files(self, filename: str) -> None:
+        """Rename batch output FITS files to show progress (e.g., '1_of_10.fits').
+        
+        Parameters
+        ----------
+        filename : str
+            The base filename without extension used for the output files
+        """
+        # Get directory and base name
+        directory = os.path.dirname(filename)
+        base_name = os.path.splitext(os.path.basename(filename))[0]
+        
+        # Find all related FITS files
+        pattern = f"{base_name}_batch_*.fits"
+        if directory:
+            pattern = os.path.join(directory, pattern)
+        
+        files = sorted(
+            glob.glob(pattern),
+            key=lambda x: int(x.split('_batch_')[1].split('.fits')[0])
+        )
+        total_files = len(files)
+        
+        if total_files == 0:
+            return
+        
+        # Rename files
+        for i, old_file in enumerate(files, 1):
+            directory = os.path.dirname(old_file)
+            new_name = f"{base_name}_{i}_of_{total_files}.fits"
+            if directory:
+                new_name = os.path.join(directory, new_name)
+            
+            try:
+                os.rename(old_file, new_name)
+            except OSError as e:
+                print(f"Error renaming {old_file} to {new_name}: {e}")
