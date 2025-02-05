@@ -114,3 +114,18 @@ class FieldLineSet:
 
         io = FieldLineFitsIO(self.field_lines)
         io.save_to_fits(filename)
+
+    def concat(self, other: 'FieldLineSet') -> 'FieldLineSet':
+        """Concatenate another FieldLineSet to this one.
+
+        Args:
+            other: Another FieldLineSet instance to concatenate.
+
+        Returns:
+            A new FieldLineSet containing the combined field lines.
+        """
+        if not isinstance(other, FieldLineSet):
+            raise TypeError("Argument must be an instance of FieldLineSet")
+        
+        combined_field_lines = self.field_lines + other.field_lines
+        return FieldLineSet(combined_field_lines)

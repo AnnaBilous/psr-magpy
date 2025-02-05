@@ -109,7 +109,7 @@ class FieldLineCalculator:
                 ]
                 
                 with Pool(results_manager.memory_config.n_cores) as pool:
-                    batch_results = pool.starmap(tracer.trace_single_line, batch_args)
+                    batch_results = FieldLineSet(pool.starmap(tracer.trace_single_line, batch_args))
                 
                 results = results_manager.add_results(batch_results, filename, start_idx)
                 #self._print_memory_stats(results_manager)
@@ -122,11 +122,12 @@ class FieldLineCalculator:
                 })
 
         if config.save_results:
+            #logger.info("Writing batch %d to disk", batch_idx)
+            results_manager.write_results_to_disk(filename, start_idx)
             results_manager.rename_batch_files(filename)
             return None            
         else:
-            results_set = FieldLineSet(results)
-            return results_set
+            return results
 
     def _print_memory_stats(self, results_manager: ResultsManager) -> None:
         stats = results_manager.get_memory_stats()
@@ -142,7 +143,7 @@ if __name__ == "__main__":
         R_max=100,
         R_min=1.0,
         dt=0.01,
-        max_memory_mb=20.0,
+        max_memory_mb=40.0,
         n_cores=4,
         save_results=True,
         filename=output_filename
