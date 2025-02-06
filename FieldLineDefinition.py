@@ -22,7 +22,7 @@ class FieldLine:
     ----------
     footpoint_id : int
         Unique identifier for the field line's footpoint.
-    r_line : Optional[NDArray[np.float64]]
+    r_line : Optional[NDArray[np.float32]]
         3D coordinates of points along the field line, shape (n_points, 3).
     r_max : Optional[float]
         Maximum radial distance reached by the field line.
@@ -34,22 +34,10 @@ class FieldLine:
         Magnetic field magnitude at the line footpoint.
     b_r_ini_angle : Optional[float]
         Angle between magnetic field and radial direction at the line footpoint.
-    save_r_line : bool
-        Whether to save the 3D coordinates of the field line.
-    save_r_max : bool
-        Whether to save the maximum radial distance.
-    save_r_cyl_max : bool
-        Whether to save the maximum cylindrical radius.
-    save_z_abs_max : bool
-        Whether to save the maximum absolute z-coordinate.
-    save_b_ini : bool
-        Whether to save the initial magnetic field magnitude.
-    save_b_r_ini_angle : bool
-        Whether to save the initial field-radial angle.
     """
 
     # Required property
-    footpoint_id: int
+    footpoint_id: int = -1
 
     # Save flags
     save_r_line: bool = False
@@ -60,27 +48,12 @@ class FieldLine:
     save_b_r_ini_angle: bool = False
 
     # Optional properties
-    r_line: Optional[NDArray[np.float64]] = None  # Shape: (n_points, 3)
+    r_line: Optional[NDArray[np.float32]] = None  # Shape: (n_points, 3)
     r_max: Optional[float] = None
     r_cyl_max: Optional[float] = None
     z_abs_max: Optional[float] = None
     b_ini: Optional[float] = None
     b_r_ini_angle: Optional[float] = None
-
-    def __init__(self, footpoint_id: int = -1) -> None:
-        """Initialize a FieldLine instance.
-
-        Args:
-            footpoint_id: Unique identifier for the field line's footpoint.
-        """
-        logger.debug("Initializing FieldLine with footpoint_id=%d", footpoint_id)
-        self.footpoint_id = footpoint_id
-        self.r_line = np.array([]) if self.save_r_line else None
-        self.r_max = 0.0 if self.save_r_max else None
-        self.r_cyl_max = 0.0 if self.save_r_cyl_max else None
-        self.z_abs_max = 0.0 if self.save_z_abs_max else None
-        self.b_ini = 0.0 if self.save_b_ini else None
-        self.b_r_ini_angle = 0.0 if self.save_b_r_ini_angle else None
 
     def copy_structure(self) -> "FieldLine":
         """Create a copy of the current FieldLine instance with the same structure.

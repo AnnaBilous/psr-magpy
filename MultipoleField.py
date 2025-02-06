@@ -2,7 +2,7 @@ from typing import List
 
 import numpy as np
 
-from FieldComponent import ConcreteFieldComponent
+from FieldComponent import ConcreteFieldComponent, DipoleFieldComponent, QuadrupoleFieldComponent
 
 
 
@@ -27,7 +27,7 @@ class MultipoleField:
             TypeError: If any component is not an instance of DipoleFieldComponent
                       or QuadrupoleFieldComponent.
         """
-        if not all(isinstance(comp, ConcreteFieldComponent) for comp in field_components):
+        if not all(isinstance(comp, (DipoleFieldComponent, QuadrupoleFieldComponent)) for comp in field_components):
             raise TypeError(
                 "All components must be instances of DipoleFieldComponent or QuadrupoleFieldComponent"
             )
