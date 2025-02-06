@@ -34,51 +34,53 @@ class FieldLine:
         Magnetic field magnitude at the line footpoint.
     b_r_ini_angle : Optional[float]
         Angle between magnetic field and radial direction at the line footpoint.
+    save_r_line : bool
+        Whether to save the 3D coordinates of the field line.
+    save_r_max : bool
+        Whether to save the maximum radial distance.
+    save_r_cyl_max : bool
+        Whether to save the maximum cylindrical radius.
+    save_z_abs_max : bool
+        Whether to save the maximum absolute z-coordinate.
+    save_b_ini : bool
+        Whether to save the initial magnetic field magnitude.
+    save_b_r_ini_angle : bool
+        Whether to save the initial field-radial angle.
     """
 
     # Required property
     footpoint_id: int
 
-    # Optional path of the field line in 3D space
-    r_line: Optional[NDArray[np.float64]] = None  # Shape: (n_points, 3)
+    # Save flags
+    save_r_line: bool = False
+    save_r_max: bool = False
+    save_r_cyl_max: bool = False
+    save_z_abs_max: bool = False
+    save_b_ini: bool = False
+    save_b_r_ini_angle: bool = False
 
-    # Optional scalar properties at the initial point
+    # Optional properties
+    r_line: Optional[NDArray[np.float64]] = None  # Shape: (n_points, 3)
     r_max: Optional[float] = None
     r_cyl_max: Optional[float] = None
     z_abs_max: Optional[float] = None
     b_ini: Optional[float] = None
     b_r_ini_angle: Optional[float] = None
 
-    def __init__(
-        self,
-        footpoint_id: int = -1,
-        *,
-        save_r_line: bool = False,
-        save_r_max: bool = False,
-        save_r_cyl_max: bool = False,
-        save_z_abs_max: bool = False,
-        save_b_ini: bool = False,
-        save_b_r_ini_angle: bool = False
-    ) -> None:
+    def __init__(self, footpoint_id: int = -1) -> None:
         """Initialize a FieldLine instance.
 
         Args:
             footpoint_id: Unique identifier for the field line's footpoint.
-            save_r_line: Whether to save the 3D coordinates of the field line.
-            save_r_max: Whether to save the maximum radial distance.
-            save_r_cyl_max: Whether to save the maximum cylindrical radius.
-            save_z_abs_max: Whether to save the maximum absolute z-coordinate.
-            save_b_ini: Whether to save the initial magnetic field magnitude.
-            save_b_r_ini_angle: Whether to save the initial field-radial angle.
         """
         logger.debug("Initializing FieldLine with footpoint_id=%d", footpoint_id)
         self.footpoint_id = footpoint_id
-        self.r_line = np.array([]) if save_r_line else None
-        self.r_max = 0.0 if save_r_max else None
-        self.r_cyl_max = 0.0 if save_r_cyl_max else None
-        self.z_abs_max = 0.0 if save_z_abs_max else None
-        self.b_ini = 0.0 if save_b_ini else None
-        self.b_r_ini_angle = 0.0 if save_b_r_ini_angle else None
+        self.r_line = np.array([]) if self.save_r_line else None
+        self.r_max = 0.0 if self.save_r_max else None
+        self.r_cyl_max = 0.0 if self.save_r_cyl_max else None
+        self.z_abs_max = 0.0 if self.save_z_abs_max else None
+        self.b_ini = 0.0 if self.save_b_ini else None
+        self.b_r_ini_angle = 0.0 if self.save_b_r_ini_angle else None
 
     def copy_structure(self) -> "FieldLine":
         """Create a copy of the current FieldLine instance with the same structure.
@@ -87,15 +89,14 @@ class FieldLine:
             A new FieldLine instance with the same structure but empty values.
         """
         logger.debug("Creating copy of FieldLine structure for footpoint_id=%d", self.footpoint_id)
-        return FieldLine(
-            footpoint_id=self.footpoint_id,
-            save_r_line=self.r_line is not None,
-            save_r_max=self.r_max is not None,
-            save_r_cyl_max=self.r_cyl_max is not None,
-            save_z_abs_max=self.z_abs_max is not None,
-            save_b_ini=self.b_ini is not None,
-            save_b_r_ini_angle=self.b_r_ini_angle is not None,
-        )
+        new_line = FieldLine(footpoint_id=self.footpoint_id)
+        new_line.save_r_line = self.save_r_line
+        new_line.save_r_max = self.save_r_max
+        new_line.save_r_cyl_max = self.save_r_cyl_max
+        new_line.save_z_abs_max = self.save_z_abs_max
+        new_line.save_b_ini = self.save_b_ini
+        new_line.save_b_r_ini_angle = self.save_b_r_ini_angle
+        return new_line
 
     def memory_usage(self) -> int:
         """Calculate approximate memory usage of the field line in bytes.

@@ -34,7 +34,7 @@ class FieldComponentParams:
 
     Attributes
     ----------
-    moment_type : Union[MultipoleType, str]
+    moment_type : MultipoleType
         Type of the multipole moment (dipole or quadrupole).
     B_magnitude : float
         Magnitude of the magnetic field.
@@ -42,23 +42,17 @@ class FieldComponentParams:
         Latitude of the moment orientation in degrees.
     moment_orientation_longitude_degree : float
         Longitude of the moment orientation in degrees.
-    offset_x_r_ns : float
-        X offset in radius normalized units.
-    offset_y_r_ns : float
-        Y offset in radius normalized units.
-    offset_z_r_ns : float
-        Z offset in radius normalized units.
+    offset_r_ns : np.ndarray
+        Offset vector [x, y, z] in neutron star radii.
     component_number : int
         Identifier for the component.
     """
 
-    moment_type: Union[MultipoleType, str]
+    moment_type: MultipoleType
     B_magnitude: float = 1.0
     moment_orientation_latitude_degree: float = 0.0
     moment_orientation_longitude_degree: float = 0.0
-    offset_x_r_ns: float = 0.0
-    offset_y_r_ns: float = 0.0
-    offset_z_r_ns: float = 0.0
+    offset_r_ns: np.ndarray = np.array([0.0, 0.0, 0.0])
     component_number: int = 0
 
     @classmethod
@@ -71,16 +65,6 @@ class FieldComponentParams:
             A list of parameter names.
         """
         return list(cls.__dataclass_fields__.keys())
-
-    def __post_init__(self) -> None:
-        """Post-initialization processing to convert string to MultipoleType if necessary."""
-        if isinstance(self.moment_type, str):
-            try:
-                self.moment_type = MultipoleType(self.moment_type)
-            except ValueError:
-                raise ValueError(
-                    f"moment_type must be a MultipoleType, got {self.moment_type}"
-                )
 
 
 class FieldComponent(ABC):
@@ -100,20 +84,35 @@ class FieldComponent(ABC):
         Rotation object to transform from spin to magnetic frame.
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        B_magnitude: float = 1.0,
+        moment_orientation_latitude_degree: float = 0.0,
+        moment_orientation_longitude_degree: float = 0.0,
+        offset_r_ns: np.ndarray = np.array([0.0, 0.0, 0.0]),
+        component_number: int = 0,
+    ) -> None:
         """Initialize FieldComponent with given parameters.
 
         Args:
-            **kwargs: Keyword arguments for FieldComponentParams.
-
-        Raises:
-            TypeError: If invalid parameters are provided.
+            B_magnitude: Magnitude of the magnetic field.
+            moment_orientation_latitude_degree: Latitude of the moment orientation in degrees.
+            moment_orientation_longitude_degree: Longitude of the moment orientation in degrees.
+            offset_r_ns: Offset vector [x, y, z] in neutron star radii.
+            component_number: Identifier for the component.
         """
         logger.info("Initializing %s", self.__class__.__name__)
 
         # Convert kwargs to FieldComponentParams
         try:
-            params = FieldComponentParams(**kwargs)
+            params = FieldComponentParams(
+                moment_type=self.get_moment_type(),
+                B_magnitude=B_magnitude,
+                moment_orientation_latitude_degree=moment_orientation_latitude_degree,
+                moment_orientation_longitude_degree=moment_orientation_longitude_degree,
+                offset_r_ns=np.asarray(offset_r_ns, dtype=np.float32),
+                component_number=component_number,
+            )
         except TypeError as e:
             logger.error("Failed to initialize %s: %s", self.__class__.__name__, e)
             raise
@@ -126,13 +125,7 @@ class FieldComponent(ABC):
             theta=params.moment_orientation_latitude_degree * u.deg,
             r=0,
         )
-        self.moment_offset_vector = np.array(
-            [
-                params.offset_x_r_ns,
-                params.offset_y_r_ns,
-                params.offset_z_r_ns,
-            ]
-        )
+        self.moment_offset_vector = self.params.offset_r_ns
 
         logger.debug(
             "Moment orientation: phi=%s, theta=%s",
@@ -158,9 +151,9 @@ class FieldComponent(ABC):
             f"B_magnitude={self.params.B_magnitude:.2f}, "
             f"lat={self.params.moment_orientation_latitude_degree:.1f}°, "
             f"lon={self.params.moment_orientation_longitude_degree:.1f}°, "
-            f"offset=[{self.params.offset_x_r_ns:.2f}, "
-            f"{self.params.offset_y_r_ns:.2f}, "
-            f"{self.params.offset_z_r_ns:.2f}])"
+            f"offset=[{self.params.offset_r_ns[0]:.2f}, "
+            f"{self.params.offset_r_ns[1]:.2f}, "
+            f"{self.params.offset_r_ns[2]:.2f}])"
         )
 
     @abstractmethod
@@ -187,6 +180,11 @@ class FieldComponent(ABC):
         r_offset_spin_frame = r_spin_frame - self.moment_offset_vector
         r_magn_frame = self.rotate_spin_to_magn_frame.apply(r_offset_spin_frame)
         return r_magn_frame
+
+    @abstractmethod
+    def get_moment_type(self) -> MultipoleType:
+        """Get the moment type for this component."""
+        pass
 
 
 class DipoleFieldComponent(FieldComponent):
@@ -225,6 +223,10 @@ class DipoleFieldComponent(FieldComponent):
             )
         )
 
+    def get_moment_type(self) -> MultipoleType:
+        """Get the moment type for this component."""
+        return MultipoleType.DIPOLE
+
 
 class QuadrupoleFieldComponent(FieldComponent):
     """Concrete implementation of a quadrupole field component."""
@@ -260,3 +262,7 @@ class QuadrupoleFieldComponent(FieldComponent):
                 ]
             )
         )
+
+    def get_moment_type(self) -> MultipoleType:
+        """Get the moment type for this component."""
+        return MultipoleType.QUADRUPOLE
