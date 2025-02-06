@@ -119,18 +119,18 @@ class FieldLineTracer:
         r = field_line.sol(t)
         R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
 
-        # Directly write properties into output
-        if template.b_r_ini_angle is not None:
+ 
+        if template.save_b_r_ini_angle:
             output.b_r_ini_angle = np.arccos(dotprod)
-        if template.r_max is not None:
+        if template.save_r_max:
             output.r_max = R_max
-        if template.r_cyl_max is not None:
+        if template.save_r_cyl_max:
             output.r_cyl_max = np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
-        if template.z_abs_max is not None:
+        if template.save_z_abs_max:
             output.z_abs_max = np.max(np.abs(r[2, :]))
-        if template.b_ini is not None:
+        if template.save_b_ini:
             output.b_ini = np.sum(B_initial**2) ** 0.5
-        if template.r_line is not None:
+        if template.save_r_line:
             if R_max >= self.R_min:
                 output.r_line = r.T
             else:
@@ -147,12 +147,11 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from MultipoleField import MultipoleField
     from FootpointGrid import FootpointGrid, GridType, SphericalGridParams
-    from FieldComponent import FieldComponent, MultipoleType
+    from FieldComponent import DipoleFieldComponent, QuadrupoleFieldComponent,MultipoleType
     from multiprocessing import Pool
 
     # Create magnetic field (example with dipole)
-    dipole = FieldComponent(
-        moment_type=MultipoleType.DIPOLE,
+    dipole = DipoleFieldComponent(
         B_magnitude=1.0,
         moment_orientation_latitude_degree=45.0,
     )
