@@ -1,13 +1,37 @@
 from dataclasses import dataclass, fields
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import numpy as np
 from numpy.typing import NDArray
 from sys import getsizeof
+import logging
 
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 @dataclass
 class FieldLine:
-    """Single field line and its properties."""
+    """Single field line and its properties.
+
+    A field line represents a magnetic field line in 3D space, along with various
+    properties that can be calculated and stored.
+
+    Attributes
+    ----------
+    footpoint_id : int
+        Unique identifier for the field line's footpoint.
+    r_line : Optional[NDArray[np.float64]]
+        3D coordinates of points along the field line, shape (n_points, 3).
+    r_max : Optional[float]
+        Maximum radial distance reached by the field line.
+    r_cyl_max : Optional[float]
+        Maximum cylindrical radius reached by the field line.
+    z_abs_max : Optional[float]
+        Maximum absolute z-coordinate reached by the field line.
+    b_ini : Optional[float]
+        Magnetic field magnitude at the line footpoint.
+    b_r_ini_angle : Optional[float]
+        Angle between magnetic field and radial direction at the line footpoint.
+    """
 
     # Required property
     footpoint_id: int
@@ -32,7 +56,19 @@ class FieldLine:
         save_z_abs_max: bool = False,
         save_b_ini: bool = False,
         save_b_r_ini_angle: bool = False
-    ):
+    ) -> None:
+        """Initialize a FieldLine instance.
+
+        Args:
+            footpoint_id: Unique identifier for the field line's footpoint.
+            save_r_line: Whether to save the 3D coordinates of the field line.
+            save_r_max: Whether to save the maximum radial distance.
+            save_r_cyl_max: Whether to save the maximum cylindrical radius.
+            save_z_abs_max: Whether to save the maximum absolute z-coordinate.
+            save_b_ini: Whether to save the initial magnetic field magnitude.
+            save_b_r_ini_angle: Whether to save the initial field-radial angle.
+        """
+        logger.debug("Initializing FieldLine with footpoint_id=%d", footpoint_id)
         self.footpoint_id = footpoint_id
         self.r_line = np.array([]) if save_r_line else None
         self.r_max = 0.0 if save_r_max else None
@@ -41,15 +77,16 @@ class FieldLine:
         self.b_ini = 0.0 if save_b_ini else None
         self.b_r_ini_angle = 0.0 if save_b_r_ini_angle else None
 
-    # @property
-    # def parameters(self):
-    #    return [field.name for field in self.__dataclass_fields__.values() if getattr(self, field.name) is not None]
-
     def copy_structure(self) -> "FieldLine":
-        """Create a copy of the current FieldLine instance with the same structure."""
+        """Create a copy of the current FieldLine instance with the same structure.
+
+        Returns:
+            A new FieldLine instance with the same structure but empty values.
+        """
+        logger.debug("Creating copy of FieldLine structure for footpoint_id=%d", self.footpoint_id)
         return FieldLine(
             footpoint_id=self.footpoint_id,
-            save_r_line=False,  # Assuming you want to keep it None
+            save_r_line=self.r_line is not None,
             save_r_max=self.r_max is not None,
             save_r_cyl_max=self.r_cyl_max is not None,
             save_z_abs_max=self.z_abs_max is not None,
@@ -60,10 +97,8 @@ class FieldLine:
     def memory_usage(self) -> int:
         """Calculate approximate memory usage of the field line in bytes.
 
-        Returns
-        -------
-        int
-            Estimated memory usage in bytes
+        Returns:
+            Estimated memory usage in bytes.
         """
         total_size = 0
 
@@ -87,33 +122,58 @@ class FieldLine:
                 # For other types, use basic size
                 total_size += getsizeof(value)
 
+        logger.debug("Memory usage for footpoint_id=%d: %d bytes", self.footpoint_id, total_size)
         return total_size
+
+    def __repr__(self) -> str:
+        """Return string representation of the field line.
+
+        Returns:
+            String representation including footpoint ID and saved properties.
+        """
+        saved_props = [
+            name for name in ['r_line', 'r_max', 'r_cyl_max', 'z_abs_max', 'b_ini', 'b_r_ini_angle']
+            if getattr(self, name) is not None
+        ]
+        return f"FieldLine(id={self.footpoint_id}, saved_properties={saved_props})"
 
 
 @dataclass
 class FieldLineSet:
-    """Collection of field lines with IO capabilities."""
+    """Collection of field lines with I/O capabilities.
+
+    A container class for managing multiple field lines, providing methods for
+    concatenation and file I/O operations.
+
+    Attributes
+    ----------
+    field_lines : List[FieldLine]
+        List of FieldLine objects in the set.
+    """
 
     field_lines: List[FieldLine]
 
-    def __init__(self, field_lines: Optional[List[FieldLine]] = None):
+    def __init__(self, field_lines: Optional[List[FieldLine]] = None) -> None:
         """Initialize the FieldLineSet.
 
         Args:
             field_lines: List of FieldLine objects. If None, creates an empty list.
         """
         self.field_lines = field_lines if field_lines is not None else []
+        logger.debug("Initialized FieldLineSet with %d field lines", len(self.field_lines))
 
     def write_to_fits(self, filename: str) -> None:
         """Write field lines to a FITS file.
 
         Args:
-            filename: Path to the output FITS file
+            filename: Path to the output FITS file.
         """
+        logger.info("Writing %d field lines to %s", len(self.field_lines), filename)
         from FitsIO import FieldLineFitsIO
 
         io = FieldLineFitsIO(self.field_lines)
         io.save_to_fits(filename)
+        logger.debug("Successfully wrote field lines to %s", filename)
 
     def concat(self, other: 'FieldLineSet') -> 'FieldLineSet':
         """Concatenate another FieldLineSet to this one.
@@ -123,9 +183,31 @@ class FieldLineSet:
 
         Returns:
             A new FieldLineSet containing the combined field lines.
+
+        Raises:
+            TypeError: If the argument is not a FieldLineSet instance.
         """
         if not isinstance(other, FieldLineSet):
+            logger.error("Attempted to concatenate with non-FieldLineSet object: %s", type(other))
             raise TypeError("Argument must be an instance of FieldLineSet")
         
+        logger.debug("Concatenating FieldLineSets with %d and %d field lines",
+                    len(self.field_lines), len(other.field_lines))
         combined_field_lines = self.field_lines + other.field_lines
         return FieldLineSet(combined_field_lines)
+
+    def __repr__(self) -> str:
+        """Return string representation of the field line set.
+
+        Returns:
+            String representation including the number of field lines.
+        """
+        return f"FieldLineSet(n_lines={len(self.field_lines)})"
+
+    def __len__(self) -> int:
+        """Return the number of field lines in the set.
+
+        Returns:
+            Number of field lines.
+        """
+        return len(self.field_lines)
