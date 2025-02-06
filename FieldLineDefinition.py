@@ -1,9 +1,12 @@
+# Standard library imports
 from dataclasses import dataclass, fields
-from typing import Optional, List, Dict, Any
+import logging
+from sys import getsizeof
+from typing import Any, Dict, List, Optional
+
+# Third-party imports
 import numpy as np
 from numpy.typing import NDArray
-from sys import getsizeof
-import logging
 
 # Initialize logger
 logger = logging.getLogger(__name__)

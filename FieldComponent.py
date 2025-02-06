@@ -1,15 +1,15 @@
+# Standard library imports
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Type, Union, Optional, Any, List
+from typing import Any, List, Union
 import logging
 
+# Third-party imports
 import numpy as np
 from scipy.spatial.transform import Rotation as rot
-
 from astropy import units as u
 from astropy.coordinates import PhysicsSphericalRepresentation
-from astropy.coordinates.representation import CartesianRepresentation
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -19,6 +19,13 @@ class MultipoleType(Enum):
     """Enumeration for multipole types."""
     DIPOLE = "dipole"
     QUADRUPOLE = "quadrupole"
+
+
+# Type alias for concrete field components
+ConcreteFieldComponent = Union[
+    'DipoleFieldComponent',
+    'QuadrupoleFieldComponent'
+]
 
 
 @dataclass

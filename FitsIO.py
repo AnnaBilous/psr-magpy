@@ -5,7 +5,8 @@ from FieldComponent import (
     FieldComponent,
     DipoleFieldComponent,
     QuadrupoleFieldComponent,
-    MultipoleType
+    MultipoleType,
+    ConcreteFieldComponent
 )
 from numpy.typing import NDArray
 from numpy import ndarray, integer, floating
@@ -62,7 +63,7 @@ class FitsIO:
         raise NotImplementedError("Subclasses must implement create_column")
 
     @classmethod
-    def load_from_fits(cls, hdu, component_class: Type[Union[DipoleFieldComponent, QuadrupoleFieldComponent]]):
+    def load_from_fits(cls, hdu, component_class: Type[ConcreteFieldComponent]):
         """Load data from a FITS HDU.
 
         Args:
@@ -87,9 +88,9 @@ class FieldComponentFitsIO(FitsIO):
     def generate_column_info(self):
         """Generate column information for field component data."""
         first_component = self.data[0]
-        if not isinstance(first_component, (DipoleFieldComponent, QuadrupoleFieldComponent)):
+        if not isinstance(first_component, ConcreteFieldComponent):
             raise TypeError(
-                f"Expected DipoleFieldComponent or QuadrupoleFieldComponent, got {type(first_component).__name__}"
+                f"Expected concrete field component, got {type(first_component).__name__}"
             )
 
         params_dict = vars(first_component.params)
