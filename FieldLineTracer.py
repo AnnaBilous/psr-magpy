@@ -153,42 +153,33 @@ if __name__ == "__main__":
     # Create magnetic field (example with dipole)
     dipole = DipoleFieldComponent(
         B_magnitude=1.0,
+        moment_orientation_latitude_degree=90.0,
+    )
+    quadrupole = QuadrupoleFieldComponent(
+        B_magnitude=3.0,
         moment_orientation_latitude_degree=45.0,
     )
-    quadrupole = FieldComponent(moment_type=MultipoleType.QUADRUPOLE, B_magnitude=3.0)
-    field = MultipoleField([dipole, quadrupole])
-
-    def trace_wrapper(footpoint, vars_to_save):
-        """Wrapper function for parallel processing"""
-        return tracer.trace_single_line(footpoint, vars_to_save)
-
-    # Create profiler
-    profiler = cProfile.Profile()
-    profiler.enable()
+    field = MultipoleField([dipole]) #, quadrupole])
 
     # Initialize field line tracer
     tracer = FieldLineTracer(field, R_max=5.0)
 
-    # Create footpoints using FootpointGrid
-    params_standard = SphericalGridParams(nlon=4, nlat=11)
-    grid = FootpointGrid(grid_type=GridType.SPHERICAL, params=params_standard)
+    # Create spherical grid of footpoints
+    params = SphericalGridParams(nlon=2, nlat=20, pole_lat=90.0)  # 8 longitude points, 16 latitude points
+    grid = FootpointGrid(grid_type=GridType.SPHERICAL, params=params)
     footpoints = grid.footpoint_coordinates
 
-    # Variables to save
+    # Create template for field line properties to save
     template = FieldLine(save_r_line=True)
 
-    # Create list of arguments for each footpoint
-    args = [(footpoint, template) for footpoint in footpoints]
+    # Calculate field lines
+    field_lines = []
+    for i, footpoint in enumerate(footpoints):
+        line = tracer.trace_single_line(footpoint, i, template)
+        if line.r_line is not None and len(line.r_line) > 0:
+            field_lines.append(line.r_line)
 
-    # Parallel processing of field lines
-    with Pool() as pool:
-        results = pool.starmap(trace_wrapper, args)
-
-    # Filter and collect results
-    field_lines = [
-        a.r_line for a in results
-    ]  # if a.r_line # is not None and len(a.r_line) > 0]
-
+ 
     # Plot results
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection="3d")
@@ -212,14 +203,3 @@ if __name__ == "__main__":
     ax.set_zlabel("Z")
 
     plt.show()
-
-    # Disable profiler and print stats
-    profiler.disable()
-
-    # Print stats sorted by cumulative time
-    stats = pstats.Stats(profiler).sort_stats(SortKey.CUMULATIVE)
-    stats.print_stats(10)  # Show top 20 time-consuming functions
-
-    # Print stats sorted by total time
-    print("\nStats sorted by cumulative time:")
-    stats.sort_stats(SortKey.CUMULATIVE).print_stats(20)
