@@ -1,12 +1,9 @@
-import numpy as np
-from astropy.io import fits as pf
-from typing import List, Union
+from typing import List
 
-from FieldComponent import (
-    FieldComponent,
-    DipoleFieldComponent,
-    QuadrupoleFieldComponent
-)
+import numpy as np
+
+from FieldComponent import ConcreteFieldComponent
+
 
 
 class MultipoleField:
@@ -19,7 +16,7 @@ class MultipoleField:
         that make up the multipole field.
     """
 
-    def __init__(self, field_components: List[Union[DipoleFieldComponent, QuadrupoleFieldComponent]]):
+    def __init__(self, field_components: List[ConcreteFieldComponent]):
         """Initialize MultipoleField with a list of field components.
 
         Args:
@@ -30,8 +27,7 @@ class MultipoleField:
             TypeError: If any component is not an instance of DipoleFieldComponent
                       or QuadrupoleFieldComponent.
         """
-        if not all(isinstance(comp, (DipoleFieldComponent, QuadrupoleFieldComponent)) 
-                  for comp in field_components):
+        if not all(isinstance(comp, ConcreteFieldComponent) for comp in field_components):
             raise TypeError(
                 "All components must be instances of DipoleFieldComponent or QuadrupoleFieldComponent"
             )
