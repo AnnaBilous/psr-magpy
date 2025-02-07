@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Union, Optional, Any
+from typing import Union, Optional, Any, TypeVar, Type
 import logging
 
 import numpy as np
@@ -16,55 +16,222 @@ from scipy.spatial.transform import Rotation as rot
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar('T', bound='FootpointGrid')
+
 class GridType(Enum):
     SPHERICAL = "spherical"
     HEALPIX = "healpix"
     RANDOM = "random"
 
-@dataclass
-class SphericalGridParams:
-    nlon: int
-    nlat: int
-    pole_lat: float = 0  # optional with default
-
-@dataclass
-class HealpixGridParams:
-    nside: int
-
-@dataclass
-class RandomGridParams:
-    nline_ori: int
-
-# Type alias for parameter types
-GridParams = Union[SphericalGridParams, HealpixGridParams, RandomGridParams]
-
-class BaseGrid(ABC):
+class FootpointGrid(ABC):
+    """Base class for all grid types."""
+    
+    def __init__(self) -> None:
+        self.partial: bool = False
+        self.footpoint_coordinates: Optional[CartesianRepresentation] = None
+        self.nline_ori: Optional[int] = None
+        self.indices: Optional[np.ndarray] = None
+        self.nline: Optional[int] = None
+        self.grid_type: Optional[GridType] = None
+        
     @abstractmethod
     def prepare_footpoints(self) -> CartesianRepresentation:
         pass
 
-class GridConfigValidator:
+    def calculate_grid(self) -> None:
+        """Calculate grid points and initialize grid properties."""
+        logger.info("Calculating grid points")
+        try:
+            self.footpoint_coordinates = self.prepare_footpoints()
+            self.nline_ori = len(self.footpoint_coordinates.x)
+            self.indices = np.arange(self.nline_ori)
+            self.nline = self.nline_ori
+            logger.info(f"Successfully created grid with {self.nline} points")
+        except Exception as e:
+            logger.error(f"Failed to calculate grid points: {e}")
+            raise
+
+    def subset_grid(self, grid_indices: np.ndarray) -> 'FootpointGrid':
+        """Create a new grid instance with subset of indices.
+        
+        Args:
+            grid_indices: Array of indices to include in the subset
+            
+        Returns:
+            FootpointGrid: New grid instance with subset of points
+            
+        Raises:
+            ValueError: If any indices are invalid
+        """
+        logger.info(f"Creating subset grid from {self.nline_ori} points")
+        invalid_indices: set[int] = set(grid_indices) - set(self.indices)
+        if invalid_indices:
+            error_msg = (
+                f"Invalid indices found: {invalid_indices}. "
+                f"Indices must be between 0 and {len(self.indices)-1}"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        try:
+            # Create a new instance with same parameters
+            if isinstance(self, SphericalGrid):
+                new_grid = SphericalGrid(self.nlon, self.nlat, self.pole_lat.deg)
+            elif isinstance(self, HealpixGrid):
+                new_grid = HealpixGrid(self.nside)
+            else:  # RandomGrid
+                new_grid = RandomGrid(self.nline_ori)
+            
+            # Set subset properties
+            new_grid.partial = True
+            new_grid.footpoint_coordinates = self.footpoint_coordinates[grid_indices]
+            new_grid.indices = grid_indices
+            new_grid.nline = len(grid_indices)
+            
+            logger.info(f"Successfully created subset grid with {new_grid.nline} points")
+            return new_grid
+            
+        except Exception as e:
+            logger.error(f"Failed to create subset grid: {e}")
+            raise
+
+    def plot_footpoint_coordinates(
+        self,
+        ax: Optional[plt.Axes] = None,
+        marker: str = ".",
+        color: str = "r",
+        **kwargs: Any
+    ) -> plt.Axes:
+        """Plot footpoint coordinates."""
+        logger.debug("Plotting footpoint coordinates")
+        try:
+            if ax is None:
+                _, ax = plt.subplots()
+
+            ax.plot(self.longitude, self.colatitude, marker, color=color, **kwargs)
+            
+            ax.set_xlim(0, 360)
+            ax.set_xlabel("Longitude, deg")
+            ax.set_ylim(180, 0)
+            ax.set_ylabel("Latitude, deg")
+            
+            logger.debug("Successfully plotted footpoint coordinates")
+            return ax
+        except Exception as e:
+            logger.error(f"Failed to plot footpoint coordinates: {e}")
+            raise
+
+    @property
+    def colatitude(self) -> np.ndarray:
+        """Latitude of footpoints in degrees."""
+        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
+        return spherical.theta.to(u.deg)
+
+    @property
+    def longitude(self) -> np.ndarray:
+        """Longitude of footpoints in degrees."""
+        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
+        return spherical.phi.to(u.deg)
+
+    def save_to_fits(self, fitsname: str) -> None:
+        """Save grid to a FITS file."""
+        logger.info(f"Saving grid to {fitsname}")
+        try:
+            hdu_main = pf.PrimaryHDU()
+            header_main = hdu_main.header
+            header_main.set("GRIDTYPE", self.grid_type.value, "Grid type")
+            header_main.set("NLINE", self.nline_ori, "Number of field lines in a full grid")
+            header_main.set("PARTIAL", self.partial, "Partial grid")
+
+            # Add grid-specific parameters to header
+            self._add_params_to_header(header_main)
+
+            # Save coordinates
+            data = CCDData(self.footpoint_coordinates.xyz, unit=self.footpoint_coordinates.xyz.unit)
+            hdu_footpoints = data.to_hdu(as_image_hdu=True)[0]
+            hdu_footpoints.name = "FTP_CRD"
+
+            # Save indices
+            col = pf.Column(name="footpoint_id", format="K", array=self.indices)
+            hdu_indices = pf.BinTableHDU.from_columns([col], name="FTP_ID")
+            
+            # Write file
+            hdul = pf.HDUList([hdu_main, hdu_indices, hdu_footpoints])
+            hdul.writeto(fitsname, overwrite=True)
+            logger.info(f"Successfully saved grid to {fitsname}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save grid to {fitsname}: {e}")
+            raise
+
+    @abstractmethod
+    def _add_params_to_header(self, header: pf.Header) -> None:
+        """Add grid-specific parameters to FITS header."""
+        pass
+
+    @classmethod
+    def load_from_fits(cls: Type[T], fitsname: str) -> T:
+        """Load grid from a FITS file.
+        
+        Args:
+            fitsname: Path to FITS file
+            
+        Returns:
+            Instance of the specific grid class that called this method
+        """
+        logger.info(f"Loading grid from {fitsname}")
+        try:
+            with pf.open(fitsname) as hdulist:
+                header_main = hdulist[0].header
+                grid_type = GridType(header_main["GRIDTYPE"])
+                
+                # Delegate creation to specific grid class
+                grid = cls._create_grid_from_header(header_main, grid_type)
+                
+                # Load coordinates
+                footpoint_coordinates = hdulist["FTP_CRD"].data
+                grid.footpoint_coordinates = CartesianRepresentation(footpoint_coordinates)
+                
+                # Load indices
+                grid.indices = np.array([row[0] for row in hdulist["FTP_ID"].data])
+                grid.partial = header_main["PARTIAL"]
+                grid.nline = len(grid.indices)
+                
+                return grid
+                    
+        except Exception as e:
+            logger.error(f"Failed to load grid from {fitsname}: {e}")
+            raise
+
     @staticmethod
-    def validate_spherical_params(params: SphericalGridParams) -> None:
-        if params.nlon <= 0 or params.nlat <= 0:
+    def _create_grid_from_header(header: pf.Header, grid_type: GridType) -> 'FootpointGrid':
+        """Factory method to create appropriate grid instance."""
+        grid_classes = {
+            GridType.SPHERICAL: SphericalGrid,
+            GridType.HEALPIX: HealpixGrid,
+            GridType.RANDOM: RandomGrid
+        }
+        grid_class = grid_classes.get(grid_type)
+        if grid_class is None:
+            raise ValueError(f"Unknown grid type: {grid_type}")
+        return grid_class.from_header(header)
+
+class SphericalGrid(FootpointGrid):
+    def __init__(self, nlon: int, nlat: int, pole_lat: float = 0):
+        super().__init__()
+        self.grid_type = GridType.SPHERICAL
+        if nlon <= 0 or nlat <= 0:
             raise ValueError("Grid dimensions must be positive")
+            
+        self.nlon = nlon
+        self.nlat = nlat
+        self.pole_lat = Angle(pole_lat * u.deg)
+        self.calculate_grid()
 
-    @staticmethod
-    def validate_healpix_params(params: HealpixGridParams) -> None:
-        if params.nside <= 0 or not (params.nside & (params.nside - 1) == 0):
-            raise ValueError("NSIDE must be a positive power of 2")
-
-    @staticmethod
-    def validate_random_params(params: RandomGridParams) -> None:
-        if params.nline_ori <= 0:
-            raise ValueError("Number of random points must be positive")
-
-class SphericalGrid(BaseGrid):
-    def __init__(self, params: SphericalGridParams):
-        GridConfigValidator.validate_spherical_params(params)
-        self.nlon = params.nlon
-        self.nlat = params.nlat
-        self.pole_lat = Angle(params.pole_lat * u.deg)
+    def _add_params_to_header(self, header: pf.Header) -> None:
+        header.set("NLON", self.nlon, "Number of longitude divisions")
+        header.set("NLAT", self.nlat, "Number of latitude divisions")
+        header.set("POLELAT", self.pole_lat.deg, "Latitude of grid pole, degree")
 
     def prepare_footpoints(self) -> CartesianRepresentation:
         phi_grid = np.linspace(0, 2 * np.pi, self.nlon, endpoint=False)
@@ -99,9 +266,27 @@ class SphericalGrid(BaseGrid):
             f"pole_lat={self.pole_lat.deg:.1f} deg)"
         )
 
-class HealpixGrid(BaseGrid):
-    def __init__(self, params: HealpixGridParams):
-        self.nside = params.nside
+    @classmethod
+    def from_header(cls, header: pf.Header) -> 'SphericalGrid':
+        """Create SphericalGrid from FITS header."""
+        return cls(
+            nlon=header["NLON"],
+            nlat=header["NLAT"],
+            pole_lat=header["POLELAT"]
+        )
+
+class HealpixGrid(FootpointGrid):
+    def __init__(self, nside: int):
+        super().__init__()
+        self.grid_type = GridType.HEALPIX
+        if nside <= 0 or not (nside & (nside - 1) == 0):
+            raise ValueError("NSIDE must be a positive power of 2")
+            
+        self.nside = nside
+        self.calculate_grid()
+
+    def _add_params_to_header(self, header: pf.Header) -> None:
+        header.set("NSIDE", self.nside, "Healpix parameter nside")
 
     def prepare_footpoints(self) -> CartesianRepresentation:
         npix = hp.nside2npix(self.nside)
@@ -119,9 +304,23 @@ class HealpixGrid(BaseGrid):
     def __repr__(self) -> str:
         return f"HealpixGrid(nside={self.nside})"
 
-class RandomGrid(BaseGrid):
-    def __init__(self, params: RandomGridParams):
-        self.nline_ori = params.nline_ori
+    @classmethod
+    def from_header(cls, header: pf.Header) -> 'HealpixGrid':
+        """Create HealpixGrid from FITS header."""
+        return cls(nside=header["NSIDE"])
+
+class RandomGrid(FootpointGrid):
+    def __init__(self, nline_ori: int):
+        super().__init__()
+        self.grid_type = GridType.RANDOM
+        if nline_ori <= 0:
+            raise ValueError("Number of random points must be positive")
+            
+        self.nline_ori = nline_ori
+        self.calculate_grid()
+
+    def _add_params_to_header(self, header: pf.Header) -> None:
+        pass  # No additional parameters needed for random grid
 
     def prepare_footpoints(self) -> CartesianRepresentation:
         # Muller method for random points on a sphere
@@ -133,266 +332,7 @@ class RandomGrid(BaseGrid):
     def __repr__(self) -> str:
         return f"RandomGrid(nline_ori={self.nline_ori})"
 
-class FootpointGrid:
-    """A class for managing grids of footpoints on a sphere."""
-    
-    def __init__(self, grid_type: Union[GridType, str], params: GridParams) -> None:
-        logger.info(f"Initializing FootpointGrid with type {grid_type}")
-        
-        # Convert string to GridType if needed
-        if isinstance(grid_type, str):
-            try:
-                grid_type = GridType(grid_type.lower())
-            except ValueError:
-                logger.error(f"Invalid grid type: {grid_type}")
-                raise ValueError(f"Invalid grid type: {grid_type}. Must be one of {[t.value for t in GridType]}")
-                
-        self.grid_type: GridType = grid_type
-        try:
-            self.grid: BaseGrid = self.__create_grid(grid_type, params)
-        except Exception as e:
-            logger.error(f"Failed to create grid: {e}")
-            raise
-        self.partial: bool = False
-        self.calculate_grid()
-
-    def __create_grid(self, grid_type: GridType, params: GridParams) -> BaseGrid:
-        grid_classes: dict[GridType, type[BaseGrid]] = {
-            GridType.SPHERICAL: SphericalGrid,
-            GridType.HEALPIX: HealpixGrid,
-            GridType.RANDOM: RandomGrid
-        }
-        grid_class = grid_classes.get(grid_type)
-        if not grid_class:
-            logger.error(f"Unknown grid type: {grid_type}")
-            raise ValueError(f"Unknown grid type: {grid_type}")
-        logger.debug(f"Creating grid of type {grid_class.__name__}")
-        return grid_class(params)
-
-    def calculate_grid(self) -> None:
-        logger.info("Calculating grid points")
-        try:
-            self.footpoint_coordinates: CartesianRepresentation = self.grid.prepare_footpoints()
-            self.nline_ori: int = len(self.footpoint_coordinates.x)
-            self.indices: np.ndarray = np.arange(self.nline_ori)
-            self.nline: int = self.nline_ori
-            logger.info(f"Successfully created grid with {self.nline} points")
-        except Exception as e:
-            logger.error(f"Failed to calculate grid points: {e}")
-            raise
-
-    def subset_grid(self, grid_indices: np.ndarray) -> None:
-        logger.info(f"Subsetting grid from {self.nline_ori} points")
-        invalid_indices: set[int] = set(grid_indices) - set(self.indices)
-        if invalid_indices:
-            error_msg = (
-                f"Invalid indices found: {invalid_indices}. "
-                f"Indices must be between 0 and {len(self.indices)-1}"
-            )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-        
-        try:
-            self.partial = True
-            self.footpoint_coordinates = self.footpoint_coordinates[grid_indices]
-            self.indices = grid_indices
-            self.nline = len(grid_indices)
-            logger.info(f"Successfully subset grid to {self.nline} points")
-        except Exception as e:
-            logger.error(f"Failed to subset grid: {e}")
-            raise
-
-    def plot_footpoint_coordinates(
-        self,
-        ax: Optional[plt.Axes] = None,
-        marker: str = ".",
-        color: str = "r",
-        **kwargs: Any
-    ) -> plt.Axes:
-        logger.debug("Plotting footpoint coordinates")
-        try:
-            if ax is None:
-                _, ax = plt.subplots()
-
-            ax.plot(self.longitude, self.colatitude, marker, color=color, **kwargs)
-            
-            ax.set_xlim(0, 360)
-            ax.set_xlabel("Longitude, deg")
-            ax.set_ylim(180, 0)
-            ax.set_ylabel("Latitude, deg")
-            
-            logger.debug("Successfully plotted footpoint coordinates")
-            return ax
-        except Exception as e:
-            logger.error(f"Failed to plot footpoint coordinates: {e}")
-            raise
-
-    @property
-    def colatitude(self) -> np.ndarray:
-        """Latitude of footpoints in degrees.
-        
-        Returns:
-            np.ndarray: Array of latitude values from 0 to 180 degrees
-        """
-        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
-        return spherical.theta.to(u.deg)
-
-    @property
-    def longitude(self) -> np.ndarray:
-        """Longitude of footpoints in degrees.
-        
-        Returns:
-            np.ndarray: Array of longitude values from 0 to 360 degrees
-        """
-        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
-        return spherical.phi.to(u.deg)
-    """
-    @property
-    def xyz(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        Cartesian coordinates of footpoints.
-        
-        Returns:
-            tuple[np.ndarray, np.ndarray, np.ndarray]: x, y, z coordinates
-        
-        return (
-            self.footpoint_coordinates.x.value,
-            self.footpoint_coordinates.y.value,
-            self.footpoint_coordinates.z.value
-        )
-    """
-
-    def __repr__(self) -> str:
-        status = "partial" if self.partial else "full"
-        points = f"{self.nline}/{self.nline_ori}" if self.partial else str(self.nline)
-        return (
-            f"FootpointGrid(type={self.grid_type.value}, "
-            f"points={points}, "
-            f"status={status})"
-        )
-        
-    def save_to_fits(self, fitsname: str) -> None:
-        """Save grid to a FITS file.
-        
-        Args:
-            fitsname: Path to the output FITS file
-            
-        Raises:
-            OSError: If file cannot be written
-        """
-        logger.info(f"Saving grid to {fitsname}")
-        try:
-            hdu_main = pf.PrimaryHDU()
-            header_main = hdu_main.header
-            header_main.set("GRIDTYPE", self.grid_type.value, "Grid type")
-            header_main.set("NLINE", self.nline_ori, "Number of field lines in a full grid")
-            header_main.set("PARTIAL", self.partial, "Partial grid")
-
-            # Add grid-specific parameters
-            if self.grid_type == GridType.SPHERICAL:
-                header_main.set("NLON", self.grid.nlon, "Number of longitude divisions")
-                header_main.set("NLAT", self.grid.nlat, "Number of latitude divisions")
-                header_main.set("POLELAT", self.grid.pole_lat.deg, "Latitude of grid pole, degree")
-            elif self.grid_type == GridType.HEALPIX:
-                header_main.set("NSIDE", self.grid.nside, "Healpix parameter nside")
-
-            # Save coordinates
-            data = CCDData(self.footpoint_coordinates.xyz, unit=self.footpoint_coordinates.xyz.unit)
-            hdu_footpoints = data.to_hdu(as_image_hdu=True)[0]
-            hdu_footpoints.name = "FTP_CRD"
-
-            # Save indices
-            col = pf.Column(name="footpoint_id", format="K", array=self.indices)
-            hdu_indices = pf.BinTableHDU.from_columns([col], name="FTP_ID")
-            
-            # Write file
-            hdul = pf.HDUList([hdu_main, hdu_indices, hdu_footpoints])
-            hdul.writeto(fitsname, overwrite=True)
-            logger.info(f"Successfully saved grid to {fitsname}")
-            
-        except Exception as e:
-            logger.error(f"Failed to save grid to {fitsname}: {e}")
-            raise
-
-    def _load_coordinates(self, data: np.ndarray) -> CartesianRepresentation:
-        """Convert array data to CartesianRepresentation.
-        
-        Args:
-            data: Array of coordinate data from FITS file
-            
-        Returns:
-            CartesianRepresentation: Coordinates in Cartesian form
-        """
-        try:
-            return CartesianRepresentation(data)
-        except Exception as e:
-            logger.error(f"Failed to convert coordinates: {e}")
-            raise ValueError("Invalid coordinate data in FITS file") from e
-
     @classmethod
-    def from_fits(cls, fitsname: str) -> 'FootpointGrid':
-        """Load grid from a FITS file.
-        
-        Args:
-            fitsname: Path to the FITS file
-            
-        Returns:
-            FootpointGrid: Loaded grid object
-            
-        Raises:
-            OSError: If file cannot be read
-            ValueError: If file format is invalid
-        """
-        logger.info(f"Loading grid from {fitsname}")
-        try:
-            with pf.open(fitsname) as hdulist:
-                header_main = hdulist[0].header
-                
-                try:
-                    grid_type = GridType(header_main["GRIDTYPE"])
-                except ValueError as e:
-                    logger.error(f"Invalid grid type in {fitsname}: {header_main['GRIDTYPE']}")
-                    raise ValueError(f"Invalid grid type in FITS file: {header_main['GRIDTYPE']}") from e
-                
-                # Create parameters dictionary based on grid type
-                parameters_dict = {}
-                if grid_type == GridType.SPHERICAL:
-                    parameters_dict = {
-                        "nlon": header_main["NLON"],
-                        "nlat": header_main["NLAT"],
-                        "pole_lat": header_main["POLELAT"]
-                    }
-                elif grid_type == GridType.HEALPIX:
-                    parameters_dict = {
-                        "nside": header_main["NSIDE"]
-                    }
-                else:  # GridType.RANDOM
-                    parameters_dict = {
-                        "nline_ori": header_main["NLINE"]
-                    }
-
-                # Create appropriate parameter object
-                if grid_type == GridType.SPHERICAL:
-                    params = SphericalGridParams(**parameters_dict)
-                elif grid_type == GridType.HEALPIX:
-                    params = HealpixGridParams(**parameters_dict)
-                else:  # random
-                    params = RandomGridParams(**parameters_dict)
-
-                # Create grid instance
-                grid = cls(grid_type, params)
-                
-                # Load coordinates using helper method
-                footpoint_coordinates = hdulist["FTP_CRD"].data
-                grid.footpoint_coordinates = grid._load_coordinates(footpoint_coordinates)
-                
-                # Load indices
-                # There shouldn't be a need for this conversion. Investigate later.
-                grid.indices = np.array([row[0] for row in hdulist["FTP_ID"].data])
-                grid.partial = header_main["PARTIAL"]
-                
-                logger.info(f"Successfully loaded grid from {fitsname}")
-                return grid
-                
-        except Exception as e:
-            logger.error(f"Failed to load grid from {fitsname}: {e}")
-            raise
+    def from_header(cls, header: pf.Header) -> 'RandomGrid':
+        """Create RandomGrid from FITS header."""
+        return cls(nline_ori=header["NLINE"])
