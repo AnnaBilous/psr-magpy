@@ -178,17 +178,8 @@ class FieldComponent(ABC):
         Returns:
             np.ndarray: Position vector in the magnetic frame.
         """
-<<<<<<< HEAD
-        logger.debug("r_spin_frame: %s", r_spin_frame)
-        r_offset_spin_frame = r_spin_frame - self.moment_offset_vector
-        logger.debug("r_offset_spin_frame: %s", r_offset_spin_frame)
-        logger.debug("rotate_spin_to_magn_frame: %s", self.rotate_spin_to_magn_frame.as_matrix())
-        r_magn_frame = self.rotate_spin_to_magn_frame.apply(r_offset_spin_frame)
-        logger.debug("r_magn_frame: %s", r_magn_frame)
-=======
         r_offset_spin_frame = r_spin_frame - self.moment_offset_vector
         r_magn_frame = self.rotate_spin_to_magn_frame.apply(r_offset_spin_frame)
->>>>>>> 060e90260e6e0336ed7bbda8fb1d0e98e3f784eb
         return r_magn_frame
 
     @abstractmethod
@@ -215,21 +206,13 @@ class DipoleFieldComponent(FieldComponent):
             r_magn_frame: Position vector in the magnetic frame.
 
         Returns:
-<<<<<<< HEAD
-            np.ndarray: The magnetic field vector in the spin frame.
-=======
             np.ndarray: The magnetic field vector in the magnetic frame.
->>>>>>> 060e90260e6e0336ed7bbda8fb1d0e98e3f784eb
         """
         x, y, z = r_magn_frame
         r = (x**2 + y**2 + z**2) ** 0.5
         r_cyl = (x**2 + y**2) ** 0.5
 
-<<<<<<< HEAD
         B_magnetic_frame = (
-=======
-        return (
->>>>>>> 060e90260e6e0336ed7bbda8fb1d0e98e3f784eb
             self.params.B_magnitude
             * r**-5
             * np.array(
@@ -281,11 +264,7 @@ class QuadrupoleFieldComponent(FieldComponent):
             r_magn_frame: Position vector in the magnetic frame.
 
         Returns:
-<<<<<<< HEAD
-            np.ndarray: The magnetic field vector in the spin frame.
-=======
             np.ndarray: The magnetic field vector in the magnetic frame.
->>>>>>> 060e90260e6e0336ed7bbda8fb1d0e98e3f784eb
         """
         x, y, z = r_magn_frame
         r = (x**2 + y**2 + z**2) ** 0.5
@@ -302,10 +281,7 @@ class QuadrupoleFieldComponent(FieldComponent):
                 ]
             )
         )
-<<<<<<< HEAD
         return self.rotate_magn_to_spin_frame.apply(B_magnetic_frame)
-=======
->>>>>>> 060e90260e6e0336ed7bbda8fb1d0e98e3f784eb
 
     def get_moment_type(self) -> MultipoleType:
         """Get the moment type for this component."""
