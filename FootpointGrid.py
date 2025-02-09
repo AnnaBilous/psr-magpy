@@ -259,12 +259,7 @@ class SphericalGrid(FootpointGrid):
 
         if not (self.pole_lat == 0):
             rotation_operator = rot.from_euler("yzx", [self.pole_lat.rad, 0, 0])
-            
-            # Debug prints
-            print("Original shape:", footpoints_cart.xyz.shape)
-            print("Transposed shape:", footpoints_cart.xyz.T.shape)
-            print("Original units:", footpoints_cart.xyz.unit)
-            
+   
             rotated_xyz = rotation_operator.apply(footpoints_cart.xyz.value.T).T
             
             print("Rotated shape:", rotated_xyz.shape)
