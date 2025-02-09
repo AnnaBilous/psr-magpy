@@ -138,6 +138,7 @@ class FieldComponent(ABC):
             "yzx",
             [self.moment_orientation.theta.rad, self.moment_orientation.phi.rad, 0],
         )
+        logger.debug("rotate_magn_to_spin_frame: %s", self.rotate_magn_to_spin_frame)
         self.rotate_spin_to_magn_frame = self.rotate_magn_to_spin_frame.inv()
 
     def __repr__(self) -> str:
@@ -177,8 +178,12 @@ class FieldComponent(ABC):
         Returns:
             np.ndarray: Position vector in the magnetic frame.
         """
+        logger.debug("r_spin_frame: %s", r_spin_frame)
         r_offset_spin_frame = r_spin_frame - self.moment_offset_vector
+        logger.debug("r_offset_spin_frame: %s", r_offset_spin_frame)
+        logger.debug("rotate_spin_to_magn_frame: %s", self.rotate_spin_to_magn_frame.as_matrix())
         r_magn_frame = self.rotate_spin_to_magn_frame.apply(r_offset_spin_frame)
+        logger.debug("r_magn_frame: %s", r_magn_frame)
         return r_magn_frame
 
     @abstractmethod
@@ -205,13 +210,13 @@ class DipoleFieldComponent(FieldComponent):
             r_magn_frame: Position vector in the magnetic frame.
 
         Returns:
-            np.ndarray: The magnetic field vector in the magnetic frame.
+            np.ndarray: The magnetic field vector in the spin frame.
         """
         x, y, z = r_magn_frame
         r = (x**2 + y**2 + z**2) ** 0.5
         r_cyl = (x**2 + y**2) ** 0.5
 
-        return (
+        B_magnetic_frame = (
             self.params.B_magnitude
             * r**-5
             * np.array(
@@ -222,6 +227,7 @@ class DipoleFieldComponent(FieldComponent):
                 ]
             )
         )
+        return self.rotate_magn_to_spin_frame.apply(B_magnetic_frame)
 
     def get_moment_type(self) -> MultipoleType:
         """Get the moment type for this component."""
@@ -246,12 +252,13 @@ class QuadrupoleFieldComponent(FieldComponent):
             r_magn_frame: Position vector in the magnetic frame.
 
         Returns:
-            np.ndarray: The magnetic field vector in the magnetic frame.
+            np.ndarray: The magnetic field vector in the spin frame.
         """
         x, y, z = r_magn_frame
         r = (x**2 + y**2 + z**2) ** 0.5
         denom = (0.5 * (5 * z**2 / r**2 - 1) / r) ** -1
-        return (
+        
+        B_magnetic_frame = (
             self.params.B_magnitude
             * r**-4
             * np.array(
@@ -262,6 +269,7 @@ class QuadrupoleFieldComponent(FieldComponent):
                 ]
             )
         )
+        return self.rotate_magn_to_spin_frame.apply(B_magnetic_frame)
 
     def get_moment_type(self) -> MultipoleType:
         """Get the moment type for this component."""

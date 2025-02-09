@@ -8,7 +8,10 @@ import pstats
 from pstats import SortKey
 from multiprocessing import Pool
 from FieldLineDefinition import FieldLine
+import logging
 
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 class FieldLineTracer:
     def __init__(self, field, R_max=10.0, R_min=1.0, dt=0.01):
@@ -94,8 +97,11 @@ class FieldLineTracer:
         output.footpoint_id = footpoint_id
         r_initial = r_initial.xyz.value
         B_initial = self.field.get_total_field(r_initial, K=1, normalize=False)
+        logger.debug("B_initial: %s", B_initial)
         B_initial_norm = self.field.get_total_field(r_initial, K=1, normalize=True)
+        logger.debug("B_initial_norm: %s", B_initial_norm)
         dotprod = np.dot(B_initial_norm, r_initial)
+        logger.debug("dotprod: %s", dotprod)
         K = np.sign(dotprod)
         if K == 0:
             K = 1.0
@@ -146,14 +152,14 @@ class FieldLineTracer:
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from MultipoleField import MultipoleField
-    from FootpointGrid import FootpointGrid, GridType, SphericalGridParams
-    from FieldComponent import DipoleFieldComponent, QuadrupoleFieldComponent,MultipoleType
+    from FootpointGrid import SphericalGrid
+    from FieldComponent import DipoleFieldComponent, QuadrupoleFieldComponent, MultipoleType
     from multiprocessing import Pool
 
     # Create magnetic field (example with dipole)
     dipole = DipoleFieldComponent(
         B_magnitude=1.0,
-        moment_orientation_latitude_degree=90.0,
+        moment_orientation_latitude_degree=60.0,
     )
     quadrupole = QuadrupoleFieldComponent(
         B_magnitude=3.0,
@@ -162,11 +168,10 @@ if __name__ == "__main__":
     field = MultipoleField([dipole]) #, quadrupole])
 
     # Initialize field line tracer
-    tracer = FieldLineTracer(field, R_max=5.0)
+    tracer = FieldLineTracer(field, R_max=1.1)
 
     # Create spherical grid of footpoints
-    params = SphericalGridParams(nlon=2, nlat=20, pole_lat=90.0)  # 8 longitude points, 16 latitude points
-    grid = FootpointGrid(grid_type=GridType.SPHERICAL, params=params)
+    grid = SphericalGrid(nlon=8, nlat=20, pole_lat=60.0)
     footpoints = grid.footpoint_coordinates
 
     # Create template for field line properties to save
@@ -179,7 +184,6 @@ if __name__ == "__main__":
         if line.r_line is not None and len(line.r_line) > 0:
             field_lines.append(line.r_line)
 
- 
     # Plot results
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection="3d")
@@ -195,6 +199,10 @@ if __name__ == "__main__":
     y = np.outer(np.sin(u), np.sin(v))
     z = np.outer(np.ones(np.size(u)), np.cos(v))
     ax.plot_surface(x, y, z, color="r", alpha=0.1)
+
+    # Plot footpoints
+    xyz = footpoints.xyz.value
+    ax.scatter(xyz[0], xyz[1], xyz[2], c='black', s=20, alpha=1.0)
 
     # Set equal aspect ratio
     ax.set_box_aspect([1, 1, 1])
