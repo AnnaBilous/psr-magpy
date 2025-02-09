@@ -63,11 +63,6 @@ def main():
         if line.r_line is not None and len(line.r_line) > 0:
             field_lines.append(line.r_line)
     
-    # Analyze x-components
-    max_x_components = analyze_field_lines(field_lines)
-    logger.info(f"\nMaximum x-component across all lines: {np.max(max_x_components):.6f}")
-    logger.info(f"Mean x-component across all lines: {np.mean(max_x_components):.6f}")
-    
     # Create figure with two subplots
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 7))
     
