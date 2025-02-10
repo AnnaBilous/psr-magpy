@@ -1,18 +1,19 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from enum import Enum
-from typing import Union, Optional, Any, TypeVar, Type
+from typing import Optional, Any, TypeVar, Type, Dict, List, Union, cast
 import logging
+import time
 
 import numpy as np
 import healpy as hp
+from scipy.spatial.transform import Rotation as rot
 import matplotlib.pyplot as plt
+
 from astropy import units as u
 from astropy.coordinates import Angle, PhysicsSphericalRepresentation
 from astropy.coordinates.representation import CartesianRepresentation
 from astropy.io import fits as pf
 from astropy.nddata import CCDData
-from scipy.spatial.transform import Rotation as rot
 
 logger = logging.getLogger(__name__)
 
@@ -24,34 +25,131 @@ class GridType(Enum):
     RANDOM = "random"
 
 class FootpointGrid(ABC):
-    """Base class for all grid types."""
+    """Abstract base class for different types of spherical grid point distributions.
+    
+    This class provides a framework for creating and managing different types of point 
+    distributions on a unit sphere, including regular spherical grids, HEALPix grids, 
+    and random distributions.
+    
+    Attributes
+    ----------
+    partial : bool
+        Whether this is a subset of a full grid
+    footpoint_coordinates : CartesianRepresentation, optional
+        Cartesian coordinates of grid points
+    nline_ori : int, optional
+        Original number of points in the full grid
+    indices : ndarray, optional
+        Array of point indices
+    nline : int, optional
+        Current number of points in the grid
+    grid_type : GridType, optional
+        Type of grid (SPHERICAL, HEALPIX, or RANDOM)
+    """
     
     def __init__(self) -> None:
+        logger.debug("Initializing FootpointGrid")
         self.partial: bool = False
         self.footpoint_coordinates: Optional[CartesianRepresentation] = None
         self.nline_ori: Optional[int] = None
         self.indices: Optional[np.ndarray] = None
         self.nline: Optional[int] = None
         self.grid_type: Optional[GridType] = None
+        logger.debug("FootpointGrid initialized")
         
+    @classmethod
+    def load_from_fits(cls: Type[T], fitsname: str) -> T:
+        """Load grid from a FITS file.
+        
+        Args:
+            fitsname: Path to FITS file
+            
+        Returns:
+            Instance of the specific grid class that called this method
+        """
+        logger.info(f"Loading grid from {fitsname}")
+        try:
+            with pf.open(fitsname) as hdulist:
+                header_main = hdulist[0].header
+                grid_type = GridType(header_main["GRIDTYPE"])
+                
+                # Delegate creation to specific grid class
+                grid = cls._create_grid_from_header(header_main, grid_type)
+                
+                # Load coordinates
+                logger.info("Coordinates are loaded from fits file.")
+                footpoint_coordinates = hdulist["FTP_CRD"].data
+                grid.footpoint_coordinates = CartesianRepresentation(footpoint_coordinates)
+                
+                # Load indices
+                grid.indices = np.array([row[0] for row in hdulist["FTP_ID"].data])
+                grid.partial = header_main["PARTIAL"]
+                grid.nline = len(grid.indices)
+                
+                return grid
+                    
+        except Exception as e:
+            logger.error(f"Failed to load grid from {fitsname}: {e}")
+            raise
+
+    @classmethod
+    def _create_grid_from_header(cls: Type[T], header: pf.Header, grid_type: GridType) -> T:
+        """Factory method to create appropriate grid instance."""
+        grid_classes = {
+            GridType.SPHERICAL: SphericalGrid,
+            GridType.HEALPIX: HealpixGrid,
+            GridType.RANDOM: RandomGrid
+        }
+        grid_class = grid_classes.get(grid_type)
+        if grid_class is None:
+            raise ValueError(f"Unknown grid type: {grid_type}")
+        return cast(T, grid_class.from_header(header))
+
+    @property
+    def colatitude(self) -> np.ndarray:
+        """Get the colatitude of all grid points.
+        
+        Returns
+        -------
+        ndarray
+            Colatitude values in degrees, ranging from 0 (north pole) to 180 (south pole)
+        """
+        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
+        return spherical.theta.to(u.deg).value
+
+    @property
+    def longitude(self) -> np.ndarray:
+        """Get the longitude of all grid points.
+        
+        Returns
+        -------
+        ndarray
+            Longitude values in degrees, ranging from 0 to 360
+        """
+        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
+        return spherical.phi.to(u.deg).value
+    
     @abstractmethod
-    def prepare_footpoints(self) -> CartesianRepresentation:
+    def _prepare_footpoints(self) -> CartesianRepresentation:
+        """Prepare the footpoint coordinates for this grid type."""
         pass
 
-    def calculate_grid(self) -> None:
+    def _set_up_grid(self) -> None:
         """Calculate grid points and initialize grid properties."""
-        logger.info("Calculating grid points")
+        logger.info(f"Setting up grid of type {self.grid_type}")
         try:
-            self.footpoint_coordinates = self.prepare_footpoints()
+            start_time = time.perf_counter()
+            self.footpoint_coordinates = self._prepare_footpoints()  
             self.nline_ori = len(self.footpoint_coordinates.x)
             self.indices = np.arange(self.nline_ori)
             self.nline = self.nline_ori
-            logger.info(f"Successfully created grid with {self.nline} points")
+            elapsed = time.perf_counter() - start_time
+            logger.info(f"Successfully set up grid with {self.nline} points in {elapsed:.2f} seconds")
         except Exception as e:
-            logger.error(f"Failed to calculate grid points: {e}")
+            logger.error(f"Failed to set up grid: {str(e)}", exc_info=True)
             raise
 
-    def subset_grid(self, grid_indices: np.ndarray) -> 'FootpointGrid':
+    def subset_grid(self, grid_indices: np.ndarray) -> Union['SphericalGrid', 'HealpixGrid', 'RandomGrid']:
         """Create a new grid instance with subset of indices.
         
         Args:
@@ -63,7 +161,9 @@ class FootpointGrid(ABC):
         Raises:
             ValueError: If any indices are invalid
         """
-        logger.info(f"Creating subset grid from {self.nline_ori} points")
+        logger.info(f"Creating subset grid from {self.nline_ori} points with {len(grid_indices)} indices")
+        logger.debug(f"Subset indices: {grid_indices}")
+        
         invalid_indices: set[int] = set(grid_indices) - set(self.indices)
         if invalid_indices:
             error_msg = (
@@ -76,10 +176,13 @@ class FootpointGrid(ABC):
         try:
             # Create a new instance with same parameters
             if isinstance(self, SphericalGrid):
+                logger.debug(f"Creating SphericalGrid subset with nlon={self.nlon}, nlat={self.nlat}")
                 new_grid = SphericalGrid(self.nlon, self.nlat, self.pole_lat.deg)
             elif isinstance(self, HealpixGrid):
+                logger.debug(f"Creating HealpixGrid subset with nside={self.nside}")
                 new_grid = HealpixGrid(self.nside)
             else:  # RandomGrid
+                logger.debug(f"Creating RandomGrid subset with nline_ori={self.nline_ori}")
                 new_grid = RandomGrid(self.nline_ori)
             
             # Set subset properties
@@ -92,47 +195,9 @@ class FootpointGrid(ABC):
             return new_grid
             
         except Exception as e:
-            logger.error(f"Failed to create subset grid: {e}")
+            logger.error(f"Failed to create subset grid: {str(e)}", exc_info=True)
             raise
-
-    def plot_footpoint_coordinates(
-        self,
-        ax: Optional[plt.Axes] = None,
-        marker: str = ".",
-        color: str = "r",
-        **kwargs: Any
-    ) -> plt.Axes:
-        """Plot footpoint coordinates."""
-        logger.debug("Plotting footpoint coordinates")
-        try:
-            if ax is None:
-                _, ax = plt.subplots()
-
-            ax.plot(self.longitude, self.colatitude, marker, color=color, **kwargs)
-            
-            ax.set_xlim(0, 360)
-            ax.set_xlabel("Longitude, deg")
-            ax.set_ylim(180, 0)
-            ax.set_ylabel("Latitude, deg")
-            
-            logger.debug("Successfully plotted footpoint coordinates")
-            return ax
-        except Exception as e:
-            logger.error(f"Failed to plot footpoint coordinates: {e}")
-            raise
-
-    @property
-    def colatitude(self) -> np.ndarray:
-        """Latitude of footpoints in degrees."""
-        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
-        return spherical.theta.to(u.deg)
-
-    @property
-    def longitude(self) -> np.ndarray:
-        """Longitude of footpoints in degrees."""
-        spherical = self.footpoint_coordinates.represent_as(PhysicsSphericalRepresentation)
-        return spherical.phi.to(u.deg)
-
+    
     def save_to_fits(self, fitsname: str) -> None:
         """Save grid to a FITS file."""
         logger.info(f"Saving grid to {fitsname}")
@@ -164,109 +229,77 @@ class FootpointGrid(ABC):
             logger.error(f"Failed to save grid to {fitsname}: {e}")
             raise
 
-    @abstractmethod
-    def _add_params_to_header(self, header: pf.Header) -> None:
-        """Add grid-specific parameters to FITS header."""
-        pass
-
-    @classmethod
-    def load_from_fits(cls: Type[T], fitsname: str) -> T:
-        """Load grid from a FITS file.
-        
-        Args:
-            fitsname: Path to FITS file
-            
-        Returns:
-            Instance of the specific grid class that called this method
-        """
-        logger.info(f"Loading grid from {fitsname}")
+    def plot_footpoint_coordinates(
+        self,
+        ax: Optional[plt.Axes] = None,
+        marker: str = ".",
+        color: str = "r",
+        **kwargs: Any
+    ) -> plt.Axes:
+        """Plot footpoint coordinates."""
+        logger.debug("Plotting footpoint coordinates")
         try:
-            with pf.open(fitsname) as hdulist:
-                header_main = hdulist[0].header
-                grid_type = GridType(header_main["GRIDTYPE"])
-                
-                # Delegate creation to specific grid class
-                grid = cls._create_grid_from_header(header_main, grid_type)
-                
-                # Load coordinates
-                footpoint_coordinates = hdulist["FTP_CRD"].data
-                grid.footpoint_coordinates = CartesianRepresentation(footpoint_coordinates)
-                
-                # Load indices
-                grid.indices = np.array([row[0] for row in hdulist["FTP_ID"].data])
-                grid.partial = header_main["PARTIAL"]
-                grid.nline = len(grid.indices)
-                
-                return grid
-                    
+            if ax is None:
+                _, ax = plt.subplots()
+
+            ax.plot(self.longitude, self.colatitude, marker, color=color, **kwargs)
+            
+            ax.set_xlim(0, 360)
+            ax.set_xlabel("Longitude, deg")
+            ax.set_ylim(180, 0)
+            ax.set_ylabel("Latitude, deg")
+            
+            logger.debug("Successfully plotted footpoint coordinates")
+            return ax
         except Exception as e:
-            logger.error(f"Failed to load grid from {fitsname}: {e}")
+            logger.error(f"Failed to plot footpoint coordinates: {e}")
             raise
 
-    @staticmethod
-    def _create_grid_from_header(header: pf.Header, grid_type: GridType) -> 'FootpointGrid':
-        """Factory method to create appropriate grid instance."""
-        grid_classes = {
-            GridType.SPHERICAL: SphericalGrid,
-            GridType.HEALPIX: HealpixGrid,
-            GridType.RANDOM: RandomGrid
-        }
-        grid_class = grid_classes.get(grid_type)
-        if grid_class is None:
-            raise ValueError(f"Unknown grid type: {grid_type}")
-        return grid_class.from_header(header)
 
 class SphericalGrid(FootpointGrid):
+    """Regular spherical grid with uniform spacing in longitude and latitude.
+    
+    Creates a grid of points on a unit sphere with regular spacing in longitude and 
+    latitude. Optionally, the grid can be rotated to have its pole at a specified latitude.
+    
+    Parameters
+    ----------
+    nlon : int
+        Number of longitude divisions
+    nlat : int
+        Number of latitude divisions
+    pole_lat : float, optional
+        Latitude of the grid's pole in degrees, default is 0
+        
+    Attributes
+    ----------
+    nlon : int
+        Number of longitude divisions
+    nlat : int
+        Number of latitude divisions
+    pole_lat : Angle
+        Latitude of grid's pole
+        
+    Raises
+    ------
+    ValueError
+        If nlon or nlat are not positive integers
+    """
+    
     def __init__(self, nlon: int, nlat: int, pole_lat: float = 0):
+        logger.debug(f"Initializing SphericalGrid with nlon={nlon}, nlat={nlat}, pole_lat={pole_lat}")
         super().__init__()
         self.grid_type = GridType.SPHERICAL
         if nlon <= 0 or nlat <= 0:
-            raise ValueError("Grid dimensions must be positive")
+            error_msg = f"Grid dimensions must be positive, got nlon={nlon}, nlat={nlat}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
             
         self.nlon = nlon
         self.nlat = nlat
         self.pole_lat = Angle(pole_lat * u.deg)
-        self.calculate_grid()
-
-    def _add_params_to_header(self, header: pf.Header) -> None:
-        header.set("NLON", self.nlon, "Number of longitude divisions")
-        header.set("NLAT", self.nlat, "Number of latitude divisions")
-        header.set("POLELAT", self.pole_lat.deg, "Latitude of grid pole, degree")
-
-    def prepare_footpoints(self) -> CartesianRepresentation:
-        phi_grid = np.linspace(0, 2 * np.pi, self.nlon, endpoint=False)
-        theta_grid = np.linspace(0, np.pi, self.nlat)
-        print(
-            f"Latitude resolution {np.rad2deg(theta_grid[1] - theta_grid[0])} degrees"
-        )
-
-        phi_mesh, theta_mesh = np.meshgrid(phi_grid, theta_grid)
-        phi_mesh = np.ravel(phi_mesh)
-        theta_mesh = np.ravel(theta_mesh)
-
-        # Remove duplicate points at poles
-        duplicate = np.where(
-            (phi_mesh > 0) & ((theta_mesh == 0) | (theta_mesh == np.pi))
-        )
-        theta_pruned = np.delete(theta_mesh, duplicate)
-        phi_pruned = np.delete(phi_mesh, duplicate)
-
-        theta = Angle(theta_pruned * u.rad)
-        phi = Angle(phi_pruned * u.rad)
-
-        footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=1)
-        footpoints_cart = footpoints.represent_as(CartesianRepresentation)
-
-        if not (self.pole_lat == 0):
-            rotation_operator = rot.from_euler("yzx", [self.pole_lat.rad, 0, 0])
-   
-            rotated_xyz = rotation_operator.apply(footpoints_cart.xyz.value.T).T
-            
-            print("Rotated shape:", rotated_xyz.shape)
-            
-            return CartesianRepresentation(rotated_xyz, unit=footpoints_cart.xyz.unit)
-
-        return footpoints_cart
+        self._set_up_grid()
+        logger.debug("SphericalGrid initialization complete")
 
     def __repr__(self) -> str:
         return (
@@ -283,7 +316,77 @@ class SphericalGrid(FootpointGrid):
             pole_lat=header["POLELAT"]
         )
 
+    def _prepare_footpoints(self) -> CartesianRepresentation:
+        logger.debug("Preparing SphericalGrid footpoints")
+        start_time = time.perf_counter()
+        
+        # Create grid
+        phi_grid = np.linspace(0, 2 * np.pi, self.nlon, endpoint=False)
+        theta_grid = np.linspace(0, np.pi, self.nlat)
+        lat_resolution = np.rad2deg(theta_grid[1] - theta_grid[0])
+        logger.info(f"Latitude resolution: {lat_resolution:.2f} degrees")
+
+        # Create mesh and handle poles
+        phi_mesh, theta_mesh = np.meshgrid(phi_grid, theta_grid)
+        phi_mesh = np.ravel(phi_mesh)
+        theta_mesh = np.ravel(theta_mesh)
+
+        duplicate = np.where((phi_mesh > 0) & ((theta_mesh == 0) | (theta_mesh == np.pi)))
+        logger.debug(f"Removing {len(duplicate[0])} duplicate pole points")
+        
+        theta_pruned = np.delete(theta_mesh, duplicate)
+        phi_pruned = np.delete(phi_mesh, duplicate)
+
+        # Convert to Cartesian
+        theta = Angle(theta_pruned * u.rad)
+        phi = Angle(phi_pruned * u.rad)
+        footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=1)
+        footpoints_cart = footpoints.represent_as(CartesianRepresentation)
+
+        # Apply rotation if needed
+        if not (self.pole_lat == 0):
+            logger.debug(f"Applying rotation for pole_lat={self.pole_lat.deg:.2f} degrees")
+            rotation_operator = rot.from_euler("yzx", [self.pole_lat.rad, 0, 0])
+            rotated_xyz = rotation_operator.apply(footpoints_cart.xyz.value.T).T
+            footpoints_cart = CartesianRepresentation(rotated_xyz, unit=footpoints_cart.xyz.unit)
+
+        elapsed = time.perf_counter() - start_time
+        logger.debug(f"Footpoint preparation completed in {elapsed:.2f} seconds")
+        return footpoints_cart
+
+    def _add_params_to_header(self, header: pf.Header) -> None:
+        header.set("NLON", self.nlon, "Number of longitude divisions")
+        header.set("NLAT", self.nlat, "Number of latitude divisions")
+        header.set("POLELAT", self.pole_lat.deg, "Latitude of grid pole, degree")
+
+
 class HealpixGrid(FootpointGrid):
+    """HEALPix grid for uniform spherical sampling.
+    
+    Creates a grid using the Hierarchical Equal Area isoLatitude Pixelization (HEALPix)
+    scheme, which provides approximately uniform sampling of a sphere.
+    
+    Parameters
+    ----------
+    nside : int
+        HEALPix resolution parameter, must be a power of 2
+        
+    Attributes
+    ----------
+    nside : int
+        HEALPix resolution parameter
+        
+    Notes
+    -----
+    The number of pixels is 12 * nside^2. Resolution at given nside is
+    approximately sqrt(4π/N) where N is the number of pixels.
+    
+    Raises
+    ------
+    ValueError
+        If nside is not a positive power of 2
+    """
+    
     def __init__(self, nside: int):
         super().__init__()
         self.grid_type = GridType.HEALPIX
@@ -291,16 +394,19 @@ class HealpixGrid(FootpointGrid):
             raise ValueError("NSIDE must be a positive power of 2")
             
         self.nside = nside
-        self.calculate_grid()
+        self._set_up_grid()
+
+    def __repr__(self) -> str:
+        return f"HealpixGrid(nside={self.nside})"
 
     def _add_params_to_header(self, header: pf.Header) -> None:
         header.set("NSIDE", self.nside, "Healpix parameter nside")
 
-    def prepare_footpoints(self) -> CartesianRepresentation:
+    def _prepare_footpoints(self) -> CartesianRepresentation:
         npix = hp.nside2npix(self.nside)
-        #print(
-        #    f" Approx res at NSIDE {self.nside} is {hp.nside2resol(self.nside, arcmin=True) / 60:.2f} deg ({npix} points)"
-        #)
+        print(
+            f" Approx res at NSIDE {self.nside} is {hp.nside2resol(self.nside, arcmin=True) / 60:.2f} deg ({npix} points)"
+        )
 
         theta_val, phi_val = hp.pix2ang(nside=self.nside, ipix=np.arange(npix))
         phi = Angle(phi_val * u.rad)
@@ -309,15 +415,35 @@ class HealpixGrid(FootpointGrid):
         footpoints = PhysicsSphericalRepresentation(phi, theta=theta, r=1)
         return footpoints.represent_as(CartesianRepresentation)
 
-    def __repr__(self) -> str:
-        return f"HealpixGrid(nside={self.nside})"
-
     @classmethod
     def from_header(cls, header: pf.Header) -> 'HealpixGrid':
         """Create HealpixGrid from FITS header."""
         return cls(nside=header["NSIDE"])
 
 class RandomGrid(FootpointGrid):
+    """Random uniform distribution of points on a sphere.
+    
+    Creates a grid of randomly distributed points that are approximately uniformly
+    distributed on a unit sphere using the Muller method.
+    
+    Parameters
+    ----------
+    nline_ori : int
+        Number of random points to generate
+        
+    Notes
+    -----
+    Uses the Muller method which generates points by:
+    1. Creating 3D normal distributions
+    2. Normalizing to unit vectors
+    This produces a uniform distribution on the sphere.
+    
+    Raises
+    ------
+    ValueError
+        If nline_ori is not a positive integer
+    """
+    
     def __init__(self, nline_ori: int):
         super().__init__()
         self.grid_type = GridType.RANDOM
@@ -325,20 +451,20 @@ class RandomGrid(FootpointGrid):
             raise ValueError("Number of random points must be positive")
             
         self.nline_ori = nline_ori
-        self.calculate_grid()
+        self._set_up_grid()
+
+    def __repr__(self) -> str:
+        return f"RandomGrid(nline_ori={self.nline_ori})"
 
     def _add_params_to_header(self, header: pf.Header) -> None:
         pass  # No additional parameters needed for random grid
 
-    def prepare_footpoints(self) -> CartesianRepresentation:
+    def _prepare_footpoints(self) -> CartesianRepresentation:
         # Muller method for random points on a sphere
-        u = np.random.normal(loc=0, scale=1, size=(3, self.nline_ori))
-        norm = (np.sum(u**2, axis=0)) ** 0.5
-        (x, y, z) = u / norm
+        u: np.ndarray = np.random.normal(loc=0, scale=1, size=(3, self.nline_ori))
+        norm: np.ndarray = (np.sum(u**2, axis=0)) ** 0.5
+        x, y, z = u / norm
         return CartesianRepresentation(x, y, z)
-
-    def __repr__(self) -> str:
-        return f"RandomGrid(nline_ori={self.nline_ori})"
 
     @classmethod
     def from_header(cls, header: pf.Header) -> 'RandomGrid':
