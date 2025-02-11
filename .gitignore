@@ -1,6 +1,8 @@
 /ember_snapshot_2405
 /np
 /__pycache__
+srs/*/__pycache__
+demos/__pycache__
 /demos/output
 /logs
 .sw?

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional, Any, TypeVar, Type, Dict, List, Union, cast
+from typing import Optional, Any, TypeVar, Type, Union, cast
 import logging
 import time
 
@@ -358,7 +358,6 @@ class SphericalGrid(FootpointGrid):
         header.set("NLON", self.nlon, "Number of longitude divisions")
         header.set("NLAT", self.nlat, "Number of latitude divisions")
         header.set("POLELAT", self.pole_lat.deg, "Latitude of grid pole, degree")
-
 
 class HealpixGrid(FootpointGrid):
     """HEALPix grid for uniform spherical sampling.
