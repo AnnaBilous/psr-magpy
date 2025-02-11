@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from setup_directories import setup_output_directories
 
 parent_dir = Path(__file__).parent.parent
 sys.path.append(str(parent_dir))
@@ -11,14 +12,7 @@ from FootpointGrid import (FootpointGrid, SphericalGrid, HealpixGrid, RandomGrid
 
 
 # Create output directories relative to script location
-script_dir = Path(__file__).parent
-output_dir = script_dir / "output"
-fits_dir = output_dir / "fits"
-plot_dir = output_dir / "plots"
-log_dir = output_dir / "logs"
-
-for directory in [fits_dir, plot_dir, log_dir]:
-    directory.mkdir(parents=True, exist_ok=True)
+_, fits_dir, plot_dir, log_dir = setup_output_directories(__file__)
 
 # Create logger for this script
 logger = logging.getLogger(__name__)
