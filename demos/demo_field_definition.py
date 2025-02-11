@@ -1,12 +1,11 @@
-"""
-Demo script for FieldDefinition module showing how to create and visualize
-different magnetic field configurations.
-"""
 import sys
 from pathlib import Path
+from setup_directories import setup_output_directories
 
-parent_dir = Path(__file__).parent.parent
-sys.path.append(str(parent_dir))
+# Add project root to PYTHONPATH only if not already present
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from setup_directories import setup_output_directories
 
@@ -15,11 +14,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-from FieldDefinition import (
+from src.field.components import (
     DipoleFieldComponent,
-    QuadrupoleFieldComponent,
-    MultipoleField
+    QuadrupoleFieldComponent
 )
+from src.field.multipole import MultipoleField
 
 # Create output directories relative to script location
 _, fits_dir, plot_dir, log_dir = setup_output_directories(__file__)

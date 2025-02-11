@@ -2,13 +2,16 @@ import sys
 from pathlib import Path
 from setup_directories import setup_output_directories
 
-parent_dir = Path(__file__).parent.parent
-sys.path.append(str(parent_dir))
-from logging_config import setup_logging, cleanup_logging
+# Add project root to PYTHONPATH only if not already present
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from configs.logging_config import setup_logging, cleanup_logging
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-from FootpointGrid import (FootpointGrid, SphericalGrid, HealpixGrid, RandomGrid)
+from src.footpoint_grid.grid import FootpointGrid, SphericalGrid, HealpixGrid, RandomGrid
 
 
 # Create output directories relative to script location
