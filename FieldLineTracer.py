@@ -150,7 +150,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from MultipoleField import MultipoleField
     from FootpointGrid import SphericalGrid
-    from FieldComponent import DipoleFieldComponent, QuadrupoleFieldComponent, MultipoleType
+    from FieldDefinition import DipoleFieldComponent, QuadrupoleFieldComponent, MultipoleType
     from multiprocessing import Pool
 
     # Create magnetic field (example with dipole)

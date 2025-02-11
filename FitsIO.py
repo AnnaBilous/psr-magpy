@@ -1,12 +1,11 @@
 from typing import List, Type, Union
 from astropy.io import fits as pf
 from FieldLineDefinition import FieldLine
-from FieldComponent import (
-    FieldComponent,
+from FieldDefinition import (
     DipoleFieldComponent,
     QuadrupoleFieldComponent,
     MultipoleType,
-    ConcreteFieldComponent
+    FieldComponentProtocol
 )
 from numpy.typing import NDArray
 from numpy import ndarray, integer, floating
@@ -63,7 +62,7 @@ class FitsIO:
         raise NotImplementedError("Subclasses must implement create_column")
 
     @classmethod
-    def load_from_fits(cls, hdu, component_class: Type[ConcreteFieldComponent]):
+    def load_from_fits(cls, hdu, component_class: FieldComponentProtocol):
         """Load data from a FITS HDU.
 
         Args:
@@ -88,12 +87,13 @@ class FieldComponentFitsIO(FitsIO):
     def generate_column_info(self):
         """Generate column information for field component data."""
         first_component = self.data[0]
-        if not isinstance(first_component, ConcreteFieldComponent):
+        if not isinstance(first_component, FieldComponentProtocol):
             raise TypeError(
-                f"Expected concrete field component, got {type(first_component).__name__}"
+                f"Expected field component, got {type(first_component).__name__}"
             )
-
-        params_dict = vars(first_component.params)
+       
+        params_dict = first_component.params._asdict()
+        
 
         return {
             param_name: (

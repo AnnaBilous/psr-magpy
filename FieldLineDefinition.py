@@ -2,7 +2,7 @@
 from dataclasses import dataclass, fields
 import logging
 from sys import getsizeof
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 # Third-party imports
 import numpy as np
