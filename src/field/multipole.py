@@ -86,4 +86,34 @@ class MultipoleField:
             logger.info("Successfully saved MultipoleField to FITS file")
         except Exception as e:
             logger.error(f"Failed to save MultipoleField to FITS: {e}")
+            raise
+
+    @classmethod
+    def load_from_fits(cls, filename: str) -> 'MultipoleField':
+        """Load field configuration from a FITS file.
+        
+        Parameters
+        ----------
+        filename : str
+            Path to the input FITS file
+            
+        Returns
+        -------
+        MultipoleField
+            New MultipoleField instance with components loaded from file
+            
+        Raises
+        ------
+        Exception
+            If loading from FITS file fails
+        """
+        logger.info(f"Loading MultipoleField from {filename}")
+        try:
+            from .io import FieldComponentFitsIO
+            multipole_field = FieldComponentFitsIO.load_from_fits(filename)
+            field_components = fits_io.get_components()
+            logger.info("Successfully loaded MultipoleField from FITS file")
+            return cls(field_components)
+        except Exception as e:
+            logger.error(f"Failed to load MultipoleField from FITS: {e}")
             raise 

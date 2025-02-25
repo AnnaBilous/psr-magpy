@@ -1,10 +1,9 @@
-from typing import List, Type, Union
 from astropy.io import fits as pf
 
 from src.fitsio.base import FitsIO
 from src.field.components import FieldComponentProtocol
 from src.field.components import MultipoleType, DipoleFieldComponent, QuadrupoleFieldComponent
-from numpy import ndarray, integer, floating
+from numpy import ndarray
 
 
 class FieldComponentFitsIO(FitsIO):
@@ -26,8 +25,8 @@ class FieldComponentFitsIO(FitsIO):
                 FitsIO.FITS_TYPE_MAPPING[str]
                 if param_name == "moment_type"
                 else (
-                    FitsIO.FITS_TYPE_MAPPING[ndarray]
-                    if param_name == "field_lines"
+                    FitsIO.FITS_TYPE_MAPPING[list]
+                    if param_name == "offset_r_ns"
                     else FitsIO.get_fits_format(param_value)
                 )
             )
@@ -49,7 +48,9 @@ class FieldComponentFitsIO(FitsIO):
             value = [v.params.moment_type.value for v in self.data]
         else:
             value = [getattr(v.params, key) for v in self.data]
-        return pf.Column(name=key, format=format, array=value)
+        column = pf.Column(name=key, format=format, array=value)
+        print(column)
+        return column
 
     @classmethod
     def load_from_fits(cls, hdu):

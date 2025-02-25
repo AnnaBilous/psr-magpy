@@ -6,6 +6,16 @@ import logging
 from src.field.components import FieldComponentProtocol
 from numpy import ndarray, integer, floating
 
+# Setup logging
+log_file = "test.log"
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()  # This will print to console as well
+    ]
+)
 logger = logging.getLogger(__name__)
 
 class FitsIO:
@@ -16,7 +26,8 @@ class FitsIO:
         float: "D",
         int: "I",
         str: "10A",
-        ndarray: "PE",  # Variable-length array of doubles
+        list: "PE",  # Variable-length array of doubles
+        ndarray: "D",  
         integer: "I",  # numpy integers
         floating: "D",  # numpy floats
     }
@@ -65,7 +76,9 @@ class FitsIO:
         """
         logger.info(f"Saving data to {filename}")
         try:
+            logger.debug(f"Creating HDU for {filename}")
             hdu = self.create_hdu()
+            logger.debug(f"Writing HDU to {filename}")
             hdu.writeto(filename, overwrite=True)
             logger.info("Successfully saved data to FITS file")
         except Exception as e:
@@ -90,6 +103,10 @@ class FitsIO:
             columns = [
                 self.create_column(key, column_info[key]) for key in column_info.keys()
             ]
+            print(columns)
+            for i in columns:
+                print(i.array)
+            #exit(1)
             hdu = pf.BinTableHDU.from_columns(columns, name="TEST")
             return hdu
         except Exception as e:

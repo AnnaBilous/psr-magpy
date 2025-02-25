@@ -1,4 +1,4 @@
-from .definition import FieldLine
-from .io import LineIO
+from .field_line import FieldLine
 
-__all__ = ['FieldLine', 'LineIO'] 
+
+__all__ = ['FieldLine'] 

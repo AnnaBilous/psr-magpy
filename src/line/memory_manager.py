@@ -6,8 +6,9 @@ from typing import Optional, Tuple
 import logging
 import psutil
 
-from FieldLineDefinition import FieldLine, FieldLineSet
-from FieldLineTracer import FieldLineTracer
+from src.line.field_line import FieldLine
+from src.line.field_line_set import FieldLineSet
+from src.line.tracer import FieldLineTracer
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ class ResultsManager:
         """
         self.memory_config = config
         self._total_memory = psutil.virtual_memory().total
-        self._results_in_memory: FieldLineSet = FieldLineSet([])  # Initialize as an empty FieldLineSet
+        self._results_in_memory: FieldLineSet = None  # Initialize as an empty FieldLineSet
         self._results_in_memory_size: float = 0.0
         self.tracer = tracer
         logger.info("ResultsManager initialized with memory config: %s", config)
@@ -102,17 +103,6 @@ class ResultsManager:
                 f"results_in_memory_size={self._results_in_memory_size:.2f}, "
                 f"total_field_lines_in_memory={len(self._results_in_memory.field_lines)})>")
 
-    def _calculate_n_points(self, tracer: FieldLineTracer) -> int:
-        """Calculate the number of points for a field line based on the tracer's parameters.
-
-        Args:
-            tracer: FieldLineTracer instance used for calculations.
-
-        Returns:
-            int: Number of points for the field line.
-        """
-        return int((tracer.R_max - tracer.R_min) / tracer.dt)
-
     @property
     def available_memory(self) -> float:
         """Get available memory in MB.
@@ -122,33 +112,9 @@ class ResultsManager:
         """
         return psutil.virtual_memory().available / (1024 * 1024)
 
-    def estimate_single_line_size(self, template: FieldLine, n_points: int) -> float:
-        """Estimate memory size for a single field line.
-
-        Args:
-            template: FieldLine instance representing the field line.
-            n_points: Number of points in the field line.
-
-        Returns:
-            float: Estimated memory size in bytes for the field line.
-        """
-        float_size = 4  # FITS uses float32 (4 bytes)
-        total_bytes = 8  # footpoint_id (int64)
-
-        # Add size for optional parameters
-        for attr in ["r_max", "r_cyl_max", "z_abs_max", "b_ini", "b_r_ini_angle"]:
-            if getattr(template, attr) is not None:
-                total_bytes += float_size
-
-        # Add size for field line coordinates
-        if template.r_line is not None:
-            total_bytes += n_points * 3 * float_size
-
-        return total_bytes
-
     def find_batch_size(
         self,
-        template: FieldLine,
+        estimated_line_size: float,
     ) -> Tuple[int, float]:
         """Determine optimal batch size based on performance testing.
 
@@ -174,10 +140,6 @@ class ResultsManager:
                 f"{self.memory_config.safety_factor*100:.1f}% of available system memory "
                 f"({available_memory_mb:.1f} MB)"
             )
-
-        n_points = self._calculate_n_points(self.tracer)
-        estimated_line_size = self.estimate_single_line_size(template, n_points)
-        logger.info("Estimated memory per field line: %.2f KB", estimated_line_size / 1024)
 
         max_batch_size = int(
             (self.memory_config.max_memory_mb * 1024 * 1024) / estimated_line_size
@@ -213,22 +175,19 @@ class ResultsManager:
         Returns:
             FieldLineSet: Current results as a FieldLineSet.
         """
-        self._results_in_memory = self._results_in_memory.concat(batch_results)
-        current_size = sum(
-            self.estimate_single_line_size(
-                line, len(line.r_line) if line.r_line is not None else 0
-            )
-            for line in batch_results.field_lines
-        )
-        self._results_in_memory_size += current_size
+        if self._results_in_memory is None:
+            self._results_in_memory = batch_results
+        else:
+            self._results_in_memory = self._results_in_memory.append(batch_results)
+            
 
-        logger.debug("Added %d field lines, current in-memory size: %.2f MB", len(batch_results.field_lines), self._results_in_memory_size / (1024 * 1024))
+        self._results_in_memory_size = self._results_in_memory.estimate_size()
 
         if self.should_write_batch(self._results_in_memory_size / (1024 * 1024)):
             logger.info("Writing batch %d to disk", batch_idx)
+            exit(1)
             self.write_results_to_disk(filename, batch_idx)
 
-        logger.info("Total field lines in memory: %d", len(self._results_in_memory.field_lines))
         return self._results_in_memory
 
     def write_results_to_disk(self, filename: str, batch_idx: int) -> None:
@@ -239,11 +198,13 @@ class ResultsManager:
             batch_idx: Current batch index.
         """
         if self._results_in_memory:
+            logger.info("Writing results to disk for batch %d", batch_idx)
             self._results_in_memory.write_to_fits(f"{filename}_batch_{batch_idx}.fits")
+            exit(1)
             logger.info("Results written to %s_batch_%d.fits", filename, batch_idx)
             logger.debug("Clearing in-memory results after writing to disk.")
             self._results_in_memory_size = 0
-            self._results_in_memory = FieldLineSet([])
+            self._results_in_memory = None
 
     def rename_batch_files(self, filename: str) -> None:
         """Rename batch output FITS files to show progress (e.g., '1_of_10.fits').

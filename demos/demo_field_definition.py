@@ -88,7 +88,16 @@ def main():
     logger.info("Created quadrupole component: %s", quadrupole)
 
     # Create multipole field
-    field = MultipoleField([dipole, quadrupole])
+    field = MultipoleField([dipole, dipole, dipole])    
+
+    # Save field configuration to the fits directory
+    fits_path = fits_dir / 'field_configuration.fits'
+    field.save_to_fits(fits_path)
+    logger.info("Field configuration saved to '%s'", fits_path)
+
+    # Load field from FITS and verify
+    loaded_field = MultipoleField.load_from_fits(fits_path)
+    logger.info("Loaded field configuration from FITS")
 
     # Create visualization grid
     grid_points, (X, Z) = create_field_grid(
@@ -97,35 +106,34 @@ def main():
         n_points=20
     )
 
-    # Create 2D plot
-    fig, ax = plt.subplots(figsize=(10, 10))
+    # Create comparison plots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
     
-    # Plot field lines
-    plot_field_lines(ax, field, grid_points, scale=30)
-    
-    # Add circle to represent the neutron star
-    circle = plt.Circle((0, 0), 1, color='blue', fill=True, alpha=0.2)
-    ax.add_patch(circle)
+    # Plot original field
+    plot_field_lines(ax1, field, grid_points, scale=30)
+    circle1 = plt.Circle((0, 0), 1, color='blue', fill=True, alpha=0.2)
+    ax1.add_patch(circle1)
+    ax1.set_xlabel('X (NS radii)')
+    ax1.set_ylabel('Z (NS radii)')
+    ax1.set_title('Original Field Configuration')
+    ax1.set_aspect('equal')
+    plt.colorbar(ax1.collections[0], label='Field Strength')
 
-    # Customize plot
-    ax.set_xlabel('X (NS radii)')
-    ax.set_ylabel('Z (NS radii)')
-    ax.set_title('Magnetic Field Configuration in OX Plane\nDipole + Quadrupole')
-    ax.set_aspect('equal')
-    
-    # Add colorbar
-    plt.colorbar(ax.collections[0], label='Field Strength')
+    # Plot loaded field
+    plot_field_lines(ax2, loaded_field, grid_points, scale=30)
+    circle2 = plt.Circle((0, 0), 1, color='blue', fill=True, alpha=0.2)
+    ax2.add_patch(circle2)
+    ax2.set_xlabel('X (NS radii)')
+    ax2.set_ylabel('Z (NS radii)')
+    ax2.set_title('Loaded Field Configuration')
+    ax2.set_aspect('equal')
+    plt.colorbar(ax2.collections[0], label='Field Strength')
 
-    # Save plot to the plots directory
-    plot_path = plot_dir / 'magnetic_field_configuration_2d.png'
+    # Save comparison plot
+    plot_path = plot_dir / 'magnetic_field_configuration_comparison.png'
     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
     plt.show()
-    logger.info("Plot saved as '%s'", plot_path)
-
-    # Save field configuration to the fits directory
-    fits_path = fits_dir / 'field_configuration.fits'
-    field.save_to_fits(fits_path)
-    logger.info("Field configuration saved to '%s'", fits_path)
+    logger.info("Comparison plot saved as '%s'", plot_path)
 
 if __name__ == "__main__":
     main() 
