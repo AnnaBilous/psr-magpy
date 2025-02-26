@@ -1,4 +1,4 @@
-from typing import List, Protocol
+from typing import List
 import numpy as np
 from numpy.typing import NDArray
 import logging
@@ -63,57 +63,4 @@ class MultipoleField:
             return F
         except Exception as e:
             logger.error(f"Error calculating total field: {e}")
-            raise
-
-    def save_to_fits(self, filename: str) -> None:
-        """Save field configuration to FITS file.
-        
-        Parameters
-        ----------
-        filename : str
-            Path to the output FITS file
-            
-        Raises
-        ------
-        Exception
-            If saving to FITS file fails
-        """
-        logger.info(f"Saving MultipoleField to {filename}")
-        try:
-            from .io import FieldComponentFitsIO
-            fits_io = FieldComponentFitsIO(self.field_components)
-            fits_io.save_to_fits(filename)
-            logger.info("Successfully saved MultipoleField to FITS file")
-        except Exception as e:
-            logger.error(f"Failed to save MultipoleField to FITS: {e}")
-            raise
-
-    @classmethod
-    def load_from_fits(cls, filename: str) -> 'MultipoleField':
-        """Load field configuration from a FITS file.
-        
-        Parameters
-        ----------
-        filename : str
-            Path to the input FITS file
-            
-        Returns
-        -------
-        MultipoleField
-            New MultipoleField instance with components loaded from file
-            
-        Raises
-        ------
-        Exception
-            If loading from FITS file fails
-        """
-        logger.info(f"Loading MultipoleField from {filename}")
-        try:
-            from .io import FieldComponentFitsIO
-            multipole_field = FieldComponentFitsIO.load_from_fits(filename)
-            field_components = fits_io.get_components()
-            logger.info("Successfully loaded MultipoleField from FITS file")
-            return cls(field_components)
-        except Exception as e:
-            logger.error(f"Failed to load MultipoleField from FITS: {e}")
             raise 

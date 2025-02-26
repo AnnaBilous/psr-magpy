@@ -3,24 +3,47 @@ from astropy.io import fits as pf
 from src.fitsio.base import FitsIO
 from src.field.components import FieldComponentProtocol
 from src.field.components import MultipoleType, DipoleFieldComponent, QuadrupoleFieldComponent
+from src.field.multipole import MultipoleField
 from numpy import ndarray
 
 
 class FieldComponentFitsIO(FitsIO):
     """FITS I/O operations for field components."""
 
+    def __init__(self, field: MultipoleField):
+        """Initialize with a MultipoleField instance.
+        
+        Parameters
+        ----------
+        field : MultipoleField
+            The multipole field to save/load
+        
+        Raises
+        ------
+        TypeError
+            If field is not a MultipoleField instance
+        """
+        if not isinstance(field, MultipoleField):
+            raise TypeError(f"Expected MultipoleField, got {type(field).__name__}")
+        self.field = field
+
+    def get_hdu_name(self) -> str:
+        """Get the name for the FITS HDU.
+        
+        Returns
+        -------
+        str
+            Name for the FITS HDU
+        """
+        return "FIELD_COMPONENTS"
+
     def generate_column_info(self):
         """Generate column information for field component data."""
-        first_component = self.data[0]
-        if not isinstance(first_component, FieldComponentProtocol):
-            raise TypeError(
-                f"Expected field component, got {type(first_component).__name__}"
-            )
+        first_component = self.field.field_components[0]
        
         params_dict = first_component.params._asdict()
         
-
-        return {
+        column_info = {
             param_name: (
                 FitsIO.FITS_TYPE_MAPPING[str]
                 if param_name == "moment_type"
@@ -30,58 +53,56 @@ class FieldComponentFitsIO(FitsIO):
                     else FitsIO.get_fits_format(param_value)
                 )
             )
-            for param_name, param_value in params_dict.items()
-            if param_value is not None
+            for param_name, param_value in params_dict.items()         
         }
+        
+        return column_info
 
     def create_column(self, key: str, format: str):
-        """Create a FITS column for field component data.
-
-        Args:
-            key: Column name.
-            format: FITS format string.
-
-        Returns:
-            FITS column object.
-        """
+        """Create a FITS column for field component data."""
         if key == "moment_type":
-            value = [v.params.moment_type.value for v in self.data]
+            value = [v.params.moment_type.value for v in self.field.field_components]
         else:
-            value = [getattr(v.params, key) for v in self.data]
+            value = [getattr(v.params, key) for v in self.field.field_components]
         column = pf.Column(name=key, format=format, array=value)
-        print(column)
         return column
 
     @classmethod
-    def load_from_fits(cls, hdu):
-        """Load field components from a FITS HDU.
-
-        Args:
-            hdu: FITS HDU containing the field component data.
-
-        Returns:
-            List of field component instances.
-        """
-        data = hdu.data
-        n_components = data.shape[0]
-        components = []
+    def load_from_fits(cls, fitsname: str) -> MultipoleField:
+        """Load MultipoleField from a FITS file.
         
-        for i in range(n_components):
-            # Determine the component type from the moment_type column
-            moment_type = MultipoleType(data['moment_type'][i])
-            component_class = (
-                DipoleFieldComponent if moment_type == MultipoleType.DIPOLE
-                else QuadrupoleFieldComponent
-            )
+        Parameters
+        ----------
+        fitsname : str
+            Path to the FITS file
             
-            # Create component instance with parameters from FITS file
-            component_params = {
-                key: data[key][i] for key in hdu.columns.names
-                if key != 'moment_type'  # Handle moment_type separately
-            }
-            component_params['moment_type'] = moment_type
+        Returns
+        -------
+        MultipoleField
+            Loaded multipole field instance
+        """
+        with pf.open(fitsname) as hdulist:
+            field_data = hdulist['FIELD_COMPONENTS'].data
+            n_components = field_data.shape[0]
+            components = []
             
-            components.append(component_class(**component_params))
+            for i in range(n_components):
+                moment_type = MultipoleType(field_data['moment_type'][i])
+                if moment_type == MultipoleType.DIPOLE:
+                    component_class = DipoleFieldComponent
+                elif moment_type == MultipoleType.QUADRUPOLE:
+                    component_class = QuadrupoleFieldComponent
+                else:
+                    raise ValueError(f"Unsupported multipole type: {moment_type}")
+                
+                component_params = {
+                    key: field_data[key][i] for key in field_data.columns.names
+                    if key != 'moment_type'  # Handle moment_type separately
+                }
+
+                component = component_class(**component_params)
+                components.append(component)
             
-        return cls(components)
+            return MultipoleField(components)
+
 

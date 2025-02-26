@@ -8,6 +8,10 @@ from numpy import ndarray, integer, floating
 
 # Setup logging
 log_file = "test.log"
+
+# Suppress matplotlib debug messages
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -21,7 +25,6 @@ logger = logging.getLogger(__name__)
 class FitsIO:
     """Base class for FITS I/O operations."""
 
-    # Move FITS_TYPE_MAPPING inside class as a class variable
     FITS_TYPE_MAPPING = {
         float: "D",
         int: "I",
@@ -50,16 +53,6 @@ class FitsIO:
             if isinstance(value, type_class):
                 return format_str
         return FitsIO.FITS_TYPE_MAPPING[type(value)]
-
-    def __init__(self, data: Any):
-        """Initialize FitsIO with data to be saved/loaded.
-        
-        Parameters
-        ----------
-        data : Any
-            Data to be saved to or loaded from FITS files
-        """
-        self.data = data
 
     def save_to_fits(self, filename: str) -> None:
         """Save data to a FITS file.
@@ -103,15 +96,22 @@ class FitsIO:
             columns = [
                 self.create_column(key, column_info[key]) for key in column_info.keys()
             ]
-            print(columns)
-            for i in columns:
-                print(i.array)
-            #exit(1)
-            hdu = pf.BinTableHDU.from_columns(columns, name="TEST")
+
+            hdu = pf.BinTableHDU.from_columns(columns, name=self.get_hdu_name())
             return hdu
         except Exception as e:
             logger.error(f"Failed to create HDU: {e}")
             raise
+
+    def get_hdu_name(self) -> str:
+        """Get the name for the FITS HDU.
+        
+        Returns
+        -------
+        str
+            Name for the FITS HDU
+        """
+        return "DATA"
 
     def generate_column_info(self) -> Dict[str, str]:
         """Generate column information for the FITS table.

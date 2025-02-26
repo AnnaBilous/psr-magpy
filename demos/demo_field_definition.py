@@ -12,14 +12,13 @@ from setup_directories import setup_output_directories
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 from src.field.components import (
     DipoleFieldComponent,
     QuadrupoleFieldComponent
 )
 from src.field.multipole import MultipoleField
-
+from src.field.io import FieldComponentFitsIO
 # Create output directories relative to script location
 _, fits_dir, plot_dir, log_dir = setup_output_directories(__file__)
 
@@ -92,11 +91,14 @@ def main():
 
     # Save field configuration to the fits directory
     fits_path = fits_dir / 'field_configuration.fits'
-    field.save_to_fits(fits_path)
-    logger.info("Field configuration saved to '%s'", fits_path)
+    
+    field_io = FieldComponentFitsIO(field)
+    field_io.save_to_fits(fits_path)
 
+    logger.info("Field configuration saved to '%s'", fits_path)
+    
     # Load field from FITS and verify
-    loaded_field = MultipoleField.load_from_fits(fits_path)
+    loaded_field = FieldComponentFitsIO.load_from_fits(fits_path)
     logger.info("Loaded field configuration from FITS")
 
     # Create visualization grid
