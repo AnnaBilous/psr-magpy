@@ -3,7 +3,7 @@ import numpy as np
 from numpy.typing import NDArray
 import logging
 
-from .components import FieldComponentProtocol
+from .components import FieldComponent
 
 logger = logging.getLogger(__name__)
 
@@ -15,19 +15,19 @@ class MultipoleField:
     
     Parameters
     ----------
-    field_components : List[FieldComponentProtocol]
+    field_components : List[FieldComponent]
         List of field components that make up this multipole field
         
     Raises
     ------
     TypeError
-        If any component doesn't implement FieldComponentProtocol
+        If any component isn't a subclass of FieldComponent
     """
 
-    def __init__(self, field_components: List[FieldComponentProtocol]):
+    def __init__(self, field_components: List[FieldComponent]):
         logger.debug(f"Initializing MultipoleField with {len(field_components)} components")
-        if not all(isinstance(comp, FieldComponentProtocol) for comp in field_components):
-            error_msg = "All components must implement the FieldComponentProtocol interface"
+        if not all(isinstance(comp, FieldComponent) for comp in field_components):
+            error_msg = "All components must be subclasses of FieldComponent"
             logger.error(error_msg)
             raise TypeError(error_msg)
         

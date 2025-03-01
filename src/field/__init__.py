@@ -8,7 +8,6 @@ from .components import (
     FieldComponent,
     DipoleFieldComponent,
     QuadrupoleFieldComponent,
-    FieldComponentProtocol,
 )
 from .multipole import MultipoleField
 
@@ -17,6 +16,5 @@ __all__ = [
     'FieldComponent',
     'DipoleFieldComponent',
     'QuadrupoleFieldComponent',
-    'FieldComponentProtocol',
     'MultipoleField',
 ] 

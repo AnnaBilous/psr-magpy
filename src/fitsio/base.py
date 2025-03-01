@@ -3,7 +3,6 @@
 import astropy.io.fits as pf
 from typing import Any, Dict, Type
 import logging
-from src.field.components import FieldComponentProtocol
 from numpy import ndarray, integer, floating
 
 # Setup logging
@@ -151,36 +150,30 @@ class FitsIO:
         raise NotImplementedError("Subclasses must implement create_column")
 
     @classmethod
-    def load_from_fits(cls, hdu: pf.BinTableHDU, component_class: Type[FieldComponentProtocol]) -> 'FitsIO':
+    def load_from_fits(cls, hdu: pf.BinTableHDU) -> 'FitsIO':
         """Load data from a FITS HDU.
 
         Parameters
         ----------
         hdu : pf.BinTableHDU
             FITS HDU containing the data
-        component_class : Type[FieldComponentProtocol]
-            Class to use for creating components
 
         Returns
         -------
         FitsIO
-            Instance of the appropriate component class
+            Instance of the class
             
         Raises
         ------
         Exception
             If loading from FITS file fails
         """
-        logger.info(f"Loading data from FITS HDU using {component_class.__name__}")
+        logger.info(f"Loading data from FITS HDU")
         try:
             data = hdu.data
             n_components = data.shape[0]
-            components = [
-                component_class(**{key: hdu.data[key][i] for key in hdu.columns.names})
-                for i in range(n_components)
-            ]
             logger.info(f"Successfully loaded {n_components} components")
-            return cls(components)
+            return cls(data)
         except Exception as e:
             logger.error(f"Failed to load data from FITS: {e}")
             raise 

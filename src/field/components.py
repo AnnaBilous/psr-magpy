@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import NamedTuple, Protocol, runtime_checkable
+from typing import NamedTuple
 import logging
 
 import numpy as np
@@ -22,21 +22,6 @@ class MultipoleType(Enum):
     """
     DIPOLE = "dipole"
     QUADRUPOLE = "quadrupole"
-
-
-@runtime_checkable
-class FieldComponentProtocol(Protocol):
-    """Protocol defining the interface for magnetic field components.
-    
-    This protocol ensures that all field components provide consistent methods
-    for field calculations and type identification.
-    
-    Methods:
-        get_field: Calculate the magnetic field at a given position
-        get_moment_type: Return the multipole type of the component
-    """
-    def get_field(self, r_spin_frame: NDArray[np.float32]) -> NDArray[np.float32]: ...
-    def get_moment_type(self) -> MultipoleType: ...
 
 
 class Parameters(NamedTuple):
