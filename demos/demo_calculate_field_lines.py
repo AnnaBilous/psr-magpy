@@ -18,7 +18,8 @@ from src.footpoint_grid.grid import HealpixGrid
 from src.line.field_line import FieldLine
 from src.line.calculator import FieldLineCalculator, TracingConfig
 from src.line.field_line_base import PropertyName
-
+from src.line.field_line_set import FieldLineSet
+from src.line.io import FieldLineSetFitsIO
 # Create output directories relative to script location
 _, fits_dir, plot_dir, log_dir = setup_output_directories(__file__)
 
@@ -103,7 +104,6 @@ def main():
     grid = HealpixGrid(nside=4)
     logger.info(f"Number of field lines to calculate: {grid.nline}")
     
-
     # Configure which field line properties to save
     template = FieldLine(
         save_r_max=True,           # Save maximum radius reached
@@ -122,14 +122,24 @@ def main():
             template=template,
             config=config
         )
-        logger.info(f"Successfully calculated {len(results)} field lines")
-        exit(1)
+
         if config.save_results:
             logger.info(f"Results saved to: {output_filename}")
-        else:
-            logger.info("Generating plot of field lines...")
+            
+            # Load the saved results and create visualization
+            logger.info("Loading saved results for verification...")
+            loaded_field_lines = FieldLineSetFitsIO.load_from_fits(output_filename + ".fits")
+            logger.info(f"Successfully loaded {loaded_field_lines.n_field_lines} field lines")
+            
+            # Print information about loaded data
+            logger.info("Loaded field line properties:")
+            for prop in loaded_field_lines.save_flags.__dict__:
+                if getattr(loaded_field_lines.save_flags, prop):
+                    logger.info(f"  - {prop}")
+            
+            # Create visualization of loaded data
             plot_path = os.path.join(plot_dir, f"field_lines_{timestamp}.png")
-            plot_field_lines(results, save_path=plot_path)
+            plot_field_lines(loaded_field_lines, save_path=plot_path)
             logger.info(f"Plot saved to: {plot_path}")
             
     except MemoryError:

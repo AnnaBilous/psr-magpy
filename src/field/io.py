@@ -1,10 +1,9 @@
 from astropy.io import fits as pf
 
 from src.fitsio.base import FitsIO
-from src.field.components import FieldComponentProtocol
 from src.field.components import MultipoleType, DipoleFieldComponent, QuadrupoleFieldComponent
 from src.field.multipole import MultipoleField
-from numpy import ndarray
+
 
 
 class FieldComponentFitsIO(FitsIO):

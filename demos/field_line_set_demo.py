@@ -15,7 +15,7 @@ import numpy as np
 from pathlib import Path
 from src.line.field_line import FieldLine
 from src.line.field_line_set import FieldLineSet
-
+from src.line.io import FieldLineSetFitsIO
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -93,6 +93,18 @@ def main():
     output_file = output_dir / "field_lines.fits"
     field_line_set.write_to_fits(str(output_file))
     logger.info("Saved field lines to %s", output_file)
+    
+    # Demonstrate loading from FITS
+    logger.info("Demonstrating loading from FITS file")
+    loaded_field_lines = FieldLineSetFitsIO.load_from_fits(str(output_file))
+    logger.info("Loaded FieldLineSet")
+    logger.info(repr(loaded_field_lines))
+    
+    # Verify the loaded data matches the original
+    logger.info("Verifying loaded data...")
+    assert len(loaded_field_lines.footpoint_id) == len(field_line_set.footpoint_id), "Number of field lines mismatch"
+    assert loaded_field_lines.save_flags.__dict__ == field_line_set.save_flags.__dict__, "Save flags mismatch"
+    logger.info("Data verification successful")
 
 if __name__ == "__main__":
     main() 

@@ -24,7 +24,6 @@ class FieldLine(FieldLineBase):
         super().__init__(**save_flags)
         # Initialize footpoint_id with default value since it's always enabled
         self._set_property(PropertyName.FOOTPOINT_ID, -1)
-        logger.info(repr(self))
     
     def _set_property(self, prop: PropertyName, value: Any) -> None:
         """Set a property value, ensuring it's a single value except for r_line."""

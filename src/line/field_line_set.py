@@ -1,7 +1,7 @@
-from typing import Any, List
+from typing import Any, List, Union
 from sys import getsizeof
 import numpy as np
-from .field_line_base import FieldLineBase, PropertyName
+from .field_line_base import FieldLineBase, PropertyName, PROPERTY_TYPES
 from .field_line import FieldLine
 
 # Initialize logger
@@ -11,17 +11,26 @@ logger = logging.getLogger(__name__)
 
 class FieldLineSet(FieldLineBase):
     """Collection of field lines with array values"""
-    def __init__(self, field_lines: List[FieldLine]) -> None:
-        """Initialize empty FieldLineSet using template's structure.
+    def __init__(self, field_lines: Union[List[FieldLine], FieldLine]) -> None:
+        """Initialize FieldLineSet, either empty or with provided field lines.
         
         Args:
-            template: A FieldLine object that defines the structure via save flags
+            field_lines: Input that defines the structure:
+                        - List[FieldLine]: Creates set with these field lines
+                        - FieldLine: Uses as template for empty set
         """
-        # Initialize using template's structure
-        template = field_lines[0]
-        super().__init__(**template.save_flags.__dict__)
-        logger.debug("Initialized FieldLineSet with template: %s", repr(template.save_flags))
-        self.append(field_lines)
+        if isinstance(field_lines, FieldLine):
+            # Initialize using template's structure but no data
+            super().__init__(**field_lines.save_flags.__dict__)
+            self._properties = {}
+            self.n_field_lines = 0
+            logger.debug("Initialized empty FieldLineSet with template: %s", repr(field_lines.save_flags))
+        else:
+            # Initialize using list of field lines
+            template = field_lines[0]
+            super().__init__(**template.save_flags.__dict__)
+            logger.debug("Initialized FieldLineSet with field lines, template: %s", repr(template.save_flags))
+            self.append(field_lines)
     
     def _set_property(self, prop: PropertyName, value: Any) -> None:
         """Set a property value, ensuring it's a collection."""
@@ -68,7 +77,6 @@ class FieldLineSet(FieldLineBase):
                     ])
         
         self.n_field_lines = len(field_lines)
-        print(self.footpoint_id)
         logger.debug("Appended %d field lines", self.n_field_lines)
         
     def estimate_size(self) -> float:
@@ -160,3 +168,9 @@ class FieldLineSet(FieldLineBase):
                 value = np.array(value, dtype=expected_type.dtype)
         
         return value
+
+    def create_template(self) -> None:
+        """Initialize properties dictionary based on current save flags."""
+        self._properties = {}
+        self.n_field_lines = 0
+        logger.debug("Created template with save flags: %s", repr(self.save_flags))

@@ -200,7 +200,7 @@ class ResultsManager:
         if self._results_in_memory:
             logger.info("Writing results to disk for batch %d", batch_idx)
             self._results_in_memory.write_to_fits(f"{filename}_batch_{batch_idx}.fits")
-            exit(1)
+            
             logger.info("Results written to %s_batch_%d.fits", filename, batch_idx)
             logger.debug("Clearing in-memory results after writing to disk.")
             self._results_in_memory_size = 0

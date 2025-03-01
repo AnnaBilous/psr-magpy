@@ -214,7 +214,7 @@ class FieldComponent(ABC):
             Exception: For other calculation errors
 
         """
-        logger.info(
+        logger.debug(
             "Calculating %s field at position %s", 
             self.params.moment_type.value, 
             r_spin_frame
@@ -236,7 +236,7 @@ class FieldComponent(ABC):
                 raise ValueError(f"Invalid field calculation result: {field}")
                 
             logger.debug("Field in magnetic frame: %s", field)
-            logger.info("Successfully calculated field at position %s", r_spin_frame)
+            logger.debug("Successfully calculated field at position %s", r_spin_frame)
             return field
             
         except Exception as e:

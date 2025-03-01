@@ -1,198 +1,14 @@
 from typing import List, Type, Union
 from astropy.io import fits as pf
-from FieldLineDefinition import FieldLine
-from FieldDefinition import (
-    DipoleFieldComponent,
-    QuadrupoleFieldComponent,
-    MultipoleType,
-    FieldComponentProtocol
-)
 from numpy.typing import NDArray
 from numpy import ndarray, integer, floating
 
-# Define FITS format mapping at module level
-FITS_TYPE_MAPPING = {
-    float: "D",
-    int: "I",
-    str: "10A",
-    ndarray: "PE",  # Variable-length array of doubles
-    integer: "I",  # numpy integers
-    floating: "D",  # numpy floats
-}
-
-
-def get_fits_format(value):
-    """Helper function to determine FITS format for a value."""
-    for type_class, format_str in FITS_TYPE_MAPPING.items():
-        if isinstance(value, type_class):
-            return format_str
-    return FITS_TYPE_MAPPING[type(value)]
-
-
-class FitsIO:
-    """Base class for FITS I/O operations."""
-
-    def __init__(self, data):
-        self.data = data
-
-    def save_to_fits(self, filename: str) -> None:
-        """Save data to a FITS file.
-
-        Args:
-            filename: Path to the output FITS file.
-        """
-        hdu = self.create_hdu()
-        hdu.writeto(filename, overwrite=True)
-
-    def create_hdu(self):
-        """Create a FITS HDU from the data."""
-        column_info = self.generate_column_info()
-        columns = [
-            self.create_column(key, column_info[key]) for key in column_info.keys()
-        ]
-        hdu = pf.BinTableHDU.from_columns(columns, name="TEST")
-        return hdu
-
-    def generate_column_info(self):
-        """Generate column information for the FITS table."""
-        raise NotImplementedError("Subclasses must implement generate_column_info")
-
-    def create_column(self, key: str, format: str):
-        """Create a FITS column for the given key and format."""
-        raise NotImplementedError("Subclasses must implement create_column")
-
-    @classmethod
-    def load_from_fits(cls, hdu, component_class: FieldComponentProtocol):
-        """Load data from a FITS HDU.
-
-        Args:
-            hdu: FITS HDU containing the data.
-            component_class: Class to use for creating components.
-
-        Returns:
-            Instance of the appropriate component class.
-        """
-        data = hdu.data
-        n_components = data.shape[0]
-        components = [
-            component_class(**{key: hdu.data[key][i] for key in hdu.columns.names})
-            for i in range(n_components)
-        ]
-        return cls(components)
-
-
-class FieldComponentFitsIO(FitsIO):
-    """FITS I/O operations for field components."""
-
-    def generate_column_info(self):
-        """Generate column information for field component data."""
-        first_component = self.data[0]
-        if not isinstance(first_component, FieldComponentProtocol):
-            raise TypeError(
-                f"Expected field component, got {type(first_component).__name__}"
-            )
-       
-        params_dict = first_component.params._asdict()
-        
-
-        return {
-            param_name: (
-                FITS_TYPE_MAPPING[str]
-                if param_name == "moment_type"
-                else (
-                    FITS_TYPE_MAPPING[ndarray]
-                    if param_name == "field_lines"
-                    else get_fits_format(param_value)
-                )
-            )
-            for param_name, param_value in params_dict.items()
-            if param_value is not None
-        }
-
-    def create_column(self, key: str, format: str):
-        """Create a FITS column for field component data.
-
-        Args:
-            key: Column name.
-            format: FITS format string.
-
-        Returns:
-            FITS column object.
-        """
-        if key == "moment_type":
-            value = [v.params.moment_type.value for v in self.data]
-        else:
-            value = [getattr(v.params, key) for v in self.data]
-        return pf.Column(name=key, format=format, array=value)
-
-    @classmethod
-    def load_from_fits(cls, hdu):
-        """Load field components from a FITS HDU.
-
-        Args:
-            hdu: FITS HDU containing the field component data.
-
-        Returns:
-            List of field component instances.
-        """
-        data = hdu.data
-        n_components = data.shape[0]
-        components = []
-        
-        for i in range(n_components):
-            # Determine the component type from the moment_type column
-            moment_type = MultipoleType(data['moment_type'][i])
-            component_class = (
-                DipoleFieldComponent if moment_type == MultipoleType.DIPOLE
-                else QuadrupoleFieldComponent
-            )
-            
-            # Create component instance with parameters from FITS file
-            component_params = {
-                key: data[key][i] for key in hdu.columns.names
-                if key != 'moment_type'  # Handle moment_type separately
-            }
-            component_params['moment_type'] = moment_type
-            
-            components.append(component_class(**component_params))
-            
-        return cls(components)
-
-
-class FieldLineFitsIO(FitsIO):
-    """FITS I/O operations for field lines."""
-
-    def generate_column_info(self):
-        """Generate column information for field line data."""
-        first_line = self.data[0]
-        if not isinstance(first_line, FieldLine):
-            raise TypeError(f"Expected FieldLine, got {type(first_line).__name__}")
-
-        params_dict = vars(first_line)
-
-        return {
-            param_name: get_fits_format(param_value)
-            for param_name, param_value in params_dict.items()
-            if param_value is not None
-        }
-
-    def create_column(self, key: str, format: str):
-        """Create a FITS column for field line data.
-
-        Args:
-            key: Column name.
-            format: FITS format string.
-
-        Returns:
-            FITS column object.
-        """
-        value = [getattr(v, key) for v in self.data]
-        return pf.Column(name=key, format=format, array=value)
 
 from astropy.io import fits as pf
 
 from src.fitsio.base import FitsIO
 from src.line.field_line_base import PropertyName
+from src.line.field_line_set import FieldLineSet
 import logging
 import numpy as np
 
@@ -201,10 +17,19 @@ logger = logging.getLogger(__name__)
 
 class FieldLineSetFitsIO(FitsIO):
     """FITS I/O operations for field lines."""
-    def __init__(self, data):
-        self.data = data
-        super().__init__(self.data)
+    def __init__(self, field_line_set: FieldLineSet):
+        self.data = field_line_set
         logger.info("Initialized FieldLineSetFitsIO")
+
+    def get_hdu_name(self) -> str:
+        """Get the name for the FITS HDU.
+        
+        Returns
+        -------
+        str
+            Name for the FITS HDU
+        """
+        return "FIELD_LINES"
 
     def generate_column_info(self):
         """Generate column information for field line data.
@@ -249,7 +74,73 @@ class FieldLineSetFitsIO(FitsIO):
         value = self.data._properties[prop]
         
         logger.info(f"Creating column for {key} with format {format}")
-        if value is not None:
-            logger.info(f"Sample values: {value[:10] if isinstance(value, (list, np.ndarray)) else value}")
-            
+    
         return pf.Column(name=key, format=format, array=value)
+
+
+    @classmethod
+    def load_from_fits(cls, fitsname: str) -> FieldLineSet:
+        """Load field line data from a FITS file.
+
+        Parameters
+        ----------
+        fitsname : str
+            Path to the FITS file
+
+        Returns
+        -------
+        FieldLineSet
+            Loaded field line set object
+
+        Raises
+        ------
+        ValueError
+            If required HDU is not found in the FITS file
+        """
+        logger.info(f"Loading field lines from {fitsname}")
+        
+        with pf.open(fitsname) as hdul:
+            # Look for the FIELD_LINES HDU
+            hdu_name = "FIELD_LINES"
+            if hdu_name not in [h.name for h in hdul]:
+                raise ValueError(f"No {hdu_name} HDU found in {fitsname}")
+            
+            hdu = hdul[hdu_name]
+            
+            # Create template FieldLine based on column names
+            from src.line.field_line import FieldLine  # Import here to avoid circular import
+            template = FieldLine()
+            column_names = [col.name.upper() for col in hdu.columns]
+            for prop in PropertyName:
+                flag_enabled = prop.name in column_names
+                setattr(template.save_flags, prop.flag_name, flag_enabled)
+                logger.debug(f"Template: setting {prop.flag_name} to {flag_enabled}")
+            
+            # Create a new FieldLineSet with the template
+            field_line_set = FieldLineSet(template)
+            
+            # Load each column into the appropriate property
+            for col in hdu.columns:
+                try:
+                    # Convert column name to PropertyName enum
+                    prop = PropertyName[col.name.upper()]
+                    
+                    # Read the column data
+                    data = hdu.data[col.name]
+                    
+                    # Convert to numpy array if needed
+                    if isinstance(data, np.ndarray) and data.dtype.kind == 'O':
+                        data = np.array([np.array(x) for x in data])
+                    
+                    # Set the property in the FieldLineSet using set_property method
+                    field_line_set._set_property(prop, data)
+                    
+                    logger.info(f"Loaded property: {prop.key_name}")
+                except KeyError:
+                    logger.warning(f"Unknown property name: {col.name}")
+                except Exception as e:
+                    logger.error(f"Error loading property {col.name}: {str(e)}")
+                    raise
+        
+        logger.info("Successfully loaded field line data")
+        return field_line_set
