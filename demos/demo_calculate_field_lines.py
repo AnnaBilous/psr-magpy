@@ -17,7 +17,7 @@ from src.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
 from src.footpoint_grid.grid import HealpixGrid
 from src.line.field_line import FieldLine
 from src.line.calculator import FieldLineCalculator, TracingConfig
-from src.line.field_line_base import PropertyName
+from src.line.field_line import PropertyName
 from src.line.field_line_set import FieldLineSet
 from src.line.io import FieldLineSetFitsIO
 # Create output directories relative to script location

@@ -91,6 +91,7 @@ class FieldLineCalculator:
         logger.info("Selected %d random footpoints for field line calculation", n_trial)
         
         trial_results = self._process_batch(trial_grid, template, tracer, results_manager.memory_config.n_cores)
+        
         trial_size = trial_results.estimate_size() / n_trial
         logger.info("Estimated memory size per line: %.2f MB", trial_size/(1024*1024))
     
@@ -158,7 +159,9 @@ class FieldLineCalculator:
         ]
         
         with Pool(n_cores) as pool:
-            return FieldLineSet(pool.starmap(tracer.trace_single_line, batch_args))
+            line_list = pool.starmap(tracer.trace_single_line, batch_args)
+        result = FieldLineSet(field_lines=line_list, copy_data=True)
+        return result
 
     def _process_all_batches(
         self,

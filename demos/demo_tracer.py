@@ -40,7 +40,7 @@ def main():
     field_lines = []
     for i, footpoint in enumerate(footpoints):
         line = tracer.trace_single_line(footpoint, i, template)
-        field_lines.append(line.r_line)
+        field_lines.append(line.get_property("r_line"))
 
     # Plot results
     fig = plt.figure(figsize=(10, 10))

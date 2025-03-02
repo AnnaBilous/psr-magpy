@@ -1,13 +1,12 @@
-from typing import List, Type, Union
 from astropy.io import fits as pf
 from numpy.typing import NDArray
-from numpy import ndarray, integer, floating
+
 
 
 from astropy.io import fits as pf
 
 from src.fitsio.base import FitsIO
-from src.line.field_line_base import PropertyName
+from src.line.field_line import PropertyName
 from src.line.field_line_set import FieldLineSet
 import logging
 import numpy as np

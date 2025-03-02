@@ -88,7 +88,7 @@ class FieldLineTracer:
             FieldLine object containing requested variables for the field line
         """
         output = template.copy_structure()
-        output.update(footpoint_id=footpoint_id)
+        output.set_property(footpoint_id=footpoint_id)
         r_initial = r_initial.xyz.value
         B_initial = self.field.get_total_field(r_initial, K=1, normalize=False)
         B_initial_norm = self.field.get_total_field(r_initial, K=1, normalize=True)
@@ -137,7 +137,7 @@ class FieldLineTracer:
         # Remove None values from kwargs
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
-        output.update(**kwargs)
+        output.set_property(**kwargs)
 
         if save_dR:
             dr = r[:, 1:] - r[:, :-1]

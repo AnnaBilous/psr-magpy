@@ -1,110 +1,114 @@
-#!/usr/bin/env python3
 """
-Demo script showcasing the usage of FieldLineSet class for managing multiple field lines.
-"""
-import sys
-from pathlib import Path
+Demo script showcasing the usage of FieldLineSet class.
 
-# Add project root to PYTHONPATH only if not already present
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+This demo illustrates:
+1. Creating individual field lines
+2. Creating a field line set
+3. Appending field lines to the set
+4. Accessing properties from the set
+5. Memory size estimation
+"""
 
 import logging
 import numpy as np
+import sys
 from pathlib import Path
-from src.line.field_line import FieldLine
+
+# Add src to path to import field_line
+sys.path.append(str(Path(__file__).parent.parent))
+from src.line.field_line import FieldLine, PropertyName
 from src.line.field_line_set import FieldLineSet
-from src.line.io import FieldLineSetFitsIO
+
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
-def create_sample_field_line(footpoint_id: int, points: int = 100) -> FieldLine:
-    """Create a sample field line with synthetic data.
-    
-    Args:
-        footpoint_id: Identifier for the field line
-        points: Number of points in the trajectory
-        
-    Returns:
-        FieldLine: A field line with synthetic data
-    """
-    # Create a helical trajectory
-    t = np.linspace(0, 4*np.pi, points)
-    r = np.array([
-        np.cos(t),  # x
-        np.sin(t),  # y
-        t/4         # z
-    ])
-    
-    # Initialize with all save flags enabled
+def create_sample_field_line(footpoint_id: int, scale: float = 1.0) -> FieldLine:
+    """Create a sample field line with some properties."""
     line = FieldLine(
         save_r_line=True,
         save_r_max=True,
-        save_r_cyl_max=True,
-        save_z_abs_max=True,
-        save_b_ini=True,
-        save_b_r_ini_angle=True
+        save_b_ini=True
     )
     
+    coordinates = np.array([
+        [0, 0, 0],
+        [1, 1, 1],
+        [2, 2, 2]
+    ]) * scale
     
-    # Set properties using the update method
-    kwargs = { 'footpoint_id': footpoint_id,
-         'r_line': r,
-         'r_max': np.max(np.sum(r**2, axis=0)**0.5),
-         'r_cyl_max': np.max(np.sum(r[:2,]**2, axis=0)**0.5),
-         'z_abs_max': np.max(np.abs(r[2, :])),
-         'b_ini': 1.0,
-         'b_r_ini_angle': np.pi/4
-        }
-    line.update(**kwargs)
+    line.set_property(
+        footpoint_id=footpoint_id,
+        r_line=coordinates,
+        r_max=3.0 * scale,
+        b_ini=np.array([0.1, 0.2, 0.3]) * scale
+    )
     
     return line
 
 def main():
-    """Main demo function."""
-    logger.info("Starting FieldLineSet demo")
+    # Create several field lines
+    logger.info("Creating sample field lines")
+    field_lines = [
+        create_sample_field_line(i, scale=1.0 + i*0.5) 
+        for i in range(3)
+    ]
     
-    # Create several sample field lines
-    field_lines = [create_sample_field_line(i) for i in range(5)]
-    logger.info("Created %d sample field lines", len(field_lines))
-    for i in range(5):
-        logger.info(repr(field_lines[i]))
+    # Create field line set from a single line
+    logger.info("Creating FieldLineSet from single line")
+    field_set_single = FieldLineSet(field_lines[0], copy_data=True)
+    print(f"\nField set from single line:")
+    print(f"Number of lines: {field_set_single.n_field_lines}")
+    print(f"First footpoint ID: {field_set_single.get_property('footpoint_id')}")
     
-    # Create a FieldLineSet
-    field_line_set = FieldLineSet(field_lines)
-    logger.info("Created FieldLineSet")
-    logger.info(repr(field_line_set))
+    # Create field line set from multiple lines
+    logger.info("Creating FieldLineSet from multiple lines")
+    field_set = FieldLineSet(field_lines, copy_data=True)
+    print(f"\nField set from multiple lines:")
+    print(f"Number of lines: {field_set.n_field_lines}")
     
-    # Print some statistics
-    size_mb = field_line_set.estimate_size() / (1024 * 1024)
-    logger.info("FieldLineSet size: %.2f MB", size_mb)
-    logger.info("Number of field lines: %d", len(field_line_set.footpoint_id))
+    # Display properties
+    print("\nField set properties:")
+    print(f"Footpoint IDs: {field_set.get_property('footpoint_id')}")
+    print(f"R Max values: {field_set.get_property('r_max')}")
+    print(f"B Initial values:\n{field_set.get_property('b_ini')}")
+    print("\nR Line coordinates (first two lines):")
+    r_lines = field_set.get_property('r_line')
+    for i, r_line in enumerate(r_lines[:2]):
+        print(f"Line {i}:\n{r_line}")
     
     # Append more field lines
-    new_lines = [create_sample_field_line(i+5) for i in range(3)]
-    field_line_set.append(new_lines)
-    logger.info("Appended %d more field lines", len(new_lines))
+    logger.info("Appending additional field lines")
+    new_lines = [
+        create_sample_field_line(i, scale=3.0) 
+        for i in range(3, 5)
+    ]
+    field_set.append(new_lines)
     
-    # Save to FITS file
-    output_dir = Path("output")
-    output_dir.mkdir(exist_ok=True)
-    output_file = output_dir / "field_lines.fits"
-    field_line_set.write_to_fits(str(output_file))
-    logger.info("Saved field lines to %s", output_file)
+    print(f"\nAfter appending:")
+    print(f"Number of lines: {field_set.n_field_lines}")
+    print(f"Footpoint IDs: {field_set.get_property('footpoint_id')}")
     
-    # Demonstrate loading from FITS
-    logger.info("Demonstrating loading from FITS file")
-    loaded_field_lines = FieldLineSetFitsIO.load_from_fits(str(output_file))
-    logger.info("Loaded FieldLineSet")
-    logger.info(repr(loaded_field_lines))
+    # Demonstrate size estimation
+    logger.info("Estimating memory size")
+    size_bytes = field_set.estimate_size()
+    size_mb = size_bytes / (1024 * 1024)
+    print(f"\nMemory usage:")
+    print(f"Bytes: {size_bytes:,.0f}")
+    print(f"Megabytes: {size_mb:.3f}")
     
-    # Verify the loaded data matches the original
-    logger.info("Verifying loaded data...")
-    assert len(loaded_field_lines.footpoint_id) == len(field_line_set.footpoint_id), "Number of field lines mismatch"
-    assert loaded_field_lines.save_flags.__dict__ == field_line_set.save_flags.__dict__, "Save flags mismatch"
-    logger.info("Data verification successful")
+    # Demonstrate error handling for incompatible field lines
+    logger.info("Demonstrating error handling for incompatible field lines")
+    incompatible_line = FieldLine(save_r_line=False)  # Different save flags
+    incompatible_line.set_property(footpoint_id=99)
+    
+    try:
+        field_set.append([incompatible_line])
+    except ValueError as e:
+        print(f"\nExpected error when appending incompatible line: {e}")
 
 if __name__ == "__main__":
     main() 
