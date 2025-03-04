@@ -17,4 +17,6 @@ __all__ = [
     'DipoleFieldComponent',
     'QuadrupoleFieldComponent',
     'MultipoleField',
-] 
+]
+
+"""Magnetic field components and calculations.""" 

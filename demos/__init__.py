@@ -1,1 +1,1 @@
-"""Initialize demos package.""" 
+"""Demo scripts showcasing functionality.""" 

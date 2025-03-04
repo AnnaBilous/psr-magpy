@@ -3,7 +3,7 @@ from pathlib import Path
 from setup_directories import setup_output_directories
 from datetime import datetime
 
-# Add project root to PYTHONPATH only if not already present
+# Add project root to PYTHONPATH
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
@@ -11,17 +11,32 @@ if str(project_root) not in sys.path:
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from src.utils.logging_config import setup_logging
+from src.utils.logging_config import setup_logging, LogLevels
 import logging
 
-# Create output directories relative to script location
+from src.field.multipole import MultipoleField
+from src.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
+from src.footpoint_grid.grid import HealpixGrid
+from src.line.field_line import FieldLine
+from src.line.calculator import FieldLineCalculator, TracingConfig
+from src.line.field_line import PropertyName
+from src.line.field_line_set import FieldLineSet
+from src.line.io import FieldLineSetFitsIO
+
+# Create output directories
 _, fits_dir, plot_dir, log_dir = setup_output_directories(__file__)
 
-# Setup logging
+# Setup logging with different levels for console and file
 log_file = log_dir / f"field_lines_{datetime.now():%Y%m%d_%H%M%S}.log"
 setup_logging(
-    log_level='INFO',
-    log_file=log_file
+    log_level='DEBUG',  # Base level
+    log_file=log_file,
+    handler_levels={
+        'console': LogLevels.CONSOLE,  # Less verbose for console
+        'file': LogLevels.FILE  # More detailed for file
+    },
+    max_bytes=50 * 1024 * 1024,  # 50MB per file
+    backup_count=3  # Keep 3 backup files
 )
 
 logger = logging.getLogger(__name__)

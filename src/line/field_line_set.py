@@ -2,9 +2,8 @@ from typing import Any, List, Union
 from sys import getsizeof
 import numpy as np
 from .field_line import FieldLine, PropertyName
-
-# Initialize logger
 import logging
+
 logger = logging.getLogger(__name__)
 
 class FieldLineSet(FieldLine):
