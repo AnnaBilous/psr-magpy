@@ -1,7 +1,8 @@
 from astropy.io import fits as pf
 from numpy.typing import NDArray
-
-
+import os
+import psutil
+from pathlib import Path
 
 from astropy.io import fits as pf
 
@@ -11,7 +12,6 @@ from src.line.field_line_set import FieldLineSet
 import logging
 import numpy as np
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FieldLineSetFitsIO(FitsIO):
@@ -79,35 +79,59 @@ class FieldLineSetFitsIO(FitsIO):
 
     @classmethod
     def load_from_fits(cls, fitsname: str) -> FieldLineSet:
-        """Load field line data from a FITS file.
+        """Load field line data from one or more FITS files.
 
         Parameters
         ----------
         fitsname : str
-            Path to the FITS file
+            Base name for FITS files (without .fits extension)
 
         Returns
         -------
         FieldLineSet
-            Loaded field line set object
+            Combined field line set from all matching files
 
         Raises
         ------
         ValueError
-            If required HDU is not found in the FITS file
+            If no matching files found or if total size exceeds memory limit
         """
-        logger.info(f"Loading field lines from {fitsname}")
+        logger.info(f"Looking for FITS files matching {fitsname}*.fits")
         
-        with pf.open(fitsname) as hdul:
-            # Look for the FIELD_LINES HDU
-            hdu_name = "FIELD_LINES"
-            if hdu_name not in [h.name for h in hdul]:
-                raise ValueError(f"No {hdu_name} HDU found in {fitsname}")
+        # Find all matching files
+        base_path = Path(fitsname).parent
+        pattern = f"{Path(fitsname).name}*.fits"
+        fits_files = list(base_path.glob(pattern))
+        
+        if not fits_files:
+            raise ValueError(f"No FITS files found matching {fitsname}*.fits")
+        
+        # Calculate total size of all FITS files
+        total_size = sum(f.stat().st_size for f in fits_files)
+        available_memory = psutil.virtual_memory().available
+        memory_threshold = 0.5  # 50% of available memory
+        
+        logger.info(f"Found {len(fits_files)} files, total size: {total_size/1e6:.1f} MB")
+        logger.info(f"Available memory: {available_memory/1e6:.1f} MB")
+        
+        if total_size > available_memory * memory_threshold:
+            raise ValueError(
+                f"Total FITS size ({total_size/1e6:.1f} MB) exceeds {memory_threshold*100}% "
+                f"of available memory ({available_memory/1e6:.1f} MB)"
+            )
+        
+        # Load first file to get template
+        first_file = fits_files[0]
+        logger.info(f"Loading first file {first_file} to create template")
+        
+        with pf.open(first_file) as hdul:
+            if "FIELD_LINES" not in [h.name for h in hdul]:
+                raise ValueError(f"No FIELD_LINES HDU found in {first_file}")
             
-            hdu = hdul[hdu_name]
+            hdu = hdul["FIELD_LINES"]
             
-            # Create template FieldLine based on column names
-            from src.line.field_line import FieldLine  # Import here to avoid circular import
+            # Create template based on column names
+            from src.line.field_line import FieldLine
             template = FieldLine()
             column_names = [col.name.upper() for col in hdu.columns]
             for prop in PropertyName:
@@ -115,31 +139,53 @@ class FieldLineSetFitsIO(FitsIO):
                 setattr(template.save_flags, prop.flag_name, flag_enabled)
                 logger.debug(f"Template: setting {prop.flag_name} to {flag_enabled}")
             
-            # Create a new FieldLineSet with the template
+            # Create empty FieldLineSet with template
             field_line_set = FieldLineSet(template)
-            
-            # Load each column into the appropriate property
-            for col in hdu.columns:
-                try:
-                    # Convert column name to PropertyName enum
-                    prop = PropertyName[col.name.upper()]
-                    
-                    # Read the column data
-                    data = hdu.data[col.name]
-                    
-                    # Convert to numpy array if needed
-                    if isinstance(data, np.ndarray) and data.dtype.kind == 'O':
-                        data = np.array([np.array(x) for x in data])
-                    
-                    # Set the property in the FieldLineSet using set_property method
-                    field_line_set._set_property(prop, data)
-                    
-                    logger.info(f"Loaded property: {prop.key_name}")
-                except KeyError:
-                    logger.warning(f"Unknown property name: {col.name}")
-                except Exception as e:
-                    logger.error(f"Error loading property {col.name}: {str(e)}")
-                    raise
         
-        logger.info("Successfully loaded field line data")
+        # Load data from all files
+        for fits_file in fits_files:
+            logger.info(f"Loading data from {fits_file}")
+            with pf.open(fits_file) as hdul:
+                hdu = hdul["FIELD_LINES"]
+                
+                # Load each column
+                for col in hdu.columns:
+                    try:
+                        prop = PropertyName[col.name.upper()]
+                        data = hdu.data[col.name]
+                        
+                        # Convert to numpy array if needed
+                        #if isinstance(data, np.ndarray) and data.dtype.kind == 'O':
+                        #    data = np.array([np.array(x) for x in data])
+                        if prop == PropertyName.R_LINE:
+                            data = [d.reshape(-1, 3) for d in data]
+                            
+                        
+                        
+                        # For first file, set the property
+                        if fits_file == first_file:
+                            field_line_set._properties[prop] = data
+                            
+                        # For subsequent files, append the data
+                        else:
+                            if prop == PropertyName.R_LINE:
+                                field_line_set._properties[prop].extend(data)
+                            else:
+                                field_line_set._properties[prop] = np.append(
+                                    field_line_set._properties[prop], 
+                                    data, 
+                                    axis=0
+                                )
+                        
+                        logger.debug(f"Loaded property {prop.key_name} from {fits_file}")
+                    except KeyError:
+                        logger.warning(f"Unknown property name: {col.name}")
+                    except Exception as e:
+                        logger.error(f"Error loading property {col.name}: {str(e)}")
+                        raise
+                
+                # Update field line count
+                field_line_set.n_field_lines += len(hdu.data)
+        
+        logger.info(f"Successfully loaded {field_line_set.n_field_lines} field lines from {len(fits_files)} files")
         return field_line_set

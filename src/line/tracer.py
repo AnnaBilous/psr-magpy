@@ -3,6 +3,7 @@ from astropy.coordinates.representation import CartesianRepresentation
 from scipy.integrate import solve_ivp
 from src.line.field_line import FieldLine
 import logging
+from typing import Tuple, Optional
 
 # Initialize logger
 logger = logging.getLogger(__name__)

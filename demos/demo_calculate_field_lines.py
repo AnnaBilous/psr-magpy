@@ -1,50 +1,40 @@
 import sys
 from pathlib import Path
 from setup_directories import setup_output_directories
-import logging
 from datetime import datetime
 
 # Add project root to PYTHONPATH only if not already present
 project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from src.utils.logging_config import setup_logging
+import logging
 
-from src.field.multipole import MultipoleField
-from src.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
-from src.footpoint_grid.grid import HealpixGrid
-from src.line.field_line import FieldLine
-from src.line.calculator import FieldLineCalculator, TracingConfig
-from src.line.field_line import PropertyName
-from src.line.field_line_set import FieldLineSet
-from src.line.io import FieldLineSetFitsIO
 # Create output directories relative to script location
 _, fits_dir, plot_dir, log_dir = setup_output_directories(__file__)
 
 # Setup logging
-log_file = log_dir / f"field_lines_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()  # This will print to console as well
-    ]
+log_file = log_dir / f"field_lines_{datetime.now():%Y%m%d_%H%M%S}.log"
+setup_logging(
+    log_level='INFO',
+    log_file=log_file
 )
-logger = logging.getLogger(__name__)
 
-logger.info("Logging system initialized")
+logger = logging.getLogger(__name__)
+logger.info("Starting field line calculation demo")
 
 def plot_field_lines(field_lines, save_path=None):
     """Plot the calculated field lines in 3D."""
     fig = plt.figure(figsize=(12, 12))
     ax = fig.add_subplot(111, projection='3d')
-
+    r_lines = field_lines.get_property("r_line")
+    
     # Plot field lines
-    for line in field_lines:
-        r_line = line._get_property(PropertyName.R_LINE)
+    for r_line in r_lines:
         if r_line is not None and len(r_line) > 0:
             ax.plot(r_line[:, 0], r_line[:, 1], r_line[:, 2], 
                    'b-', alpha=0.3)
@@ -63,6 +53,7 @@ def plot_field_lines(field_lines, save_path=None):
     ax.set_zlabel('Z')
     ax.set_title('Magnetic Field Lines')
     ax.set_box_aspect([1, 1, 1])
+    plt.show()
 
     if save_path:
         plt.savefig(save_path)
@@ -79,8 +70,8 @@ def main():
         R_max=10.0,          # Maximum radius for tracing
         R_min=1.0,           # Minimum radius (star surface)
         dt=0.01,             # Integration time step
-        max_memory_mb=100.0, # Maximum memory usage per batch
-        n_cores=4,           # Number of CPU cores to use
+        max_memory_mb=50.0, # Maximum memory usage per batch
+        n_cores=2,           # Number of CPU cores to use
         save_results=True,   # Save results to disk
         filename=output_filename
     )
@@ -88,7 +79,7 @@ def main():
     # Create magnetic field configuration
     dipole = DipoleFieldComponent(
         B_magnitude=1.0,
-        moment_orientation_latitude_degree=90.0,
+        moment_orientation_latitude_degree=0.0,
         moment_orientation_longitude_degree=0.0
     )
     
@@ -101,7 +92,7 @@ def main():
     field = MultipoleField([dipole, quadrupole])
 
     # Create footpoint grid using HEALPix
-    grid = HealpixGrid(nside=4)
+    grid = HealpixGrid(nside=64)
     logger.info(f"Number of field lines to calculate: {grid.nline}")
     
     # Configure which field line properties to save
@@ -128,7 +119,7 @@ def main():
             
             # Load the saved results and create visualization
             logger.info("Loading saved results for verification...")
-            loaded_field_lines = FieldLineSetFitsIO.load_from_fits(output_filename + ".fits")
+            loaded_field_lines = FieldLineSetFitsIO.load_from_fits(output_filename)
             logger.info(f"Successfully loaded {loaded_field_lines.n_field_lines} field lines")
             
             # Print information about loaded data
@@ -139,7 +130,7 @@ def main():
             
             # Create visualization of loaded data
             plot_path = os.path.join(plot_dir, f"field_lines_{timestamp}.png")
-            plot_field_lines(loaded_field_lines, save_path=plot_path)
+            #plot_field_lines(loaded_field_lines, save_path=plot_path)
             logger.info(f"Plot saved to: {plot_path}")
             
     except MemoryError:

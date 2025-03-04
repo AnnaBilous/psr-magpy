@@ -5,7 +5,6 @@ from .field_line import FieldLine, PropertyName
 
 # Initialize logger
 import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FieldLineSet(FieldLine):
@@ -33,15 +32,60 @@ class FieldLineSet(FieldLine):
     
    
            
-    def append(self, field_lines: List[FieldLine]) -> None:
+    def append(self, field_lines: Union[List[FieldLine], FieldLine, 'FieldLineSet']) -> None:
         """Append field lines to the set.
         
-        Args:
-            field_lines: List of FieldLine objects to append
+        Parameters
+        ----------
+        field_lines : Union[List[FieldLine], FieldLine, FieldLineSet]
+            Field lines to append. Can be:
+            - A single FieldLine instance
+            - A list of FieldLine objects
+            - Another FieldLineSet instance
             
-        Raises:
-            ValueError: If field lines have incompatible save flags
+        Raises
+        ------
+        ValueError
+            If field lines have incompatible save flags
         """
+        # Convert single FieldLine to list
+        if isinstance(field_lines, FieldLine) and not isinstance(field_lines, FieldLineSet):
+            field_lines = [field_lines]
+        
+        # Handle FieldLineSet
+        if isinstance(field_lines, FieldLineSet):
+            # Validate save flags compatibility
+            if vars(field_lines.save_flags) != vars(self.save_flags):
+                raise ValueError("FieldLineSet has incompatible save flags configuration")
+            
+            # Append each property directly
+            for prop in PropertyName:
+                if not getattr(self.save_flags, prop.flag_name):
+                    continue
+                
+                source_data = field_lines._properties[prop]
+                if source_data is None:
+                    continue
+                    
+                # Special handling for R_LINE which is a list of coordinate arrays
+                if prop == PropertyName.R_LINE:
+                    if self._properties[prop] is None:
+                        self._properties[prop] = source_data.copy()  # Copy list of arrays
+                    else:
+                        self._properties[prop].extend(source_data)
+                    continue
+                
+                # For other properties, use numpy append
+                if self._properties[prop] is None:
+                    self._properties[prop] = np.array(source_data)
+                else:
+                    self._properties[prop] = np.append(self._properties[prop], source_data, axis=0)
+            
+            self.n_field_lines += field_lines.n_field_lines
+            logger.debug(f"Appended FieldLineSet with {field_lines.n_field_lines} lines")
+            return
+        
+        # Handle list of FieldLine objects (existing functionality)
         # Validate save flags compatibility
         for line in field_lines:
             if vars(line.save_flags) != vars(self.save_flags):
@@ -67,7 +111,7 @@ class FieldLineSet(FieldLine):
             else:
                 self._properties[prop] = np.append(self._properties[prop], values, axis=0)
             
-        logger.debug("Appended %d field lines to set", len(field_lines))
+        logger.debug(f"Appended {len(field_lines)} individual field lines")
         self.n_field_lines += len(field_lines)
         
     def estimate_size(self) -> float:

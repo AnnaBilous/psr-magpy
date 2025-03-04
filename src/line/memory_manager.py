@@ -9,7 +9,7 @@ import psutil
 from src.line.field_line import FieldLine
 from src.line.field_line_set import FieldLineSet
 from src.line.tracer import FieldLineTracer
-
+from src.line.io import FieldLineSetFitsIO
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -178,14 +178,14 @@ class ResultsManager:
         if self._results_in_memory is None:
             self._results_in_memory = batch_results
         else:
-            self._results_in_memory = self._results_in_memory.append(batch_results)
+            self._results_in_memory.append(batch_results)
             
 
         self._results_in_memory_size = self._results_in_memory.estimate_size()
 
         if self.should_write_batch(self._results_in_memory_size / (1024 * 1024)):
             logger.info("Writing batch %d to disk", batch_idx)
-            exit(1)
+            
             self.write_results_to_disk(filename, batch_idx)
 
         return self._results_in_memory
@@ -199,7 +199,8 @@ class ResultsManager:
         """
         if self._results_in_memory:
             logger.info("Writing results to disk for batch %d", batch_idx)
-            self._results_in_memory.write_to_fits(f"{filename}_batch_{batch_idx}.fits")
+            line_io = FieldLineSetFitsIO(self._results_in_memory)
+            line_io.save_to_fits(f"{filename}_batch_{batch_idx}.fits")
             
             logger.info("Results written to %s_batch_%d.fits", filename, batch_idx)
             logger.debug("Clearing in-memory results after writing to disk.")

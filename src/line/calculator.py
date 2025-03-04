@@ -1,10 +1,10 @@
 import time
 import datetime
 import numpy as np
-
 import psutil
 from typing import Tuple, List, Optional, Dict, Any
 import os
+import logging
 
 from src.line.tracer import FieldLineTracer
 from src.footpoint_grid.grid import FootpointGrid
@@ -19,8 +19,6 @@ from src.line.memory_manager import ResultsManager, MemoryConfig
 from dataclasses import dataclass
 from tqdm import tqdm
 
-import logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -94,6 +92,9 @@ class FieldLineCalculator:
         
         trial_size = trial_results.estimate_size() / n_trial
         logger.info("Estimated memory size per line: %.2f MB", trial_size/(1024*1024))
+        stocastic_correction = 2.
+        trial_size = trial_size/stocastic_correction
+        logger.info(f"Reducing trial size by {stocastic_correction}x to account for unevenly distributed field line lengths.")
     
         elapsed = time.time() - time_start
         logger.info("Time taken to estimate memory size: %.1f seconds", elapsed)

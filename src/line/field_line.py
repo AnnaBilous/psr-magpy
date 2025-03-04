@@ -1,12 +1,10 @@
 # Standard library imports
 from dataclasses import dataclass
-import logging
 from typing import Optional, List, Dict, Any, TypeVar, Union
 from enum import Enum
-
-# Third-party imports
 import numpy as np
 from numpy.typing import NDArray
+import logging
 
 # Initialize logger
 logger = logging.getLogger(__name__)
