@@ -9,9 +9,7 @@ from scipy.spatial.transform import Rotation
 from astropy import units as u
 from astropy.coordinates import PhysicsSphericalRepresentation
 
-# Configure logging with more detailed format
 logger = logging.getLogger(__name__)
-
 
 class MultipoleType(Enum):
     """Enumeration for supported multipole field types.
