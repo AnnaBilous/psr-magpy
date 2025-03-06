@@ -1,46 +1,20 @@
-import sys
-from pathlib import Path
-from setup_directories import setup_output_directories
-from datetime import datetime
-
-# Add project root to PYTHONPATH
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+from utils import setup_demo
+# Setup demo environment
+fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
 
 import os
+from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-from src.utils.logging_config import setup_logging, LogLevels
-import logging
+
 
 from src.field.multipole import MultipoleField
 from src.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
 from src.footpoint_grid.grid import HealpixGrid
 from src.line.field_line import FieldLine
 from src.line.calculator import FieldLineCalculator, TracingConfig
-from src.line.field_line import PropertyName
-from src.line.field_line_set import FieldLineSet
 from src.line.io import FieldLineSetFitsIO
 
-# Create output directories
-_, fits_dir, plot_dir, log_dir = setup_output_directories(__file__)
-
-# Setup logging with different levels for console and file
-log_file = log_dir / f"field_lines_{datetime.now():%Y%m%d_%H%M%S}.log"
-setup_logging(
-    log_level='DEBUG',  # Base level
-    log_file=log_file,
-    handler_levels={
-        'console': LogLevels.CONSOLE,  # Less verbose for console
-        'file': LogLevels.FILE  # More detailed for file
-    },
-    max_bytes=50 * 1024 * 1024,  # 50MB per file
-    backup_count=3  # Keep 3 backup files
-)
-
-logger = logging.getLogger(__name__)
-logger.info("Starting field line calculation demo")
 
 def plot_field_lines(field_lines, save_path=None):
     """Plot the calculated field lines in 3D."""
@@ -85,8 +59,9 @@ def main():
         R_max=10.0,          # Maximum radius for tracing
         R_min=1.0,           # Minimum radius (star surface)
         dt=0.01,             # Integration time step
-        max_memory_mb=50.0, # Maximum memory usage per batch
+        max_memory_mb=5.0,   # Maximum memory usage per batch
         n_cores=2,           # Number of CPU cores to use
+        max_batch_size=100,      # Number of field lines to calculate per batch
         save_results=True,   # Save results to disk
         filename=output_filename
     )
@@ -107,7 +82,7 @@ def main():
     field = MultipoleField([dipole, quadrupole])
 
     # Create footpoint grid using HEALPix
-    grid = HealpixGrid(nside=64)
+    grid = HealpixGrid(nside=16)
     logger.info(f"Number of field lines to calculate: {grid.nline}")
     
     # Configure which field line properties to save

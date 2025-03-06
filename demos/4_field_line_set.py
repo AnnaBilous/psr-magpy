@@ -1,30 +1,11 @@
-"""
-Demo script showcasing the usage of FieldLineSet class.
+from utils import setup_demo
+# Setup demo environment
+fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
 
-This demo illustrates:
-1. Creating individual field lines
-2. Creating a field line set
-3. Appending field lines to the set
-4. Accessing properties from the set
-5. Memory size estimation
-"""
-
-import logging
 import numpy as np
-import sys
-from pathlib import Path
-
-# Add src to path to import field_line
-sys.path.append(str(Path(__file__).parent.parent))
-from src.line.field_line import FieldLine, PropertyName
 from src.line.field_line_set import FieldLineSet
+from src.line.field_line import FieldLine
 
-# Set up logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 def create_sample_field_line(footpoint_id: int, scale: float = 1.0) -> FieldLine:
     """Create a sample field line with some properties."""

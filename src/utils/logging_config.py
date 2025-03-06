@@ -8,7 +8,7 @@ from datetime import datetime
 class LogLevels:
     """Logging levels for different handlers."""
     CONSOLE = logging.INFO
-    FILE = logging.DEBUG
+    FILE = logging.INFO
     MEMORY = logging.WARNING  # For memory-related operations
     CALCULATION = logging.INFO  # For calculation progress
     IO = logging.INFO  # For I/O operations

@@ -29,6 +29,7 @@ class TracingConfig:
     dt: float = 0.01
     max_memory_mb: float = 100.0
     n_cores: Optional[int] = None
+    max_batch_size: int = 100
     save_results: bool = False
     filename: Optional[str] = None
 
@@ -61,7 +62,7 @@ class FieldLineCalculator:
         template: FieldLine,
         tracer: FieldLineTracer,
         results_manager: ResultsManager,
-        n_trial: int = 10,
+        n_trial: int = 100,
     ) -> Tuple[float, float, float]:
         """Estimate memory requirements by processing a small random subset.
         
@@ -91,11 +92,9 @@ class FieldLineCalculator:
         trial_results = self._process_batch(trial_grid, template, tracer, results_manager.memory_config.n_cores)
         
         trial_size = trial_results.estimate_size() / n_trial
+        
         logger.info("Estimated memory size per line: %.2f MB", trial_size/(1024*1024))
-        stocastic_correction = 2.
-        trial_size = trial_size/stocastic_correction
-        logger.info(f"Reducing trial size by {stocastic_correction}x to account for unevenly distributed field line lengths.")
-    
+
         elapsed = time.time() - time_start
         logger.info("Time taken to estimate memory size: %.1f seconds", elapsed)
         completion_time = elapsed * self.grid.nline / n_trial
@@ -107,20 +106,24 @@ class FieldLineCalculator:
         self,
         template: FieldLine,
         config: Optional[TracingConfig] = None,
+        max_batch_size: int = 100,
     ) -> Optional[FieldLineSet]:
         """Calculate field lines in batches and save to FITS file."""
         config = config or TracingConfig()
         start_time = time.time()
         
         tracer = FieldLineTracer(self.field, config.R_max, config.R_min, config.dt)
-        memory_config = MemoryConfig(max_memory_mb=config.max_memory_mb, n_cores=config.n_cores)
+        memory_config = MemoryConfig(max_memory_mb=config.max_memory_mb, max_batch_size=config.max_batch_size, n_cores=config.n_cores)
         results_manager = ResultsManager(memory_config, tracer)
         
         trial_size, completion_time = self._estimate_memory_requirements_and_time_for_completion(
             template, tracer, results_manager
         )
    
-        batch_size = results_manager.find_batch_size(trial_size)
+        memory_max_batch_size = results_manager.find_batch_size(trial_size)
+        batch_size = min(memory_config.max_batch_size, memory_max_batch_size)
+        logger.info(f"Setting batch size: {batch_size}")
+        
         logger.info(f"Starting field line calculations at {time.strftime('%H:%M:%S')}")
         results = self._process_all_batches(
             template, config.filename or "", tracer, results_manager, config, batch_size

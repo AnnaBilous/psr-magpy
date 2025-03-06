@@ -5,8 +5,7 @@ from typing import Optional, Tuple
 
 import logging
 import psutil
-
-from src.line.field_line import FieldLine
+import numpy as np
 from src.line.field_line_set import FieldLineSet
 from src.line.tracer import FieldLineTracer
 from src.line.io import FieldLineSetFitsIO
@@ -22,8 +21,8 @@ class MemoryConfig:
         Maximum memory allowed for processing in megabytes.
     safety_factor : float
         Fraction of available memory to leave as a buffer (default is 0.9).
-    min_batch_size : int
-        Minimum batch size to process (default is 10).
+    max_batch_size : int
+        Maximum batch size to process (default is 100).
     check_interval_sec : float
         How often to check memory usage in seconds (default is 1.0).
     n_cores : Optional[int]
@@ -32,7 +31,7 @@ class MemoryConfig:
 
     max_memory_mb: float
     safety_factor: float = 0.9
-    min_batch_size: int = 10
+    max_batch_size: int = 100
     check_interval_sec: float = 1.0
     n_cores: Optional[int] = None
 
@@ -182,15 +181,20 @@ class ResultsManager:
             
 
         self._results_in_memory_size = self._results_in_memory.estimate_size()
+        logger.info("Results in memory size: %.1f MB", self._results_in_memory_size / (1024 * 1024))
 
         if self.should_write_batch(self._results_in_memory_size / (1024 * 1024)):
             logger.info("Writing batch %d to disk", batch_idx)
+            print("Writing batch %d to disk", batch_idx)
+            footpoint_ids = self._results_in_memory.get_property('footpoint_id')
+
+            suffix = f"{int(np.min(footpoint_ids))}_{int(np.max(footpoint_ids))}"
+            self.write_results_to_disk(filename, suffix)
             
-            self.write_results_to_disk(filename, batch_idx)
 
         return self._results_in_memory
 
-    def write_results_to_disk(self, filename: str, batch_idx: int) -> None:
+    def write_results_to_disk(self, filename: str, suffix: str) -> None:
         """Write results to disk and reset in-memory results.
 
         Args:
@@ -198,11 +202,11 @@ class ResultsManager:
             batch_idx: Current batch index.
         """
         if self._results_in_memory:
-            logger.info("Writing results to disk for batch %d", batch_idx)
+            logger.info("Writing results to disk for indices %s", suffix)
             line_io = FieldLineSetFitsIO(self._results_in_memory)
-            line_io.save_to_fits(f"{filename}_batch_{batch_idx}.fits")
+            line_io.save_to_fits(f"{filename}_batch_{suffix}.fits")
             
-            logger.info("Results written to %s_batch_%d.fits", filename, batch_idx)
+            logger.info("Results written to %s_batch_%s.fits", filename, suffix)
             logger.debug("Clearing in-memory results after writing to disk.")
             self._results_in_memory_size = 0
             self._results_in_memory = None

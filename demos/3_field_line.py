@@ -1,28 +1,12 @@
-"""
-Demo script showcasing the usage of FieldLine class.
+from utils import setup_demo
+# Setup demo environment
+fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
 
-This demo illustrates:
-1. Creating field lines with different save flags
-2. Setting and getting properties
-3. Copying field line structure
-4. Error handling for disabled properties
-"""
-
-import logging
 import numpy as np
-import sys
-from pathlib import Path
 
-# Add src to path to import field_line
-sys.path.append(str(Path(__file__).parent.parent))
-from src.line.field_line import FieldLine, PropertyName
+from src.line.field_line import FieldLine
+from src.line.field_line import PropertyName
 
-# Set up logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 def main():
     # Create a field line with default settings (only footpoint_id enabled)
