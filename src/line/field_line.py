@@ -1,9 +1,7 @@
 # Standard library imports
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any, TypeVar, Union
+from typing import Optional, Any, Union
 from enum import Enum
-import numpy as np
-from numpy.typing import NDArray
 import logging
 
 # Initialize logger

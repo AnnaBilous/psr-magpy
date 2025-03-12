@@ -7,8 +7,7 @@ import matplotlib.pyplot as plt
 
 from src.field.components import (
     DipoleFieldComponent,
-    QuadrupoleFieldComponent,
-    MultipoleType
+    QuadrupoleFieldComponent
 )
 from src.field.multipole import MultipoleField
 
