@@ -30,8 +30,8 @@ class TracingConfig:
     max_memory_mb: float = 100.0
     n_cores: Optional[int] = None
     max_batch_size: int = 100
-    save_results: bool = False
-    filename: Optional[str] = None
+    save_results: bool = True
+    filename: Optional[str] = "dummy"
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -110,6 +110,8 @@ class FieldLineCalculator:
     ) -> Optional[FieldLineSet]:
         """Calculate field lines in batches and save to FITS file."""
         config = config or TracingConfig()
+        print(config.save_results)
+        
         start_time = time.time()
         
         tracer = FieldLineTracer(self.field, config.R_max, config.R_min, config.dt)
@@ -130,6 +132,7 @@ class FieldLineCalculator:
         )
         elapsed = time.time() - start_time
         logger.info(f"\nCalculations completed in {elapsed:.1f} seconds")
+        
         return results
 
     def _process_batch(

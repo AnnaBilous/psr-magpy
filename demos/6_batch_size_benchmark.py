@@ -1,10 +1,10 @@
-from utils import setup_demo
 import time
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 # Setup demo environment
+from utils import setup_demo
 fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
 
 from src.field.multipole import MultipoleField

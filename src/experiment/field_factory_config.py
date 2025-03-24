@@ -1,25 +1,70 @@
-# %% Imports
 from dataclasses import dataclass, asdict, replace, field
 from typing import List, Dict, Any, Optional, Union, Tuple
 from pathlib import Path
 import itertools
-import copy
-import json
 import numpy as np
 from copy import deepcopy
-# %% Class definitions
+import json
+import hashlib
+from datetime import datetime
+
+from src.field.components import MultipoleType, Parameters
 @dataclass
-class FieldComponentConfig:
+class FieldComponentFactory:
     """Configuration for a single magnetic field component."""
-    moment_type: Union[str, List, Dict]  # 'dipole', 'quadrupole', etc.
+    moment_type: Union[str, List, Dict]  
     B_magnitude: Union[float, List, Dict]
-    lat_degree: Union[float, List, Dict] = 0
-    lon_degree: Union[float, List, Dict] = 0
+    moment_orientation_latitude_degree: Union[float, List, Dict] = 0
+    moment_orientation_longitude_degree: Union[float, List, Dict] = 0
     offset_r_ns: Union[np.ndarray, List, Dict] = field(default_factory=lambda: np.zeros(3))
 
+    def __post_init__(self):
+        """Convert moment_type to MultipoleType if it's a string."""
+        if isinstance(self.moment_type, str):
+            self.moment_type = MultipoleType(self.moment_type.lower())
+        elif isinstance(self.moment_type, list):
+            self.moment_type = [MultipoleType(mt.lower()) if isinstance(mt, str) else mt for mt in self.moment_type]
+        elif isinstance(self.moment_type, dict):
+            self.moment_type = {k: MultipoleType(v.lower()) if isinstance(v, str) else v 
+                              for k, v in self.moment_type.items()}
 
-@dataclass
-class MultipoleFieldConfig:
+    # Move to json serialization
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary for JSON serialization."""
+        d = asdict(self)
+        if isinstance(d['moment_type'], MultipoleType):
+            d['moment_type'] = d['moment_type'].value
+        elif isinstance(d['moment_type'], list):
+            d['moment_type'] = [mt.value if isinstance(mt, MultipoleType) else mt for mt in d['moment_type']]
+        elif isinstance(d['moment_type'], dict):
+            d['moment_type'] = {k: v.value if isinstance(v, MultipoleType) else v for k, v in d['moment_type'].items()}
+        
+        if isinstance(d['offset_r_ns'], np.ndarray):
+            d['offset_r_ns'] = d['offset_r_ns'].tolist()
+        return d
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'FieldComponentFactory':
+        """Create a FieldComponentFactory instance from a dictionary.
+        
+        Parameters
+        ----------
+        data : Dict[str, Any]
+            Dictionary containing the field component configuration
+            
+        Returns
+        -------
+        FieldComponentFactory
+            A new FieldComponentFactory instance
+        """
+        # Handle offset_r_ns if it's a list
+        if 'offset_r_ns' in data and isinstance(data['offset_r_ns'], list):
+            data['offset_r_ns'] = np.array(data['offset_r_ns'])
+            
+        # Create a new instance
+        return cls(**data)
+
+class MultipoleFieldFactory:
     """Configuration for magnetic field with multiple components.
     
     Initialize with one or more sets of components, where each set is a list:
@@ -40,9 +85,9 @@ class MultipoleFieldConfig:
         [dipole2, quadrupole2]   # Second set
     )
     """
-    components: List[List[FieldComponentConfig]]
+    components: List[List[FieldComponentFactory]]
     
-    def __init__(self, *args: List[FieldComponentConfig]):
+    def __init__(self, *args: List[FieldComponentFactory]):
         if len(args) == 0:
             self.components = [{}]
             return
@@ -56,23 +101,27 @@ class MultipoleFieldConfig:
                 )
         self.components = args
           
-        
+   
 
-    def _expand_parameters(self) -> 'MultipoleFieldConfig':
+    def _convert_to_parameters(self, component: FieldComponentFactory) -> Parameters:
+
+        return Parameters(
+            B_magnitude=component.B_magnitude,
+            moment_orientation_latitude_degree=component.moment_orientation_latitude_degree,
+            moment_orientation_longitude_degree=component.moment_orientation_longitude_degree,
+            offset_r_ns=component.offset_r_ns,
+            moment_type=component.moment_type
+        )
+
+    def _expand_parameters(self) -> List[List[Parameters]]:
         """Expand parameters into all possible combinations.
-        
-        For each component in a set:
-        1. Collect all parameter ranges (lists) and parameter sets (dicts)
-        2. Generate all possible combinations of values
-        3. Create new component configs with specific values
         
         Returns
         -------
-        MultipoleFieldConfig
-            New config with expanded parameters, where each set contains
-            components with specific parameter values
+        List[List[Parameters]]
+            List of component sets, where each set is a list of Parameters objects
         """
-        
+       
         component_dicts = [
             {f"component_{i}": comp for i, comp in enumerate(c)}
             for c in self.components
@@ -81,11 +130,8 @@ class MultipoleFieldConfig:
         whole_expanded_component_sets = []
         # Process each set of components separately
         for component_set in component_dicts:
-            print(component_set)
-            
+                      
             expanded_components = self._expand_single_component_set(component_set)
-
-            whole_expanded_components = []
             
             for component in expanded_components:
                 modified_component = deepcopy(component_set)
@@ -94,11 +140,11 @@ class MultipoleFieldConfig:
                 modified_component_set = [v for v in modified_component.values()]
                 whole_expanded_component_sets.append(modified_component_set)
           
- 
+         
         return whole_expanded_component_sets
 
 
-    def _expand_single_component_set(self, component_set: Dict[str, FieldComponentConfig]) -> List[FieldComponentConfig]:
+    def _expand_single_component_set(self, component_set: Dict[str, FieldComponentFactory]) -> List[FieldComponentFactory]:
         """Expand a single set of components into all possible combinations.
         
         Parameters
@@ -109,7 +155,6 @@ class MultipoleFieldConfig:
     
         # Process each component in the set
         param_ranges, param_sets = self._collect_parameters(component_set)
-        
         number_of_components = len(component_set)
         
         if param_ranges:
@@ -149,12 +194,12 @@ class MultipoleFieldConfig:
         return expanded_components_formatted
         
 
-    def _collect_parameters(self, component_dict: Dict[str, FieldComponentConfig]) -> Tuple[Dict, Dict]:
+    def _collect_parameters(self, component_dict: Dict[str, FieldComponentFactory]) -> Tuple[Dict, Dict]:
         """Collect parameter ranges and sets from a component.
         
         Parameters
         ----------
-        component : FieldComponentConfig
+        component : FieldComponentFactory
             Component configuration to collect parameters from
             
         Returns
@@ -182,14 +227,16 @@ class MultipoleFieldConfig:
         ----------
         param_sets : Dict
         """
-        set_keys = set.intersection(
-                *[set(param_dict.keys()) for param_dict in param_sets.values()]
-            )
+
+        set_keys_union = set.union(*[set(param_dict.keys()) for param_dict in param_sets.values()])
+        set_keys_intersection = set.intersection(*[set(param_dict.keys()) for param_dict in param_sets.values()])
+        if set_keys_intersection != set_keys_union:
+            raise ValueError("Parameter sets have different keys. Perhaps use ranges instead?")
         
         set_names = list(param_sets.keys())
-
+     
    
-        set_combinations = [{name: param_sets[name][key] for name in set_names} for key in set_keys]
+        set_combinations = [{name: param_sets[name][key] for name in set_names} for key in set_keys_union]
 
         return set_combinations
         
@@ -215,121 +262,49 @@ class MultipoleFieldConfig:
             
         return combinations
 
-    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert config to dictionary for JSON serialization."""
+        components_dict = []
+        for component_set in self.components:
+            component_set_dict = []
+            for comp in component_set:
+                if isinstance(comp, FieldComponentFactory):
+                    component_set_dict.append(comp.to_dict())
+                elif isinstance(comp, dict):
+                    component_set_dict.append(comp)
+                elif isinstance(comp, list):
+                    # Handle the case where comp is a list
+                    component_set_dict.append([c.to_dict() if hasattr(c, 'to_dict') else c for c in comp])
+                else:
+                    # For other types, just use the value as is
+                    component_set_dict.append(comp)
+            components_dict.append(component_set_dict)
+        
+        return {
+            'components': components_dict
+        }
 
-@dataclass
-class ExperimentConfig:
-    """Full experiment configuration."""
-    field_config: MultipoleFieldConfig
-    output_dir: Path
-    save_vars: List[str]
-    experiment_name: str
-    filename_template: str = ""
-    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'MultipoleFieldFactory':
+        """Create config from dictionary."""
+        components = [[FieldComponentFactory.from_dict(comp) for comp in component_set] 
+                     for component_set in data['components']]
+        return cls(*components)
 
-class ExperimentSetup:
-    """Manages experiment parameter combinations and file naming."""
-    
-    def __init__(self, base_config: ExperimentConfig):
-        """Initialize experiment setup.
+    def get_config_id(self, component_set_idx: int) -> str:
+        """Generate unique identifier for a specific component set configuration.
         
         Parameters
         ----------
-        base_config : ExperimentConfig
-            Base configuration with default values
-        """
-        self.base_config = base_config
-    
-
-    def generate_configs(self) -> List[Tuple[ExperimentConfig, str]]:
-        """Generate experiment configurations by expanding parameter sets and ranges.
-        
-        Returns
-        -------
-        List[Tuple[ExperimentConfig, str]]
-            List of (config, filename) tuples for each experiment
-        """
-        # First, expand parameter sets
-        field_configs = self._expand_parameter_sets(self.base_config.field_config)
-        
-        # Then, expand parameter ranges
-        field_configs = self._expand_parameter_ranges(field_configs)
-        
-        # Create experiment configs with each expanded field config
-        experiment_configs = []
-        for field_config in field_configs:
-            # Create a copy of the base config with the new field config
-            config_dict = asdict(self.base_config)
-            config_dict['field_config'] = field_config
-            experiment_config = ExperimentConfig.from_dict(config_dict)
-            
-            # Generate filename
-            filename = self._generate_filename(experiment_config)
-            
-            experiment_configs.append((experiment_config, filename))
-        
-        return experiment_configs
-    
-    def _generate_filename(self, config: ExperimentConfig) -> str:
-        """Generate a filename for an experiment configuration.
-        
-        Parameters
-        ----------
-        config : ExperimentConfig
-            Experiment configuration
+        component_set_idx : int
+            Index of the component set to generate ID for
             
         Returns
         -------
         str
-            Generated filename
+            Unique identifier for the configuration
         """
-        if config.filename_template:
-            # Use the template with format string substitution
-            field_dict = asdict(config.field_config)
-            filename = config.filename_template.format(**field_dict)
-        else:
-            # Generate a default filename
-            field_dict = asdict(config.field_config)
-            parts = []
-            
-            for component in field_dict['components']:
-                for key, value in sorted(asdict(component).items()):
-                    if not isinstance(value, (dict, list, np.ndarray)):
-                        parts.append(f"{key}_{value}")
-            
-            if parts:
-                filename = f"{config.experiment_name}_{'_'.join(parts)}.npz"
-            else:
-                filename = f"{config.experiment_name}.npz"
-        
-        return filename
-  
-  
-# %% Test data setup
-dipole = FieldComponentConfig(
-    moment_type="dipole",
-    B_magnitude={"1": 1.0, "2": 2.0},  # parameter set
-    lat_degree=0,  # parameter range
-    lon_degree=0
-)
-
-quadrupole = FieldComponentConfig(
-    moment_type="quadrupole",
-    B_magnitude=1.0, #{"1": 0.5, "2": 1.0},  # parameter set
-    lat_degree=0,  # parameter range
-    lon_degree=0
-)
-
-# %% Create and test configuration
-# Create config with different component sets
-field_config = MultipoleFieldConfig([dipole, quadrupole])
-
-# Expand parameters
-expanded = field_config._expand_parameters()
-for s in expanded:
-    print(s)
-
-
-# %% Additional tests as needed
-# Test specific parameter combinations
-# Add more test cells as needed
+        config_dict = self.components[component_set_idx][0].to_dict()
+        # Convert to string and hash
+        config_str = json.dumps(config_dict, sort_keys=True)
+        return hashlib.md5(config_str.encode()).hexdigest()[:8]

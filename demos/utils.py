@@ -43,7 +43,7 @@ def setup_demo(script_path: str, log_level: str = 'DEBUG') -> Tuple[Path, Path, 
     from src.utils.logging_config import setup_logging, LogLevels
     
     # Create output directories
-    _, fits_dir, plot_dir, log_dir = setup_output_directories(script_path)
+    fits_dir, plot_dir, log_dir = setup_output_directories(project_root / "demos" / "output")
     
     # Setup logging
     script_name = Path(script_path).stem

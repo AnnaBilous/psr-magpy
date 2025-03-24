@@ -255,7 +255,6 @@ class FootpointGrid(ABC):
             logger.error(f"Failed to plot footpoint coordinates: {e}")
             raise
 
-
 class SphericalGrid(FootpointGrid):
     """Regular spherical grid with uniform spacing in longitude and latitude.
     
