@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "psr_magpy"
+version = "0.1.0"
+description = "Magnetic field line tracing package for pulsar magnetosphere modeling"
+authors = [
+    {name = "Anna Bilous", email = "hanna.bilous@gmail.com"}
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy>=1.20.0",
+    "scipy>=1.7.0",
+    "astropy>=5.0.0",
+    "matplotlib>=3.5.0",
+    "tqdm>=4.62.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+] 

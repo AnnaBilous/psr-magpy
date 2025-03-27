@@ -255,3 +255,8 @@ def run_experiment_pipeline(config: ExperimentConfig, experiment_number: int = 1
         # Error handling stage
         log_failure(log_file, experiment_number, config.name, start_time, e)
         raise 
+    
+if __name__ == "__main__":
+    # Example usage
+    from configs.standard_configs import sparse_meridional_field_lines_config
+    run_experiment_pipeline(sparse_meridional_field_lines_config, experiment_number=1)

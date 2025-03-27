@@ -1,0 +1,14 @@
+# Core dependencies (automatically installed with the package)
+numpy>=1.20.0
+scipy>=1.7.0
+astropy>=5.0.0
+matplotlib>=3.5.0
+tqdm>=4.62.0
+
+# Development dependencies
+pytest>=7.0.0
+black>=22.0.0
+flake8>=4.0.0
+
+# Install the package in development mode
+-e . 
