@@ -3,10 +3,10 @@ from dataclasses import dataclass, asdict, field
 from typing import List, Optional, Union
 import numpy as np
 from pathlib import Path
-from src.footpoint_grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
-from src.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
-from src.line.calculator import TracingConfig
-from src.line.field_line import PropertyName
+from src.psr_magpy.grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
+from src.psr_magpy.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
+from src.psr_magpy.line.calculator import TracingConfig
+from src.psr_magpy.line.field_line import PropertyName
 
 @dataclass
 class GridConfig:

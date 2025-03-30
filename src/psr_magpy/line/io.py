@@ -6,9 +6,9 @@ from pathlib import Path
 
 from astropy.io import fits as pf
 
-from src.fitsio.base import FitsIO
-from src.line.field_line import PropertyName
-from src.line.field_line_set import FieldLineSet
+from src.psr_magpy.fitsio.base import FitsIO
+from src.psr_magpy.line.field_line import PropertyName
+from src.psr_magpy.line.field_line_set import FieldLineSet
 import logging
 import numpy as np
 
@@ -131,7 +131,7 @@ class FieldLineSetFitsIO(FitsIO):
             hdu = hdul["FIELD_LINES"]
             
             # Create template based on column names
-            from src.line.field_line import FieldLine
+            from src.psr_magpy.line.field_line import FieldLine
             template = FieldLine()
             column_names = [col.name.upper() for col in hdu.columns]
             for prop in PropertyName:

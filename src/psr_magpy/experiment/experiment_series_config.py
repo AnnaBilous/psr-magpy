@@ -7,11 +7,11 @@ from copy import deepcopy
 import os
 from datetime import datetime
 
-from src.footpoint_grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
-from src.line.calculator import TracingConfig
-from src.field.components import Parameters
-from src.experiment.field_factory_config import FieldComponentFactory, MultipoleFieldFactory
-from src.experiment.experiment_config import ExperimentConfig, GridConfig, OutputConfig, FieldComponentConfig
+from src.psr_magpy.grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
+from src.psr_magpy.line.calculator import TracingConfig
+from src.psr_magpy.field.components import Parameters
+from src.psr_magpy.experiment.field_factory_config import FieldComponentFactory, MultipoleFieldFactory
+from src.psr_magpy.experiment.experiment_config import ExperimentConfig, GridConfig, OutputConfig, FieldComponentConfig
 
 @dataclass
 class ExperimentSeriesConfig:
@@ -138,7 +138,7 @@ def run_experiment_series(config: ExperimentSeriesConfig, output_dir: Optional[s
     Returns:
         List of experiment results
     """
-    from src.experiment.run_experiment import run_experiment
+    from src.psr_magpy.experiment.run_experiment import run_experiment
     import logging
     
     logger = logging.getLogger(__name__)

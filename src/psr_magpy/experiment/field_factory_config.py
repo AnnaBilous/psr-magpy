@@ -8,7 +8,7 @@ import json
 import hashlib
 from datetime import datetime
 
-from src.field.components import MultipoleType, Parameters
+from src.psr_magpy.field.components import MultipoleType, Parameters
 @dataclass
 class FieldComponentFactory:
     """Configuration for a single magnetic field component."""

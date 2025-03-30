@@ -6,16 +6,16 @@ from typing import Tuple, List, Optional, Dict, Any
 import os
 import logging
 
-from src.line.tracer import FieldLineTracer
-from src.footpoint_grid.grid import FootpointGrid
-from src.line.field_line import FieldLine
-from src.line.field_line_set import FieldLineSet
+from src.psr_magpy.line.tracer import FieldLineTracer
+from src.psr_magpy.grid.grid import FootpointGrid
+from src.psr_magpy.line.field_line import FieldLine
+from src.psr_magpy.line.field_line_set import FieldLineSet
 
 import matplotlib.pyplot as plt
-from src.field.multipole import MultipoleField
+from src.psr_magpy.field.multipole import MultipoleField
 
 from multiprocessing import Pool
-from src.line.memory_manager import ResultsManager, MemoryConfig
+from src.psr_magpy.line.memory_manager import ResultsManager, MemoryConfig
 from dataclasses import dataclass
 from tqdm import tqdm
 

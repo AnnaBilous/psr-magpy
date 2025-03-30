@@ -1,11 +1,23 @@
-from utils import setup_demo
+#!/usr/bin/env python
+"""Demo for footpoint grid generation."""
 
-# Setup demo environment
-fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
+import argparse
+from pathlib import Path
+import sys
+
+# Import directly from the package
+from psr_magpy.cli.setup_environment import setup_environment
+
+# Set up environment
+env = setup_environment(output_dir=Path(__file__).parent / "output")
+logger = env['logger']
+fits_dir = env['directories']['fits']
+plot_dir = env['directories']['plots']
+log_dir = env['directories']['logs']
 
 import numpy as np
 import matplotlib.pyplot as plt
-from src.footpoint_grid.grid import HealpixGrid, SphericalGrid, RandomGrid
+from src.psr_magpy.grid.grid import HealpixGrid, SphericalGrid, RandomGrid
 
 
 def plot_grid_points(grid, title, save_path=None, show=True):

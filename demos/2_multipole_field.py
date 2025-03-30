@@ -1,17 +1,22 @@
-from utils import setup_demo
-# Setup demo environment
-fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
+#!/usr/bin/env python
+"""Demo for multipole magnetic field visualization."""
+
+from pathlib import Path
+
+# Import directly from the package
+from psr_magpy.cli.setup_environment import setup_environment
+
+# Set up environment
+env = setup_environment(output_dir=Path(__file__).parent / "output")
+logger = env['logger']
+fits_dir = env['directories']['fits']
+plot_dir = env['directories']['plots']
+log_dir = env['directories']['logs']
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-from src.field.components import (
-    DipoleFieldComponent,
-    QuadrupoleFieldComponent
-)
-from src.field.multipole import MultipoleField
-
-
+from src.psr_magpy.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
+from src.psr_magpy.field.multipole import MultipoleField
 
 def plot_field_lines_2d(field, title, save_path=None, show=True):
     """Plot magnetic field lines in the x-z plane.
@@ -61,15 +66,15 @@ def plot_field_lines_2d(field, title, save_path=None, show=True):
         logger.info(f"Saved plot to {save_path}")
     if show:
         plt.show()
-    plt.close()
+    
+    return fig, ax
 
 def main():
+    """Run the multipole field demo."""
     # 1. Demonstrate dipole field
     logger.info("Creating dipole field")
     dipole = DipoleFieldComponent(
-        B_magnitude=1.0,
         moment_orientation_latitude_degree=45.0,
-        moment_orientation_longitude_degree=0.0
     )
     dipole_field = MultipoleField([dipole])
     plot_field_lines_2d(
@@ -81,9 +86,7 @@ def main():
     # 2. Demonstrate quadrupole field
     logger.info("Creating quadrupole field")
     quadrupole = QuadrupoleFieldComponent(
-        B_magnitude=1.0,
-        moment_orientation_latitude_degree=0.0,
-        moment_orientation_longitude_degree=0.0
+         moment_orientation_latitude_degree=90.0,
     )
     quadrupole_field = MultipoleField([quadrupole])
     plot_field_lines_2d(
@@ -95,7 +98,7 @@ def main():
     # 3. Demonstrate combined field
     logger.info("Creating combined dipole + quadrupole field")
     # Reduce quadrupole strength for visualization
-    quadrupole.params = quadrupole.params._replace(B_magnitude=0.3)
+    
     combined_field = MultipoleField([dipole, quadrupole])
     plot_field_lines_2d(
         combined_field,
@@ -106,9 +109,7 @@ def main():
     # 4. Demonstrate offset dipole
     logger.info("Creating offset dipole field")
     offset_dipole = DipoleFieldComponent(
-        B_magnitude=1.0,
-        moment_orientation_latitude_degree=0.0,
-        moment_orientation_longitude_degree=0.0,
+        moment_orientation_latitude_degree=45.0,
         offset_r_ns=np.array([0.2, 0.0, 0.0])  # Offset in x direction
     )
     offset_field = MultipoleField([offset_dipole])
@@ -118,30 +119,8 @@ def main():
         plot_dir / "offset_dipole.png"
     )
     
-    # 5. Demonstrate field strength variation
-    logger.info("Calculating field strength along equator")
-    r = np.linspace(1.0, 5.0, 100)
-    x = np.array([r, np.zeros_like(r), np.zeros_like(r)])
-    
-    B_dipole = np.array([np.linalg.norm(dipole_field.get_total_field(x[:,i])) 
-                        for i in range(len(r))])
-    B_quad = np.array([np.linalg.norm(quadrupole_field.get_total_field(x[:,i])) 
-                      for i in range(len(r))])
-    
-    # Plot field strength falloff
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(r, B_dipole, label='Dipole (∝ r⁻³)')
-    ax.plot(r, B_quad, label='Quadrupole (∝ r⁻⁴)')
-    ax.set_xlabel('Distance (NS radii)')
-    ax.set_ylabel('|B| (arbitrary units)')
-    ax.set_title('Field Strength vs Distance')
-    ax.set_yscale('log')
-    ax.grid(True)
-    ax.legend()
-    
-    plt.savefig(plot_dir / "field_strength.png")
-    logger.info("Saved field strength plot")
-    plt.close()
+    # Show plots if running interactively
+    plt.show()
 
 if __name__ == "__main__":
     try:

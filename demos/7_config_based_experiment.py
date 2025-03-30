@@ -1,14 +1,25 @@
-from utils import setup_demo
-fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
+#!/usr/bin/env python
+"""Demo for multipole magnetic field visualization."""
 
+from pathlib import Path
 
-from src.experiment.experiment_config import (
+# Import directly from the package
+from psr_magpy.cli.setup_environment import setup_environment
+
+# Set up environment
+env = setup_environment(output_dir=Path(__file__).parent / "output")
+logger = env['logger']
+fits_dir = env['directories']['fits']
+plot_dir = env['directories']['plots']
+log_dir = env['directories']['logs']
+
+from src.psr_magpy.experiment.experiment_config import (
     ExperimentConfig, 
     GridConfig,
     FieldComponentConfig,
     OutputConfig
 )
-from src.line.calculator import TracingConfig
+from src.psr_magpy.line.calculator import TracingConfig
 
 
 def create_sample_config() -> ExperimentConfig:

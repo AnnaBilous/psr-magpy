@@ -6,9 +6,9 @@ from typing import Optional, Tuple
 import logging
 import psutil
 import numpy as np
-from src.line.field_line_set import FieldLineSet
-from src.line.tracer import FieldLineTracer
-from src.line.io import FieldLineSetFitsIO
+from src.psr_magpy.line.field_line_set import FieldLineSet
+from src.psr_magpy.line.tracer import FieldLineTracer
+from src.psr_magpy.line.io import FieldLineSetFitsIO
 logger = logging.getLogger(__name__)
 
 @dataclass

@@ -7,12 +7,12 @@ import traceback
 import json
 import glob
 
-from src.field.multipole import MultipoleField
-from src.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
-from src.footpoint_grid.grid import HealpixGrid
-from src.line.field_line import FieldLine
-from src.line.calculator import FieldLineCalculator
-from src.line.io import FieldLineSetFitsIO
+from src.psr_magpy.field.multipole import MultipoleField
+from src.psr_magpy.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
+from src.psr_magpy.grid.grid import HealpixGrid
+from src.psr_magpy.line.field_line import FieldLine
+from src.psr_magpy.line.calculator import FieldLineCalculator
+from src.psr_magpy.line.io import FieldLineSetFitsIO
 
 from .experiment_config import ExperimentConfig, TracingConfig
 

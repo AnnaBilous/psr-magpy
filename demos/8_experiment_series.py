@@ -1,24 +1,33 @@
-from utils import setup_demo
-# Setup demo environment
-fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
+#!/usr/bin/env python
+"""Demo for multipole magnetic field visualization."""
 
-from src.experiment.experiment_config import (
+from pathlib import Path
+
+# Import directly from the package
+from psr_magpy.cli.setup_environment import setup_environment
+
+# Set up environment
+env = setup_environment(output_dir=Path(__file__).parent / "output")
+logger = env['logger']
+fits_dir = env['directories']['fits']
+plot_dir = env['directories']['plots']
+log_dir = env['directories']['logs']
+
+from src.psr_magpy.experiment.experiment_config import (
     GridConfig,
     OutputConfig
 )
-from src.line.calculator import TracingConfig
-from src.experiment.field_factory_config import (
+from src.psr_magpy.line.calculator import TracingConfig
+from src.psr_magpy.experiment.field_factory_config import (
     FieldComponentFactory,
     MultipoleFieldFactory
 )
-from src.experiment.experiment_series_config import (
+from src.psr_magpy.experiment.experiment_series_config import (
     ExperimentSeriesConfig,
     run_experiment_series,
     resume_experiment_series,
     analyze_experiment_log
 )
-from src.field.components import MultipoleType
-import os
 
 def create_sample_series_config() -> ExperimentSeriesConfig:
     """Create a sample experiment series configuration."""

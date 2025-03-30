@@ -11,10 +11,10 @@ import time
 import traceback
 from typing import Dict, Optional
 
-from src.field.multipole import MultipoleField
-from src.footpoint_grid.grid import FootpointGrid
-from src.line.field_line import FieldLine
-from src.line.calculator import FieldLineCalculator
+from src.psr_magpy.field.multipole import MultipoleField
+from src.psr_magpy.grid.grid import FootpointGrid
+from src.psr_magpy.line.field_line import FieldLine
+from src.psr_magpy.line.calculator import FieldLineCalculator
 
 from .experiment_config import ExperimentConfig, TracingConfig
 from .run_experiment import log_experiment_status, get_file_size
@@ -258,5 +258,5 @@ def run_experiment_pipeline(config: ExperimentConfig, experiment_number: int = 1
     
 if __name__ == "__main__":
     # Example usage
-    from configs.standard_configs import sparse_meridional_field_lines_config
+    from src.psr_magpy.experiment.experiment_config import sparse_meridional_field_lines_config
     run_experiment_pipeline(sparse_meridional_field_lines_config, experiment_number=1)

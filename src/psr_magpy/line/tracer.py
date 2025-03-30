@@ -1,7 +1,7 @@
 import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
 from scipy.integrate import solve_ivp
-from src.line.field_line import FieldLine
+from src.psr_magpy.line.field_line import FieldLine
 import logging
 
 # Initialize logger

@@ -23,4 +23,16 @@ dev = [
     "pytest>=7.0.0",
     "black>=22.0.0",
     "flake8>=4.0.0",
-] 
+]
+
+[tool.setuptools]
+packages = ["psr_magpy"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.data-files]
+"share/psr_magpy" = ["README.md"]
+
+
+[project.scripts]
+psr-magpy-setup = "psr_magpy.cli.setup_environment:main"
+psr-magpy-setup-env = "psr_magpy.cli.setup_environment:main" 

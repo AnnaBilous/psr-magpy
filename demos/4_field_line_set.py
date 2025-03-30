@@ -1,10 +1,21 @@
-from utils import setup_demo
-# Setup demo environment
-fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
+#!/usr/bin/env python
+"""Demo for multipole magnetic field visualization."""
+
+from pathlib import Path
+
+# Import directly from the package
+from psr_magpy.cli.setup_environment import setup_environment
+
+# Set up environment
+env = setup_environment(output_dir=Path(__file__).parent / "output")
+logger = env['logger']
+fits_dir = env['directories']['fits']
+plot_dir = env['directories']['plots']
+log_dir = env['directories']['logs']
 
 import numpy as np
-from src.line.field_line_set import FieldLineSet
-from src.line.field_line import FieldLine
+from src.psr_magpy.line.field_line_set import FieldLineSet
+from src.psr_magpy.line.field_line import FieldLine
 
 
 def create_sample_field_line(footpoint_id: int, scale: float = 1.0) -> FieldLine:

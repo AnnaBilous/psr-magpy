@@ -1,19 +1,29 @@
-from utils import setup_demo
-# Setup demo environment
-fits_dir, plot_dir, log_dir, logger = setup_demo(__file__)
+#!/usr/bin/env python
+"""Demo for multipole magnetic field visualization."""
+
+from pathlib import Path
+
+# Import directly from the package
+from psr_magpy.cli.setup_environment import setup_environment
+
+# Set up environment
+env = setup_environment(output_dir=Path(__file__).parent / "output")
+logger = env['logger']
+fits_dir = env['directories']['fits']
+plot_dir = env['directories']['plots']
+log_dir = env['directories']['logs']
 
 import os
-from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime
 
-
-from src.field.multipole import MultipoleField
-from src.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
-from src.footpoint_grid.grid import HealpixGrid
-from src.line.field_line import FieldLine
-from src.line.calculator import FieldLineCalculator, TracingConfig
-from src.line.io import FieldLineSetFitsIO
+from src.psr_magpy.field.multipole import MultipoleField
+from src.psr_magpy.field.components import DipoleFieldComponent, QuadrupoleFieldComponent
+from src.psr_magpy.grid.grid import HealpixGrid
+from src.psr_magpy.line.field_line import FieldLine
+from src.psr_magpy.line.calculator import FieldLineCalculator, TracingConfig
+from src.psr_magpy.line.io import FieldLineSetFitsIO
 
 
 def plot_field_lines(field_lines, save_path=None):
