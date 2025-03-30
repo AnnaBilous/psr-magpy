@@ -1,15 +1,18 @@
 import glob
+import logging
 import os
+import psutil
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-import logging
-import psutil
 import numpy as np
-from src.psr_magpy.line.field_line_set import FieldLineSet
-from src.psr_magpy.line.tracer import FieldLineTracer
-from src.psr_magpy.line.io import FieldLineSetFitsIO
+
+from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.line.io import FieldLineSetFitsIO
+from psr_magpy.line.tracer import FieldLineTracer
+
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class MemoryConfig:
@@ -57,7 +60,12 @@ class MemoryConfig:
         n_cores = max(1, n_cores)
         max_cores = psutil.cpu_count()
         if n_cores > max_cores:
-            logger.warning("Requested %d cores, but only %d available. Using %d cores.", n_cores, max_cores, max_cores)
+            logger.warning(
+                "Requested %d cores, but only %d available. Using %d cores.",
+                n_cores,
+                max_cores,
+                max_cores,
+            )
             n_cores = max_cores
 
         logger.info("Using %d CPU cores", n_cores)
@@ -90,17 +98,21 @@ class ResultsManager:
         """
         self.memory_config = config
         self._total_memory = psutil.virtual_memory().total
-        self._results_in_memory: FieldLineSet = None  # Initialize as an empty FieldLineSet
+        self._results_in_memory: FieldLineSet = (
+            None  # Initialize as an empty FieldLineSet
+        )
         self._results_in_memory_size: float = 0.0
         self.tracer = tracer
         logger.info("ResultsManager initialized with memory config: %s", config)
 
     def __repr__(self) -> str:
         """Return a string representation of the ResultsManager instance."""
-        return (f"<ResultsManager(memory_config={self.memory_config}, "
-                f"total_memory={self._total_memory:.2f}, "
-                f"results_in_memory_size={self._results_in_memory_size:.2f}, "
-                f"total_field_lines_in_memory={len(self._results_in_memory.field_lines)})>")
+        return (
+            f"<ResultsManager(memory_config={self.memory_config}, "
+            f"total_memory={self._total_memory:.2f}, "
+            f"results_in_memory_size={self._results_in_memory_size:.2f}, "
+            f"total_field_lines_in_memory={len(self._results_in_memory.field_lines)})>"
+        )
 
     @property
     def available_memory(self) -> float:
@@ -178,19 +190,20 @@ class ResultsManager:
             self._results_in_memory = batch_results
         else:
             self._results_in_memory.append(batch_results)
-            
 
         self._results_in_memory_size = self._results_in_memory.estimate_size()
-        logger.info("Results in memory size: %.1f MB", self._results_in_memory_size / (1024 * 1024))
+        logger.info(
+            "Results in memory size: %.1f MB",
+            self._results_in_memory_size / (1024 * 1024),
+        )
 
         if self.should_write_batch(self._results_in_memory_size / (1024 * 1024)):
             logger.info("Writing batch %d to disk", batch_idx)
             print("Writing batch %d to disk", batch_idx)
-            footpoint_ids = self._results_in_memory.get_property('footpoint_id')
+            footpoint_ids = self._results_in_memory.get_property("footpoint_id")
 
             suffix = f"{int(np.min(footpoint_ids))}_{int(np.max(footpoint_ids))}"
             self.write_results_to_disk(filename, suffix)
-            
 
         return self._results_in_memory
 
@@ -205,7 +218,7 @@ class ResultsManager:
             logger.info("Writing results to disk for indices %s", suffix)
             line_io = FieldLineSetFitsIO(self._results_in_memory)
             line_io.save_to_fits(f"{filename}_batch_{suffix}.fits")
-            
+
             logger.info("Results written to %s_batch_%s.fits", filename, suffix)
             logger.debug("Clearing in-memory results after writing to disk.")
             self._results_in_memory_size = 0
@@ -219,26 +232,26 @@ class ResultsManager:
         """
         directory = os.path.dirname(filename)
         base_name = os.path.splitext(os.path.basename(filename))[0]
-        
+
         pattern = f"{base_name}_batch_*.fits"
         if directory:
             pattern = os.path.join(directory, pattern)
-        
+
         files = sorted(
             glob.glob(pattern),
-            key=lambda x: int(x.split('_batch_')[1].split('.fits')[0])
+            key=lambda x: int(x.split("_batch_")[1].split(".fits")[0]),
         )
         total_files = len(files)
-        
+
         if total_files == 0:
             logger.warning("No batch files found to rename for %s", filename)
             return
-        
+
         for i, old_file in enumerate(files, 1):
             new_name = f"{base_name}_{i}_of_{total_files}.fits"
             if directory:
                 new_name = os.path.join(directory, new_name)
-            
+
             try:
                 os.rename(old_file, new_name)
                 logger.info("Renamed %s to %s", old_file, new_name)

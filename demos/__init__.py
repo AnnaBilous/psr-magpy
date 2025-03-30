@@ -1,1 +1,1 @@
-"""Demo scripts showcasing functionality.""" 
+"""Demo scripts showcasing functionality."""

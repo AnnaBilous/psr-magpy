@@ -1,11 +1,16 @@
-import numpy as np
-from astropy.coordinates.representation import CartesianRepresentation
-from scipy.integrate import solve_ivp
-from src.psr_magpy.line.field_line import FieldLine
 import logging
+
+import numpy as np
+from scipy.integrate import solve_ivp
+
+from astropy.coordinates.representation import CartesianRepresentation
+
+from psr_magpy.line.field_line import FieldLine
+
 
 # Initialize logger
 logger = logging.getLogger(__name__)
+
 
 class FieldLineTracer:
     def __init__(self, field, R_max=10.0, R_min=1.0, dt=0.01):
@@ -27,7 +32,7 @@ class FieldLineTracer:
 
     def hit_surface(self, t, r, K):
         r = np.sum(r**2) ** 0.5
-        return r - 0.999999 
+        return r - 0.999999
 
     hit_surface.terminal = True
 
@@ -125,15 +130,25 @@ class FieldLineTracer:
             r_line_arg = None  # Don't save line at all
 
         kwargs = {
-            'footpoint_id': footpoint_id,
-            'r_line': r_line_arg,
-            'r_max': R_max if template.save_flags.save_r_max else None,
-            'r_cyl_max': np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5) if template.save_flags.save_r_cyl_max else None,
-            'z_abs_max': np.max(np.abs(r[2, :])) if template.save_flags.save_z_abs_max else None,
-            'b_ini': np.sum(B_initial**2) ** 0.5 if template.save_flags.save_b_ini else None,
-            'b_r_ini_angle': np.arccos(dotprod) if template.save_flags.save_b_r_ini_angle else None
+            "footpoint_id": footpoint_id,
+            "r_line": r_line_arg,
+            "r_max": R_max if template.save_flags.save_r_max else None,
+            "r_cyl_max": (
+                np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
+                if template.save_flags.save_r_cyl_max
+                else None
+            ),
+            "z_abs_max": (
+                np.max(np.abs(r[2, :])) if template.save_flags.save_z_abs_max else None
+            ),
+            "b_ini": (
+                np.sum(B_initial**2) ** 0.5 if template.save_flags.save_b_ini else None
+            ),
+            "b_r_ini_angle": (
+                np.arccos(dotprod) if template.save_flags.save_b_r_ini_angle else None
+            ),
         }
-        
+
         # Remove None values from kwargs
         kwargs = {k: v for k, v in kwargs.items() if v is not None}
 
@@ -144,4 +159,3 @@ class FieldLineTracer:
             dR = np.median(np.sum(dr**2, axis=0) ** 0.5)
             output.dR = dR
         return output
-

@@ -1,4 +1,5 @@
 """Utility functions for tests."""
+
 import sys
 from pathlib import Path
 import logging
@@ -13,32 +14,35 @@ if str(project_root) not in sys.path:
 
 # Configure astropy logging
 import astropy
-astropy.conf.logging_level = 'WARNING'
+
+astropy.conf.logging_level = "WARNING"
 
 # Import project utilities
 from src.utils.logging_config import setup_logging, LogLevels
 
+
 def setup_test_logger(test_name: str) -> logging.Logger:
     """Set up logging for tests.
-    
+
     Parameters
     ----------
     test_name : str
         Name of the test module
-        
+
     Returns
     -------
     logging.Logger
         Configured logger
     """
     setup_logging(
-        log_level='DEBUG',
+        log_level="DEBUG",
         handler_levels={
-            'console': LogLevels.CONSOLE,
-            'file': None  # No file logging for tests
-        }
+            "console": LogLevels.CONSOLE,
+            "file": None,  # No file logging for tests
+        },
     )
     return logging.getLogger(test_name)
+
 
 @pytest.fixture
 def temp_dir():
@@ -46,13 +50,15 @@ def temp_dir():
     with tempfile.TemporaryDirectory() as tmp_dir:
         yield Path(tmp_dir)
 
+
 @pytest.fixture
 def temp_fits_file():
     """Provide temporary file path for FITS testing."""
-    with tempfile.NamedTemporaryFile(suffix='.fits') as f:
+    with tempfile.NamedTemporaryFile(suffix=".fits") as f:
         yield Path(f.name)
+
 
 @pytest.fixture
 def rng():
     """Provide numpy random number generator with fixed seed."""
-    return np.random.default_rng(42) 
+    return np.random.default_rng(42)

@@ -1,9 +1,12 @@
 from astropy.io import fits as pf
 
-from src.fitsio.base import FitsIO
-from src.field.components import MultipoleType, DipoleFieldComponent, QuadrupoleFieldComponent
-from src.field.multipole import MultipoleField
-
+from psr_magpy.fitsio.base import FitsIO
+from psr_magpy.field.components import (
+    MultipoleType,
+    DipoleFieldComponent,
+    QuadrupoleFieldComponent,
+)
+from psr_magpy.field.multipole import MultipoleField
 
 
 class FieldComponentFitsIO(FitsIO):
@@ -11,12 +14,12 @@ class FieldComponentFitsIO(FitsIO):
 
     def __init__(self, field: MultipoleField):
         """Initialize with a MultipoleField instance.
-        
+
         Parameters
         ----------
         field : MultipoleField
             The multipole field to save/load
-        
+
         Raises
         ------
         TypeError
@@ -28,7 +31,7 @@ class FieldComponentFitsIO(FitsIO):
 
     def get_hdu_name(self) -> str:
         """Get the name for the FITS HDU.
-        
+
         Returns
         -------
         str
@@ -39,9 +42,9 @@ class FieldComponentFitsIO(FitsIO):
     def generate_column_info(self):
         """Generate column information for field component data."""
         first_component = self.field.field_components[0]
-       
+
         params_dict = first_component.params._asdict()
-        
+
         column_info = {
             param_name: (
                 FitsIO.FITS_TYPE_MAPPING[str]
@@ -52,9 +55,9 @@ class FieldComponentFitsIO(FitsIO):
                     else FitsIO.get_fits_format(param_value)
                 )
             )
-            for param_name, param_value in params_dict.items()         
+            for param_name, param_value in params_dict.items()
         }
-        
+
         return column_info
 
     def create_column(self, key: str, format: str):
@@ -69,39 +72,38 @@ class FieldComponentFitsIO(FitsIO):
     @classmethod
     def load_from_fits(cls, fitsname: str) -> MultipoleField:
         """Load MultipoleField from a FITS file.
-        
+
         Parameters
         ----------
         fitsname : str
             Path to the FITS file
-            
+
         Returns
         -------
         MultipoleField
             Loaded multipole field instance
         """
         with pf.open(fitsname) as hdulist:
-            field_data = hdulist['FIELD_COMPONENTS'].data
+            field_data = hdulist["FIELD_COMPONENTS"].data
             n_components = field_data.shape[0]
             components = []
-            
+
             for i in range(n_components):
-                moment_type = MultipoleType(field_data['moment_type'][i])
+                moment_type = MultipoleType(field_data["moment_type"][i])
                 if moment_type == MultipoleType.DIPOLE:
                     component_class = DipoleFieldComponent
                 elif moment_type == MultipoleType.QUADRUPOLE:
                     component_class = QuadrupoleFieldComponent
                 else:
                     raise ValueError(f"Unsupported multipole type: {moment_type}")
-                
+
                 component_params = {
-                    key: field_data[key][i] for key in field_data.columns.names
-                    if key != 'moment_type'  # Handle moment_type separately
+                    key: field_data[key][i]
+                    for key in field_data.columns.names
+                    if key != "moment_type"  # Handle moment_type separately
                 }
 
                 component = component_class(**component_params)
                 components.append(component)
-            
+
             return MultipoleField(components)
-
-

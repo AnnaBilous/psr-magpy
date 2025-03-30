@@ -2,4 +2,4 @@
 
 from .base import FitsIO
 
-__all__ = ['FitsIO', 'FITS_TYPE_MAPPING'] 
+__all__ = ["FitsIO", "FITS_TYPE_MAPPING"]

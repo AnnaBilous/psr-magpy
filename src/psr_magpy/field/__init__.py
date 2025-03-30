@@ -12,11 +12,11 @@ from .components import (
 from .multipole import MultipoleField
 
 __all__ = [
-    'MultipoleType',
-    'FieldComponent',
-    'DipoleFieldComponent',
-    'QuadrupoleFieldComponent',
-    'MultipoleField',
+    "MultipoleType",
+    "FieldComponent",
+    "DipoleFieldComponent",
+    "QuadrupoleFieldComponent",
+    "MultipoleField",
 ]
 
-"""Magnetic field components and calculations.""" 
+"""Magnetic field components and calculations."""

@@ -1,25 +1,28 @@
 """Base classes for FITS I/O operations."""
 
-import astropy.io.fits as pf
-from typing import Any, Dict, Type
 import logging
+from typing import Dict
+
 from numpy import ndarray, integer, floating
+
+import astropy.io.fits as pf
 
 # Setup logging
 log_file = "test.log"
 
 # Suppress matplotlib debug messages
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler(log_file),
-        logging.StreamHandler()  # This will print to console as well
-    ]
+        logging.StreamHandler(),  # This will print to console as well
+    ],
 )
 logger = logging.getLogger(__name__)
+
 
 class FitsIO:
     """Base class for FITS I/O operations."""
@@ -29,7 +32,7 @@ class FitsIO:
         int: "I",
         str: "10A",
         list: "PE",  # Variable-length array of doubles
-        ndarray: "D",  
+        ndarray: "D",
         integer: "I",  # numpy integers
         floating: "D",  # numpy floats
     }
@@ -37,12 +40,12 @@ class FitsIO:
     @staticmethod
     def get_fits_format(value):
         """Helper function to determine FITS format for a value.
-        
+
         Parameters
         ----------
         value : Any
             The value to determine FITS format for
-            
+
         Returns
         -------
         str
@@ -60,7 +63,7 @@ class FitsIO:
         ----------
         filename : str
             Path to the output FITS file
-            
+
         Raises
         ------
         Exception
@@ -79,12 +82,12 @@ class FitsIO:
 
     def create_hdu(self) -> pf.BinTableHDU:
         """Create a FITS HDU from the data.
-        
+
         Returns
         -------
         pf.BinTableHDU
             FITS binary table HDU containing the data
-            
+
         Raises
         ------
         Exception
@@ -104,7 +107,7 @@ class FitsIO:
 
     def get_hdu_name(self) -> str:
         """Get the name for the FITS HDU.
-        
+
         Returns
         -------
         str
@@ -114,12 +117,12 @@ class FitsIO:
 
     def generate_column_info(self) -> Dict[str, str]:
         """Generate column information for the FITS table.
-        
+
         Returns
         -------
         Dict[str, str]
             Dictionary mapping column names to their FITS format strings
-            
+
         Raises
         ------
         NotImplementedError
@@ -129,19 +132,19 @@ class FitsIO:
 
     def create_column(self, key: str, format: str) -> pf.Column:
         """Create a FITS column for the given key and format.
-        
+
         Parameters
         ----------
         key : str
             Column name
         format : str
             FITS format string for the column
-            
+
         Returns
         -------
         pf.Column
             FITS column object
-            
+
         Raises
         ------
         NotImplementedError
@@ -150,7 +153,7 @@ class FitsIO:
         raise NotImplementedError("Subclasses must implement create_column")
 
     @classmethod
-    def load_from_fits(cls, hdu: pf.BinTableHDU) -> 'FitsIO':
+    def load_from_fits(cls, hdu: pf.BinTableHDU) -> "FitsIO":
         """Load data from a FITS HDU.
 
         Parameters
@@ -162,7 +165,7 @@ class FitsIO:
         -------
         FitsIO
             Instance of the class
-            
+
         Raises
         ------
         Exception
@@ -176,4 +179,4 @@ class FitsIO:
             return cls(data)
         except Exception as e:
             logger.error(f"Failed to load data from FITS: {e}")
-            raise 
+            raise

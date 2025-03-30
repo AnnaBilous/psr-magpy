@@ -6,3 +6,4 @@
 /demos/output
 /logs
 .sw?
+src/psr_magpy/*/__pycache__
