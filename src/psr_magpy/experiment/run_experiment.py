@@ -104,15 +104,97 @@ def log_experiment_status(
 
 
 def run_experiment(config: ExperimentConfig, experiment_number=1, log_file=None):
-    """Run field line calculation experiment using the provided configuration.
-
-    Args:
-        config: Experiment configuration
-        experiment_number: Number of the experiment in the series (default: 1)
-        log_file: Path to the log file (default: None)
-
-    Returns:
-        Results of the experiment or None if save_results is True
+    """
+    Run field line calculation experiment using the provided configuration.
+    
+    This function sets up and executes a pulsar magnetosphere simulation based on
+    the provided configuration. It handles field component creation, grid setup,
+    and field line calculations.
+    
+    Parameters
+    ----------
+    config : ExperimentConfig
+        Experiment configuration object containing all settings for the experiment.
+    experiment_number : int, optional
+        Number of the experiment in the series. Default is 1.
+    log_file : str, optional
+        Path to the log file. If None, a default log file is created in the output directory.
+        
+    Returns
+    -------
+    object
+        Results of the experiment, typically field line data.
+        
+    Raises
+    ------
+    TypeError
+        If field components are not properly configured.
+    ValueError
+        If configuration parameters are invalid.
+    IOError
+        If output files cannot be written.
+        
+    Notes
+    -----
+    The function logs experiment progress and results to both a log file and the
+    console using the logging module.
+    
+    Examples
+    --------
+    >>> from psr_magpy.experiment.experiment_config import ExperimentConfig
+    >>> from psr_magpy.field.components import DipoleFieldComponent
+    >>> from psr_magpy.grid.grid_config import GridConfig
+    >>> from psr_magpy.experiment.output_config import OutputConfig
+    >>> from psr_magpy.experiment.tracing_config import TracingConfig
+    
+    Basic experiment with a dipole field:
+    
+    >>> # Create field component configuration
+    >>> field_config = FieldComponentConfig(
+    ...     component_type="dipole",
+    ...     parameters={"strength": 1.0}
+    ... )
+    
+    >>> # Create grid configuration
+    >>> grid_config = GridConfig(
+    ...     grid_type="polar",
+    ...     parameters={"r_max": 5.0, "n_r": 10, "n_theta": 20}
+    ... )
+    
+    >>> # Create output configuration
+    >>> output_config = OutputConfig(
+    ...     output_dir="./results",
+    ...     save_coordinates=True,
+    ...     save_field=True
+    ... )
+    
+    >>> # Create tracing configuration
+    >>> tracing_config = TracingConfig(
+    ...     step_size=0.01,
+    ...     max_steps=1000,
+    ...     min_radius=1.0
+    ... )
+    
+    >>> # Create experiment configuration
+    >>> config = ExperimentConfig(
+    ...     name="dipole_test",
+    ...     field_components=[field_config],
+    ...     grid=grid_config,
+    ...     output=output_config,
+    ...     tracing=tracing_config
+    ... )
+    
+    >>> # Run the experiment
+    >>> results = run_experiment(config)
+    
+    Running an experiment with a custom log file:
+    
+    >>> results = run_experiment(config, experiment_number=2, log_file="custom_log.txt")
+    
+    See Also
+    --------
+    ExperimentConfig : Configuration class for experiments
+    FieldLineCalculator : Core calculator for field line tracing
     """
     start_time = time.time()
 
@@ -134,6 +216,7 @@ def run_experiment(config: ExperimentConfig, experiment_number=1, log_file=None)
         field_components = [
             comp_config.create_component() for comp_config in config.field_components
         ]
+                
         field = MultipoleField(field_components)
 
         # Create grid

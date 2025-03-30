@@ -1,0 +1,67 @@
+/* Custom styles for scientific documentation */
+
+/* Equation styling */
+.math {
+    font-size: 1.1em;
+    margin: 1.5em 0;
+}
+
+/* Parameter tables */
+.field-list dt {
+    font-weight: bold;
+    color: #2980b9;
+}
+
+/* Code blocks */
+div[class^="highlight"] {
+    border-radius: 4px;
+    border-left: 3px solid #2980b9;
+}
+
+/* Example admonitions */
+.admonition.example {
+    background-color: #e8f4f8;
+    border-left-color: #2980b9;
+}
+
+.admonition.example .admonition-title {
+    background-color: #2980b9;
+}
+
+/* Notes admonitions */
+.admonition.note {
+    background-color: #f8f8e8;
+    border-left-color: #b08c2e;
+}
+
+.admonition.note .admonition-title {
+    background-color: #b08c2e;
+}
+
+/* Units in parameter descriptions */
+.classifier {
+    font-style: italic;
+    color: #555;
+}
+
+/* Improve table readability */
+table.docutils {
+    width: 100%;
+    margin-bottom: 1.5em;
+}
+
+table.docutils td, table.docutils th {
+    padding: 8px;
+    border: 1px solid #e1e4e5;
+}
+
+table.docutils tr:nth-child(odd) {
+    background-color: #f3f6f6;
+}
+
+/* Improve function signature display */
+dl.py.method > dt, dl.py.function > dt {
+    background-color: #f8f8f8;
+    border-left: 3px solid #2980b9;
+    padding: 6px 8px;
+} 
