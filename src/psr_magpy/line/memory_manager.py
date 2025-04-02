@@ -10,8 +10,9 @@ import numpy as np
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.io import FieldLineSetFitsIO
 from psr_magpy.line.tracer import FieldLineTracer
+from psr_magpy.utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, console_format_brief=True)
 
 
 @dataclass
@@ -41,6 +42,7 @@ class MemoryConfig:
     def __post_init__(self) -> None:
         """Setup number of cores after initialization."""
         self.n_cores = self._setup_cores(self.n_cores)
+        logger.debug(f"MemoryConfig initialized: {self}")
 
     def _setup_cores(self, n_cores: Optional[int] = None) -> int:
         """Setup and validate the number of CPU cores to use.
@@ -54,22 +56,29 @@ class MemoryConfig:
         Raises:
             ValueError: If the requested number of cores exceeds available cores.
         """
+        available_cores = psutil.cpu_count(logical=False) or psutil.cpu_count()
+        logger.debug(f"Available physical cores: {available_cores}")
+        
         if n_cores is None:
-            n_cores = psutil.cpu_count(logical=False) or psutil.cpu_count()
+            n_cores = available_cores
+            logger.debug(f"No core count specified, using all available cores: {n_cores}")
 
         n_cores = max(1, n_cores)
         max_cores = psutil.cpu_count()
         if n_cores > max_cores:
-            logger.warning(
-                "Requested %d cores, but only %d available. Using %d cores.",
-                n_cores,
-                max_cores,
-                max_cores,
-            )
+            warning_msg = f"Requested {n_cores} cores, but only {max_cores} available. Using {max_cores} cores."
+            logger.warning(warning_msg)
             n_cores = max_cores
 
-        logger.info("Using %d CPU cores", n_cores)
+        logger.info(f"Using {n_cores} CPU cores for processing")
         return n_cores
+        
+    def __repr__(self) -> str:
+        """Return string representation of memory configuration."""
+        return (f"MemoryConfig(max_memory_mb={self.max_memory_mb}, "
+                f"safety_factor={self.safety_factor}, "
+                f"max_batch_size={self.max_batch_size}, "
+                f"n_cores={self.n_cores})")
 
 
 class ResultsManager:
@@ -98,21 +107,45 @@ class ResultsManager:
         """
         self.memory_config = config
         self._total_memory = psutil.virtual_memory().total
-        self._results_in_memory: FieldLineSet = (
-            None  # Initialize as an empty FieldLineSet
-        )
+        self._results_in_memory: FieldLineSet = None
         self._results_in_memory_size: float = 0.0
         self.tracer = tracer
-        logger.info("ResultsManager initialized with memory config: %s", config)
+        
+        logger.info(f"ResultsManager initialized with {config.max_memory_mb} MB memory limit")
+        logger.debug(f"Total system memory: {self._total_memory / (1024*1024*1024):.2f} GB")
+        logger.debug(f"Memory safety factor: {config.safety_factor}")
 
     def __repr__(self) -> str:
         """Return a string representation of the ResultsManager instance."""
+        memory_mb = self._results_in_memory_size / (1024 * 1024)
+        result_count = 0
+        if self._results_in_memory is not None:
+            result_count = self._results_in_memory.n_field_lines
+            
         return (
-            f"<ResultsManager(memory_config={self.memory_config}, "
-            f"total_memory={self._total_memory:.2f}, "
-            f"results_in_memory_size={self._results_in_memory_size:.2f}, "
-            f"total_field_lines_in_memory={len(self._results_in_memory.field_lines)})>"
+            f"ResultsManager(memory_config={self.memory_config}, "
+            f"results_size={memory_mb:.2f} MB, "
+            f"field_lines_in_memory={result_count})"
         )
+
+    def get_memory_stats(self) -> dict:
+        """Get current memory usage statistics.
+        
+        Returns:
+            dict: Dictionary with memory statistics
+        """
+        vm = psutil.virtual_memory()
+        stats = {
+            "total_gb": vm.total / (1024**3),
+            "available_gb": vm.available / (1024**3),
+            "used_gb": vm.used / (1024**3),
+            "percent_used": vm.percent,
+            "results_mb": self._results_in_memory_size / (1024**2) if self._results_in_memory_size else 0
+        }
+        
+        logger.debug(f"Memory stats: {stats['percent_used']:.1f}% used, "
+                    f"{stats['available_gb']:.2f} GB available")
+        return stats
 
     @property
     def available_memory(self) -> float:
@@ -121,42 +154,50 @@ class ResultsManager:
         Returns:
             float: Available memory in megabytes.
         """
-        return psutil.virtual_memory().available / (1024 * 1024)
+        available = psutil.virtual_memory().available / (1024 * 1024)
+        logger.debug(f"Available memory: {available:.2f} MB")
+        return available
 
-    def find_batch_size(
-        self,
-        estimated_line_size: float,
-    ) -> Tuple[int, float]:
-        """Determine optimal batch size based on performance testing.
+    def find_batch_size(self, estimated_line_size: float) -> int:
+        """Determine optimal batch size based on memory constraints.
 
         Args:
-            template: Template for field line calculation.
+            estimated_line_size: Estimated size of a single field line in bytes.
 
         Returns:
-            Tuple[int, float]: Optimal batch size and estimated line size.
+            int: Optimal batch size.
 
         Raises:
             ValueError: If requested memory exceeds system limits.
         """
         available_memory_mb = psutil.virtual_memory().available / (1024 * 1024)
-        logger.info("Available memory: %.1f MB", available_memory_mb)
-        logger.info("Number of CPU cores to use: %d", self.memory_config.n_cores)
-
+        logger.info(f"Available memory: {available_memory_mb:.1f} MB")
+        
+        # Calculate total memory needed across all cores
         max_memory_total = self.memory_config.max_memory_mb * self.memory_config.n_cores
-        logger.info("Max memory total: %.1f MB", max_memory_total)
+        logger.info(f"Maximum memory allocation: {max_memory_total:.1f} MB ({self.memory_config.n_cores} cores)")
 
-        if max_memory_total > self.memory_config.safety_factor * available_memory_mb:
-            raise ValueError(
+        # Check if we're exceeding safe memory limits
+        safe_memory_limit = self.memory_config.safety_factor * available_memory_mb
+        if max_memory_total > safe_memory_limit:
+            error_msg = (
                 f"Requested memory ({max_memory_total:.1f} MB) exceeds "
                 f"{self.memory_config.safety_factor*100:.1f}% of available system memory "
                 f"({available_memory_mb:.1f} MB)"
             )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
-        max_batch_size = int(
-            (self.memory_config.max_memory_mb * 1024 * 1024) / estimated_line_size
-        )
-        logger.info("Max batch size based on memory limit: %d", max_batch_size)
-
+        # Calculate batch size based on memory constraints
+        estimated_line_size_mb = estimated_line_size / (1024 * 1024)
+        logger.debug(f"Estimated size per field line: {estimated_line_size_mb:.4f} MB")
+        
+        max_batch_size = int(self.memory_config.max_memory_mb / estimated_line_size_mb)
+        max_batch_size = min(max_batch_size, self.memory_config.max_batch_size)
+        
+        logger.info(f"Calculated batch size: {max_batch_size} field lines")
+        logger.debug(f"Estimated memory per batch: {max_batch_size * estimated_line_size_mb:.2f} MB")
+        
         return max_batch_size
 
     def should_write_batch(self, current_size_mb: float) -> bool:
@@ -168,10 +209,16 @@ class ResultsManager:
         Returns:
             bool: True if the batch should be written to disk, False otherwise.
         """
-        return (
-            current_size_mb >= self.memory_config.max_memory_mb
-            or self.available_memory < self.memory_config.max_memory_mb
-        )
+        memory_limit_exceeded = current_size_mb >= self.memory_config.max_memory_mb
+        available_memory_low = self.available_memory < self.memory_config.max_memory_mb
+        
+        if memory_limit_exceeded:
+            logger.debug(f"Memory limit exceeded: {current_size_mb:.2f} MB > {self.memory_config.max_memory_mb:.2f} MB")
+        
+        if available_memory_low:
+            logger.debug(f"Available memory low: {self.available_memory:.2f} MB < {self.memory_config.max_memory_mb:.2f} MB")
+            
+        return memory_limit_exceeded or available_memory_low
 
     def add_results(
         self, batch_results: FieldLineSet, filename: str, batch_idx: int
@@ -186,23 +233,28 @@ class ResultsManager:
         Returns:
             FieldLineSet: Current results as a FieldLineSet.
         """
+        logger.debug(f"Adding batch results with {batch_results.n_field_lines} field lines")
+        
         if self._results_in_memory is None:
             self._results_in_memory = batch_results
+            logger.debug("Initialized results in memory with first batch")
         else:
+            logger.debug(f"Appending {batch_results.n_field_lines} field lines to existing {self._results_in_memory.n_field_lines}")
             self._results_in_memory.append(batch_results)
 
+        # Update size tracking
         self._results_in_memory_size = self._results_in_memory.estimate_size()
-        logger.info(
-            "Results in memory size: %.1f MB",
-            self._results_in_memory_size / (1024 * 1024),
-        )
+        memory_mb = self._results_in_memory_size / (1024 * 1024)
+        logger.info(f"Results in memory: {self._results_in_memory.n_field_lines} field lines, {memory_mb:.2f} MB")
 
-        if self.should_write_batch(self._results_in_memory_size / (1024 * 1024)):
-            logger.info("Writing batch %d to disk", batch_idx)
-            print("Writing batch %d to disk", batch_idx)
+        # Check if we need to write to disk
+        if self.should_write_batch(memory_mb):
+            logger.info(f"Memory threshold reached, writing batch {batch_idx} to disk")
+            
+            # Get range of footpoint IDs for filename
             footpoint_ids = self._results_in_memory.get_property("footpoint_id")
-
             suffix = f"{int(np.min(footpoint_ids))}_{int(np.max(footpoint_ids))}"
+            
             self.write_results_to_disk(filename, suffix)
 
         return self._results_in_memory
@@ -212,17 +264,30 @@ class ResultsManager:
 
         Args:
             filename: Base filename for output.
-            batch_idx: Current batch index.
+            suffix: Suffix to append to filename (typically footpoint ID range).
         """
-        if self._results_in_memory:
-            logger.info("Writing results to disk for indices %s", suffix)
+        if self._results_in_memory is None or self._results_in_memory.n_field_lines == 0:
+            logger.warning("No results in memory to write to disk")
+            return
+            
+        output_filename = f"{filename}_batch_{suffix}.fits"
+        logger.info(f"Writing {self._results_in_memory.n_field_lines} field lines to {output_filename}")
+        
+        try:
             line_io = FieldLineSetFitsIO(self._results_in_memory)
-            line_io.save_to_fits(f"{filename}_batch_{suffix}.fits")
-
-            logger.info("Results written to %s_batch_%s.fits", filename, suffix)
-            logger.debug("Clearing in-memory results after writing to disk.")
+            line_io.save_to_fits(output_filename)
+            
+            logger.info(f"Successfully wrote results to {output_filename}")
+            logger.debug("Clearing in-memory results after writing to disk")
+            
+            # Reset in-memory storage
             self._results_in_memory_size = 0
             self._results_in_memory = None
+            
+        except Exception as e:
+            logger.error(f"Error writing results to {output_filename}: {e}")
+            logger.debug("Write error details", exc_info=True)
+            raise
 
     def rename_batch_files(self, filename: str) -> None:
         """Rename batch output FITS files to show progress (e.g., '1_of_10.fits').
@@ -236,17 +301,23 @@ class ResultsManager:
         pattern = f"{base_name}_batch_*.fits"
         if directory:
             pattern = os.path.join(directory, pattern)
+            
+        logger.debug(f"Searching for batch files with pattern: {pattern}")
 
+        # Find all batch files
         files = sorted(
             glob.glob(pattern),
-            key=lambda x: int(x.split("_batch_")[1].split(".fits")[0]),
+            key=lambda x: int(x.split("_batch_")[1].split("_")[0])
         )
         total_files = len(files)
 
         if total_files == 0:
-            logger.warning("No batch files found to rename for %s", filename)
+            logger.warning(f"No batch files found to rename for {filename}")
             return
 
+        logger.info(f"Renaming {total_files} batch files to sequential format")
+        
+        # Rename files to show sequence
         for i, old_file in enumerate(files, 1):
             new_name = f"{base_name}_{i}_of_{total_files}.fits"
             if directory:
@@ -254,6 +325,9 @@ class ResultsManager:
 
             try:
                 os.rename(old_file, new_name)
-                logger.info("Renamed %s to %s", old_file, new_name)
+                logger.debug(f"Renamed {os.path.basename(old_file)} to {os.path.basename(new_name)}")
             except OSError as e:
-                logger.error("Error renaming %s to %s: %s", old_file, new_name, e)
+                logger.error(f"Error renaming {old_file} to {new_name}: {e}")
+                logger.debug("Rename error details", exc_info=True)
+                
+        logger.info(f"Successfully renamed {total_files} batch files")

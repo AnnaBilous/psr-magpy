@@ -3,7 +3,9 @@ from dataclasses import dataclass
 from typing import Optional, Any, Union
 from enum import Enum
 
-logger = logging.getLogger(__name__)
+from psr_magpy.utils.logging_config import get_logger
+
+logger = get_logger(__name__, console_format_brief=True)
 
 
 class PropertyName(Enum):
@@ -45,6 +47,11 @@ class SaveFlags:
             if prop == PropertyName.FOOTPOINT_ID:
                 value = True
             setattr(self, prop.flag_name, value)
+        
+    def __repr__(self) -> str:
+        """Return string representation of save flags."""
+        enabled_flags = [flag for flag in vars(self) if getattr(self, flag)]
+        return f"SaveFlags(enabled={enabled_flags})"
 
 
 class FieldLine:
@@ -64,17 +71,34 @@ class FieldLine:
         # Initialize save flags, ensuring footpoint_id is True
         kwargs["save_footpoint_id"] = True
         self.save_flags = SaveFlags(**kwargs)
-        logger.debug(f"Initialized save flags: {self.save_flags}")
+        logger.debug(f"Initialized FieldLine with save flags: {self.save_flags}")
 
         # Initialize properties dictionary dynamically from PropertyName enum
         self._properties = {prop: None for prop in PropertyName}
+        
+        # Log enabled properties at debug level
+        if logger.isEnabledFor(logging.DEBUG):
+            enabled_props = [
+                prop.key_name
+                for prop in PropertyName
+                if getattr(self.save_flags, prop.flag_name)
+            ]
+            logger.debug(f"Enabled properties: {enabled_props}")
 
     def __repr__(self) -> str:
         """Return string representation of the field line."""
         enabled_flags = [
             flag for flag in vars(self.save_flags) if getattr(self.save_flags, flag)
         ]
-        return f"FieldLine(enabled_properties={enabled_flags})"
+        
+        # Add property values to the representation
+        property_values = {}
+        for prop in PropertyName:
+            if getattr(self.save_flags, prop.flag_name):
+                property_values[prop.key_name] = self._properties[prop]
+        
+        return (f"FieldLine(enabled_properties={enabled_flags}, "
+                f"values={property_values})")
 
     def get_property(self, prop: Union[PropertyName, str]) -> Optional[Any]:
         """Get a property value if it's enabled.
@@ -94,15 +118,20 @@ class FieldLine:
         if isinstance(prop, str):
             try:
                 prop = PropertyName[prop.upper()]
+                logger.debug(f"Converted string '{prop}' to PropertyName enum")
             except KeyError:
-                logger.error(f"Invalid property name: {prop}")
+                error_msg = f"Invalid property name: {prop}"
+                logger.error(f"{error_msg}. Valid properties: {[p.key_name for p in PropertyName]}")
                 raise KeyError(
-                    f"Invalid property name: {prop}. Must be one of: {[p.key_name for p in PropertyName]}"
+                    f"{error_msg}. Must be one of: {[p.key_name for p in PropertyName]}"
                 )
 
         if not getattr(self.save_flags, prop.flag_name):
-            logger.warning(f"Attempting to access disabled property: {prop.key_name}")
+            warning_msg = f"Attempting to access disabled property: {prop.key_name}"
+            logger.warning(warning_msg)
             raise ValueError(f"Property {prop.key_name} is not enabled")
+            
+        #logger.debug(f"Getting property: {prop.key_name}")
         return self._properties[prop]
 
     def set_property(self, **kwargs: Any) -> None:
@@ -116,6 +145,8 @@ class FieldLine:
             ValueError: If any property is not enabled but attempted to be set
             KeyError: If property name is not valid
         """
+        logger.debug(f"Setting properties: {list(kwargs.keys())}")
+        
         for key, value in kwargs.items():
             try:
                 # Convert key to PropertyName enum
@@ -123,9 +154,8 @@ class FieldLine:
 
                 # Check if property is enabled
                 if not getattr(self.save_flags, prop.flag_name):
-                    logger.warning(
-                        f"Attempting to set disabled property: {prop.key_name}"
-                    )
+                    warning_msg = f"Attempting to set disabled property: {prop.key_name}"
+                    logger.warning(warning_msg)
                     raise ValueError(f"Property {prop.key_name} is not enabled")
 
                 # Set the property
@@ -133,9 +163,10 @@ class FieldLine:
                 logger.debug(f"Set property {prop.key_name}")
 
             except KeyError:
-                logger.error(f"Invalid property name: {key}")
+                error_msg = f"Invalid property name: {key}"
+                logger.error(f"{error_msg}. Valid properties: {[p.key_name for p in PropertyName]}")
                 raise KeyError(
-                    f"Invalid property name: {key}. Must be one of: {[p.key_name for p in PropertyName]}"
+                    f"{error_msg}. Must be one of: {[p.key_name for p in PropertyName]}"
                 )
 
     def copy_structure(self) -> "FieldLine":
@@ -151,4 +182,6 @@ class FieldLine:
 
         # Create new instance with same flags
         logger.debug(f"Copying structure with flags: {save_flags_dict}")
-        return self.__class__(**save_flags_dict)
+        new_instance = self.__class__(**save_flags_dict)
+        logger.debug(f"Created new {self.__class__.__name__} instance with same structure")
+        return new_instance

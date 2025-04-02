@@ -9,9 +9,9 @@ from astropy.io import fits as pf
 from psr_magpy.fitsio.base import FitsIO
 from psr_magpy.line.field_line import PropertyName
 from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.utils.logging_config import get_logger
 
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, console_format_brief=True)
 
 
 class FieldLineSetFitsIO(FitsIO):
@@ -19,7 +19,7 @@ class FieldLineSetFitsIO(FitsIO):
 
     def __init__(self, field_line_set: FieldLineSet):
         self.data = field_line_set
-        logger.info("Initialized FieldLineSetFitsIO")
+        logger.debug("Initialized FieldLineSetFitsIO")
 
     def get_hdu_name(self) -> str:
         """Get the name for the FITS HDU.
@@ -50,12 +50,12 @@ class FieldLineSetFitsIO(FitsIO):
                 continue
 
             value = self.data._properties[prop]
-            logger.info(f"Processing property: {prop.key_name}, type: {type(value)}")
+            logger.debug(f"Processing property: {prop.key_name}, type: {type(value)}")
 
             # Special case for r_line which is a list of arrays
             result[prop.key_name] = FitsIO.get_fits_format(value)
 
-            logger.info(
+            logger.debug(
                 f"Added format for {prop.key_name}: {result.get(prop.key_name)}"
             )
 
@@ -75,7 +75,7 @@ class FieldLineSetFitsIO(FitsIO):
         prop = PropertyName[key.upper()]
         value = self.data._properties[prop]
 
-        logger.info(f"Creating column for {key} with format {format}")
+        logger.debug(f"Creating column for {key} with format {format}")
 
         return pf.Column(name=key, format=format, array=value)
 
@@ -98,11 +98,11 @@ class FieldLineSetFitsIO(FitsIO):
         ValueError
             If no matching files found or if total size exceeds memory limit
         """
-        logger.info(f"Looking for FITS files matching {fitsname}*.fits")
+        logger.debug(f"Looking for FITS files matching {fitsname}*.fits")
 
         # Find all matching files
         base_path = Path(fitsname).parent
-        pattern = f"{Path(fitsname).name}*.fits"
+        pattern = f"{Path(fitsname).name}_?_of_?.fits"
         fits_files = list(base_path.glob(pattern))
 
         if not fits_files:
@@ -145,7 +145,7 @@ class FieldLineSetFitsIO(FitsIO):
                 logger.debug(f"Template: setting {prop.flag_name} to {flag_enabled}")
 
             # Create empty FieldLineSet with template
-            field_line_set = FieldLineSet(template)
+            field_line_set = FieldLineSet(template, copy_data=False)
 
         # Load data from all files
         for fits_file in fits_files:

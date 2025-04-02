@@ -10,7 +10,9 @@ from scipy.spatial.transform import Rotation
 from astropy import units as u
 from astropy.coordinates import PhysicsSphericalRepresentation
 
-logger = logging.getLogger(__name__)
+from psr_magpy.utils.logging_config import get_logger
+
+logger = get_logger(__name__, console_format_brief=True)
 
 
 class MultipoleType(Enum):
@@ -77,12 +79,10 @@ class FieldComponent(ABC):
     ) -> None:
         """Initialize FieldComponent with given parameters."""
         logger.info(
-            "Initializing %s with B=%g, lat=%g°, lon=%g°, offset=%s",
-            self.__class__.__name__,
-            B_magnitude,
-            moment_orientation_latitude_degree,
-            moment_orientation_longitude_degree,
-            offset_r_ns,
+            f"Initializing {self.__class__.__name__} with B={B_magnitude:.3g}, "
+            f"lat={moment_orientation_latitude_degree:.2f}°, "
+            f"lon={moment_orientation_longitude_degree:.2f}°, "
+            f"offset={offset_r_ns.tolist()}"
         )
 
         try:
@@ -94,7 +94,8 @@ class FieldComponent(ABC):
                 moment_type=self.get_moment_type(),
             )
         except Exception as e:
-            logger.error("Failed to initialize parameters: %s", e)
+            logger.error(f"Failed to initialize parameters: {e}")
+            logger.debug("Parameter initialization error details", exc_info=True)
             raise
 
         logger.debug("Creating moment orientation representation")
@@ -105,16 +106,15 @@ class FieldComponent(ABC):
                 r=0,
             )
         except Exception as e:
-            logger.error("Failed to create moment orientation: %s", e)
+            logger.error(f"Failed to create moment orientation: {e}")
+            logger.debug("Moment orientation error details", exc_info=True)
             raise
 
         self.moment_offset_vector = self.params.offset_r_ns
 
         logger.debug(
-            "Moment orientation details - phi: %s, theta: %s, r: %s",
-            self.moment_orientation.phi,
-            self.moment_orientation.theta,
-            self.moment_orientation.r,
+            f"Moment orientation - phi: {self.moment_orientation.phi}, "
+            f"theta: {self.moment_orientation.theta}"
         )
 
         try:
@@ -123,16 +123,20 @@ class FieldComponent(ABC):
                 [self.moment_orientation.theta.rad, self.moment_orientation.phi.rad, 0],
             )
             self.rotate_spin_to_magn_frame = self.rotate_magn_to_spin_frame.inv()
-            logger.debug(
-                "Rotation matrices created - magn_to_spin: %s, spin_to_magn: %s",
-                self.rotate_magn_to_spin_frame.as_matrix(),
-                self.rotate_spin_to_magn_frame.as_matrix(),
-            )
+            
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "Rotation matrices created successfully"
+                )
+                logger.debug(
+                    f"Magn to spin matrix: {self.rotate_magn_to_spin_frame.as_matrix().round(4)}"
+                )
         except Exception as e:
-            logger.error("Failed to create rotation matrices: %s", e)
+            logger.error(f"Failed to create rotation matrices: {e}")
+            logger.debug("Rotation matrix error details", exc_info=True)
             raise
 
-        logger.info("Successfully initialized %s", self.__class__.__name__)
+        logger.debug(f"Successfully initialized {self.__class__.__name__}")
 
     @abstractmethod
     def _calculate_field(
@@ -174,13 +178,13 @@ class FieldComponent(ABC):
             NDArray[np.float32]: Position vector in the magnetic frame
 
         """
-        logger.debug("Transforming position from spin frame: %s", r_spin_frame)
+        #logger.debug(f"Transforming position from spin frame: {r_spin_frame}")
 
         r_offset_spin_frame = r_spin_frame - self.moment_offset_vector
-        logger.debug("Position after offset correction: %s", r_offset_spin_frame)
+        #logger.debug(f"Position after offset correction: {r_offset_spin_frame}")
 
         r_magn_frame = self.rotate_spin_to_magn_frame.apply(r_offset_spin_frame)
-        logger.debug("Position in magnetic frame: %s", r_magn_frame)
+        #logger.debug(f"Position in magnetic frame: {r_magn_frame}")
 
         return r_magn_frame
 
@@ -205,17 +209,13 @@ class FieldComponent(ABC):
             Exception: For other calculation errors
 
         """
-        logger.debug(
-            "Calculating %s field at position %s",
-            self.params.moment_type.value,
-            r_spin_frame,
-        )
+        #logger.debug(
+        #    f"Calculating {self.params.moment_type.value} field at position {r_spin_frame}"
+        #)
 
         # Input validation
         if not np.isfinite(r_spin_frame).all():
-            err_msg = (
-                f"Invalid position vector containing non-finite values: {r_spin_frame}"
-            )
+            err_msg = f"Invalid position vector containing non-finite values: {r_spin_frame}"
             logger.error(err_msg)
             raise ValueError(err_msg)
 
@@ -225,15 +225,15 @@ class FieldComponent(ABC):
 
             # Validate output
             if not np.isfinite(field).all():
-                logger.error("Calculated field contains non-finite values: %s", field)
+                logger.error(f"Calculated field contains non-finite values: {field}")
                 raise ValueError(f"Invalid field calculation result: {field}")
 
-            logger.debug("Field in magnetic frame: %s", field)
-            logger.debug("Successfully calculated field at position %s", r_spin_frame)
+            #logger.debug(f"Field in magnetic frame: {field}")
             return field
 
         except Exception as e:
-            logger.error("Error calculating field: %s", e)
+            logger.error(f"Error calculating field: {e}")
+            logger.debug("Field calculation error details", exc_info=True)
             raise
 
     def __repr__(self) -> str:
@@ -300,16 +300,16 @@ class DipoleFieldComponent(FieldComponent):
             NDArray[np.float32]: Magnetic field vector in magnetic frame
 
         """
-        logger.debug("Calculating dipole field at position: %s", r_magn_frame)
+        #logger.debug(f"Calculating dipole field at position: {r_magn_frame}")
 
         x, y, z = r_magn_frame
         r = (x**2 + y**2 + z**2) ** 0.5
         r_cyl = (x**2 + y**2) ** 0.5
 
-        logger.debug("Spherical radius: %g, cylindrical radius: %g", r, r_cyl)
+        #logger.debug(f"Spherical radius: {r:.6g}, cylindrical radius: {r_cyl:.6g}")
 
         if r < 1e-10:  # Avoid singularity at origin
-            logger.warning("Position too close to origin (r=%g), field undefined", r)
+            logger.warning(f"Position too close to origin (r={r:.2e}), field undefined")
             return np.zeros_like(r_magn_frame)
 
         try:
@@ -326,11 +326,12 @@ class DipoleFieldComponent(FieldComponent):
             )
 
             field = self.rotate_magn_to_spin_frame.apply(B_magnetic_frame)
-            logger.debug("Calculated dipole field: %s", field)
+            #logger.debug(f"Calculated dipole field: {field}")
             return field
 
         except Exception as e:
-            logger.error("Error in dipole field calculation: %s", e)
+            logger.error(f"Error in dipole field calculation: {e}")
+            logger.debug("Dipole calculation error details", exc_info=True)
             raise
 
     def get_moment_type(self) -> MultipoleType:
@@ -381,18 +382,18 @@ class QuadrupoleFieldComponent(FieldComponent):
             - Useful for modeling field deviations
             - Returns zero field at origin
         """
-        logger.debug("Calculating quadrupole field at position: %s", r_magn_frame)
+        #logger.debug(f"Calculating quadrupole field at position: {r_magn_frame}")
 
         x, y, z = r_magn_frame
         r = (x**2 + y**2 + z**2) ** 0.5
 
         if r < 1e-10:  # Avoid singularity at origin
-            logger.warning("Position too close to origin (r=%g), field undefined", r)
+            logger.warning(f"Position too close to origin (r={r:.2e}), field undefined")
             return np.zeros_like(r_magn_frame)
 
         try:
             denom = (0.5 * (5 * z**2 / r**2 - 1) / r) ** -1
-            logger.debug("Denominator value: %g", denom)
+            #logger.debug(f"Denominator value: {denom:.6g}")
 
             B_magnetic_frame = (
                 self.params.B_magnitude
@@ -407,11 +408,12 @@ class QuadrupoleFieldComponent(FieldComponent):
             )
 
             field = self.rotate_magn_to_spin_frame.apply(B_magnetic_frame)
-            logger.debug("Calculated quadrupole field: %s", field)
+            #logger.debug(f"Calculated quadrupole field: {field}")
             return field
 
         except Exception as e:
-            logger.error("Error in quadrupole field calculation: %s", e)
+            logger.error(f"Error in quadrupole field calculation: {e}")
+            logger.debug("Quadrupole calculation error details", exc_info=True)
             raise
 
     def get_moment_type(self) -> MultipoleType:

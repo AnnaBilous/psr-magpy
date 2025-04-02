@@ -7,10 +7,10 @@ from datetime import datetime
 from typing import List, Optional, Union
 from pathlib import Path
 
-from src.psr_magpy.grid.grid import GridType
-from src.psr_magpy.line.calculator import TracingConfig
-from src.psr_magpy.experiment.field_factory_config import MultipoleFieldFactory
-from src.psr_magpy.experiment.experiment_config import (
+from psr_magpy.grid.grid import GridType
+from psr_magpy.line.calculator import TracingConfig
+from psr_magpy.experiment.field_factory_config import MultipoleFieldFactory
+from psr_magpy.experiment.experiment_config import (
     ExperimentConfig,
     GridConfig,
     OutputConfig,
@@ -157,7 +157,7 @@ def run_experiment_series(
     Returns:
         List of experiment results
     """
-    from src.psr_magpy.experiment.run_experiment import run_experiment
+    from psr_magpy.experiment.run_experiment import run_experiment
     import logging
 
     logger = logging.getLogger(__name__)

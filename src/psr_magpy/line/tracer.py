@@ -6,10 +6,11 @@ from scipy.integrate import solve_ivp
 from astropy.coordinates.representation import CartesianRepresentation
 
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.utils.logging_config import get_logger
+
+logger = get_logger(__name__, console_format_brief=True)
 
 
-# Initialize logger
-logger = logging.getLogger(__name__)
 
 
 class FieldLineTracer:
@@ -29,6 +30,9 @@ class FieldLineTracer:
         self.R_max = R_max
         self.R_min = R_min
         self.dt = dt
+        
+        logger.info(f"Initialized FieldLineTracer with R_max={R_max}, R_min={R_min}, dt={dt}")
+        logger.debug(f"Field object: {field}")
 
     def hit_surface(self, t, r, K):
         r = np.sum(r**2) ** 0.5

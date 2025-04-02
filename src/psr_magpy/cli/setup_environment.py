@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 import logging
 
+from psr_magpy.utils.logging_config import setup_logging
 
 def find_project_root(start_path=None):
     """
@@ -73,7 +74,14 @@ def setup_directories(base_dir=None, subdirs=None):
     return directories
 
 
-def setup_environment(output_dir=None, log_level="INFO", add_to_path=True):
+def setup_environment(
+    output_dir=None, 
+    log_level="INFO", 
+    add_to_path=True,
+    debug_mode=False,
+    show_filename=True,
+    show_process_id=False,
+):
     """
     Set up the environment for running psr-magpy.
 
@@ -85,6 +93,12 @@ def setup_environment(output_dir=None, log_level="INFO", add_to_path=True):
         Logging level, by default 'INFO'
     add_to_path : bool, optional
         Whether to add the project root to sys.path, by default True
+    debug_mode : bool, optional
+        Whether to enable debug mode for all loggers, by default False
+    show_filename : bool, optional
+        Whether to show the filename in log messages, by default True
+    show_process_id : bool, optional
+        Whether to show the process ID in log messages, by default False
 
     Returns
     -------
@@ -103,17 +117,26 @@ def setup_environment(output_dir=None, log_level="INFO", add_to_path=True):
         output_dir = project_root / "output"
 
     directories = setup_directories(output_dir)
-
-    # Set up logging
-    from src.psr_magpy.utils.logging_config import setup_logging
+    
+    # Override log level if debug mode is enabled
+    if debug_mode and isinstance(log_level, str):
+        log_level = "DEBUG"
 
     log_file = directories["logs"] / f"psr_magpy_{Path.cwd().name}.log"
-    root_logger = setup_logging(log_level=log_level, log_file=log_file)
+    root_logger = setup_logging(
+        log_level=log_level, 
+        log_file=log_file,
+        debug_mode=debug_mode,
+        show_filename=show_filename,
+        show_process_id=show_process_id
+    )
 
     # Get a logger for this module
     logger = logging.getLogger(__name__)
     logger.info(f"Environment set up with output directory: {output_dir}")
-    logger.info(f"Project root: {project_root}")
+    logger.debug(f"Project root: {project_root}")
+    if debug_mode:
+        logger.debug("Debug mode is enabled")
 
     return {"project_root": project_root, "directories": directories, "logger": logger}
 
@@ -123,14 +146,25 @@ def main():
     parser = argparse.ArgumentParser(description="Set up the environment for psr-magpy")
     parser.add_argument("--output-dir", help="Directory for outputs")
     parser.add_argument("--log-level", default="INFO", help="Logging level")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--no-filename", action="store_true", help="Don't show filename in logs")
+    parser.add_argument("--show-process-id", action="store_true", help="Show process ID in logs")
     args = parser.parse_args()
 
-    env = setup_environment(args.output_dir, args.log_level)
+    env = setup_environment(
+        args.output_dir, 
+        args.log_level, 
+        debug_mode=args.debug,
+        show_filename=not args.no_filename,
+        show_process_id=args.show_process_id
+    )
 
     print(f"Environment set up successfully:")
     print(f"  - Project root: {env['project_root']}")
     print(f"  - Output directory: {env['directories']['base']}")
-    print(f"  - Log file: {env['directories']['logs']}")
+    print(f"  - Log file: {env['directories']['logs'] / f'psr_magpy_{Path.cwd().name}.log'}")
+    if args.debug:
+        print(f"  - Debug mode: enabled")
 
 
 if __name__ == "__main__":

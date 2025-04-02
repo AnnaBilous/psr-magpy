@@ -4,8 +4,9 @@ from typing import List
 import numpy as np
 from numpy.typing import NDArray
 
+from psr_magpy.utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, console_format_brief=True)
 
 
 class MultipoleField:
@@ -36,15 +37,17 @@ class MultipoleField:
     """
 
     def __init__(self, field_components: List):
-        logger.debug(
+        logger.info(
             f"Initializing MultipoleField with {len(field_components)} components"
         )
         
         # Check if components are field components by checking class name
-        for comp in field_components:
+        for i, comp in enumerate(field_components):
             comp_class = type(comp)
             comp_module = comp_class.__module__
             comp_name = comp_class.__name__
+            
+            logger.debug(f"Validating component {i+1}: {comp_name} from {comp_module}")
             
             # Check if it's a FieldComponent by name
             if not (comp_name.endswith('FieldComponent') or 
@@ -54,6 +57,12 @@ class MultipoleField:
                 raise TypeError(error_msg)
         
         self.field_components = field_components
+        
+        # Log component details at debug level
+        if logger.isEnabledFor(logging.DEBUG):
+            for i, comp in enumerate(field_components):
+                logger.debug(f"Component {i+1}: {comp}")
+                
         logger.debug("MultipoleField initialized successfully")
 
     def get_total_field(
@@ -91,20 +100,43 @@ class MultipoleField:
         array([...])
         """
         if K not in [-1, 1]:
-            raise ValueError("K must be either -1 or 1")
+            error_msg = f"K must be either -1 or 1, got {K}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
-        logger.debug(f"Calculating total field at r={r}, K={K}, normalize={normalize}")
+        #logger.debug(f"Calculating total field at r={r}, K={K}, normalize={normalize}")
         try:
             F = np.array([0.0, 0.0, 0.0])
-            for component in self.field_components:
-                F += component.get_field(r)
+            
+            # Calculate field from each component
+            for i, component in enumerate(self.field_components):
+                component_field = component.get_field(r)
+                #logger.debug(f"Component {i+1} field: {component_field}")
+                F += component_field
+                
+            # Apply field direction
             F = F * K
+            
+            # Normalize if requested
             if normalize:
-                F /= np.sum(F**2) ** 0.5
-            logger.debug(f"Total field calculated: F={F}")
+                magnitude = np.sum(F**2) ** 0.5
+                if magnitude > 0:
+                    F /= magnitude
+                    #logger.debug(f"Normalized field vector, magnitude was {magnitude:.6g}")
+                else:
+                    logger.warning("Field magnitude is zero, cannot normalize")
+            
+            #logger.debug(f"Total field calculated: F={F}")
             return F
+            
         except Exception as e:
             logger.error(f"Error calculating total field: {e}")
+            logger.debug("Field calculation error details", exc_info=True)
             raise
+
+    def __repr__(self) -> str:
+        """Return string representation of the multipole field."""
+        component_types = [type(c).__name__ for c in self.field_components]
+        return f"MultipoleField(components=[{', '.join(component_types)}])"
 
     

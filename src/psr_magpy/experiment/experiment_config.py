@@ -3,13 +3,13 @@ from dataclasses import dataclass, asdict
 from typing import List, Optional, Union
 from pathlib import Path
 
-from src.psr_magpy.grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
-from src.psr_magpy.field.components import (
+from psr_magpy.grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
+from psr_magpy.field.components import (
     DipoleFieldComponent,
     QuadrupoleFieldComponent,
 )
-from src.psr_magpy.line.calculator import TracingConfig
-from src.psr_magpy.line.field_line import PropertyName
+from psr_magpy.line.calculator import TracingConfig
+from psr_magpy.line.field_line import PropertyName
 
 
 @dataclass
