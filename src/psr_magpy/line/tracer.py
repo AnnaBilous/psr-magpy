@@ -10,9 +10,6 @@ from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
 
-
-
-
 class FieldLineTracer:
     def __init__(self, field, R_max=10.0, R_min=1.0, dt=0.01):
         """Initialize the field line tracer.
