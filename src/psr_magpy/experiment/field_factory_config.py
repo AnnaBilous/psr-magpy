@@ -294,7 +294,16 @@ class MultipoleFieldFactory:
             component_set_dict = []
             for comp in component_set:
                 if isinstance(comp, FieldComponentFactory):
-                    component_set_dict.append(comp.to_dict())
+                    comp_dict = comp.to_dict()
+                    # Convert any NumPy types to standard Python types
+                    for key, value in comp_dict.items():
+                        if isinstance(value, np.integer):
+                            comp_dict[key] = int(value)
+                        elif isinstance(value, np.floating):
+                            comp_dict[key] = float(value)
+                        elif isinstance(value, np.ndarray):
+                            comp_dict[key] = value.tolist()
+                    component_set_dict.append(comp_dict)
                 elif isinstance(comp, dict):
                     component_set_dict.append(comp)
                 elif isinstance(comp, list):
@@ -335,3 +344,83 @@ class MultipoleFieldFactory:
         # Convert to string and hash
         config_str = json.dumps(config_dict, sort_keys=True)
         return hashlib.md5(config_str.encode()).hexdigest()[:8]
+
+    def __repr__(self) -> str:
+        """Return a string representation of the MultipoleFieldFactory.
+        
+        Returns
+        -------
+        str
+            A detailed string representation showing the component sets and their parameters.
+        """
+        result = f"MultipoleFieldFactory with {len(self.components)} component set(s):\n"
+        
+        for i, component_set in enumerate(self.components):
+            result += f"  Set {i+1}:\n"
+            
+            for j, comp in enumerate(component_set):
+                result += f"    Component {j+1}: "
+                
+                if hasattr(comp, 'moment_type'):
+                    # Get the moment type
+                    moment_type = comp.moment_type
+                    if hasattr(moment_type, 'value'):
+                        moment_type = moment_type.value
+                    
+                    # Add the moment type and parameters
+                    result += f"{moment_type}\n"
+                    
+                    # Add B magnitude with special handling for arrays/ranges
+                    result += f"      B_magnitude: "
+                    if isinstance(comp.B_magnitude, list):
+                        # For simple lists
+                        result += f"{comp.B_magnitude}\n"
+                    elif isinstance(comp.B_magnitude, np.ndarray):
+                        # For numpy arrays, check if it looks like an arange
+                        if len(comp.B_magnitude) > 2:
+                            step = comp.B_magnitude[1] - comp.B_magnitude[0]
+                            is_uniform = all(np.isclose(comp.B_magnitude[i+1] - comp.B_magnitude[i], step) 
+                                            for i in range(len(comp.B_magnitude)-1))
+                            
+                            if is_uniform:
+                                result += f"np.arange({comp.B_magnitude[0]}, {comp.B_magnitude[-1] + step}, {step})\n"
+                            else:
+                                result += f"{comp.B_magnitude.tolist()}\n"
+                        else:
+                            result += f"{comp.B_magnitude.tolist()}\n"
+                    else:
+                        result += f"{comp.B_magnitude}\n"
+                    
+                    # Add orientation parameters with similar special handling
+                    result += f"      latitude: "
+                    if isinstance(comp.moment_orientation_latitude_degree, (list, np.ndarray)):
+                        if isinstance(comp.moment_orientation_latitude_degree, np.ndarray):
+                            if len(comp.moment_orientation_latitude_degree) > 2:
+                                step = comp.moment_orientation_latitude_degree[1] - comp.moment_orientation_latitude_degree[0]
+                                is_uniform = all(np.isclose(comp.moment_orientation_latitude_degree[i+1] - comp.moment_orientation_latitude_degree[i], step) 
+                                                for i in range(len(comp.moment_orientation_latitude_degree)-1))
+                                
+                                if is_uniform:
+                                    result += f"np.arange({comp.moment_orientation_latitude_degree[0]}, {comp.moment_orientation_latitude_degree[-1] + step}, {step})\n"
+                                else:
+                                    result += f"{comp.moment_orientation_latitude_degree.tolist()}°\n"
+                            else:
+                                result += f"{comp.moment_orientation_latitude_degree.tolist()}°\n"
+                        else:
+                            result += f"{comp.moment_orientation_latitude_degree}°\n"
+                    else:
+                        result += f"{comp.moment_orientation_latitude_degree}°\n"
+                    
+                    # Longitude
+                    result += f"      longitude: {comp.moment_orientation_longitude_degree}°\n"
+                    
+                    # Add offset if it's not all zeros
+                    if isinstance(comp.offset_r_ns, np.ndarray) and np.any(comp.offset_r_ns):
+                        result += f"      offset: {comp.offset_r_ns.tolist()}\n"
+                else:
+                    result += "Unknown component\n"
+            
+            if i < len(self.components) - 1:
+                result += "\n"  # Add extra line between component sets
+            
+        return result

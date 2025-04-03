@@ -1,4 +1,3 @@
-
 import json
 import os
 from copy import deepcopy
@@ -6,6 +5,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import List, Optional, Union
 from pathlib import Path
+import numpy as np
 
 from psr_magpy.grid.grid import GridType
 from psr_magpy.line.calculator import TracingConfig
@@ -118,9 +118,9 @@ class ExperimentSeriesConfig:
         # Ensure directory exists
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
-        # Save to file
+        # Save to file with the custom encoder
         with open(filepath, "w") as f:
-            json.dump(config_dict, f, indent=4)
+            json.dump(config_dict, f, indent=4, cls=NumpyEncoder)
 
     @classmethod
     def load(cls, filepath: Union[str, Path]) -> "ExperimentSeriesConfig":
@@ -414,3 +414,14 @@ def analyze_experiment_log(
     logger.info(f"Total data size: {total_data_size:.5f} MB")
 
     return summary
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
