@@ -72,7 +72,7 @@ class FootpointGrid(ABC):
         Returns:
             Instance of the specific grid class that called this method
         """
-        logger.info(f"Loading grid from {fitsname}")
+        logger.debug(f"Loading grid from {fitsname}")
         try:
             with pf.open(fitsname) as hdulist:
                 header_main = hdulist[0].header
@@ -155,7 +155,7 @@ class FootpointGrid(ABC):
 
     def _set_up_grid(self) -> None:
         """Calculate grid points and initialize grid properties."""
-        logger.info(f"Setting up grid of type {self.grid_type}")
+        logger.debug(f"Setting up grid of type {self.grid_type}")
         try:
             start_time = time.perf_counter()
             self.footpoint_coordinates = self._prepare_footpoints()
@@ -186,7 +186,7 @@ class FootpointGrid(ABC):
         Raises:
             ValueError: If any indices are invalid
         """
-        logger.info(f"Creating subset with {len(grid_indices)} points")
+        logger.debug(f"Creating subset with {len(grid_indices)} points")
         logger.debug(f"Original grid size: {self.nline_ori} points")
         
         if logger.isEnabledFor(logging.DEBUG):
@@ -330,7 +330,7 @@ class SphericalGrid(FootpointGrid):
     """
 
     def __init__(self, nlon: int, nlat: int, pole_lat: float = 0):
-        logger.info(
+        logger.debug(
             f"Initializing SphericalGrid: nlon={nlon}, nlat={nlat}, pole_lat={pole_lat}"
         )
         super().__init__()
@@ -460,7 +460,7 @@ class HealpixGrid(FootpointGrid):
         npix = hp.nside2npix(self.nside)
         resolution_deg = hp.nside2resol(self.nside, arcmin=True) / 60
         
-        logger.info(f"HEALPix grid: nside={self.nside}, resolution={resolution_deg:.2f}°, points={npix}")
+        logger.debug(f"HEALPix grid: nside={self.nside}, resolution={resolution_deg:.2f}°, points={npix}")
 
         theta_val, phi_val = hp.pix2ang(nside=self.nside, ipix=np.arange(npix))
         phi = Angle(phi_val * u.rad)
@@ -501,7 +501,7 @@ class RandomGrid(FootpointGrid):
     """
 
     def __init__(self, nline_ori: int):
-        logger.info(f"Initializing RandomGrid with {nline_ori} points")
+        logger.debug(f"Initializing RandomGrid with {nline_ori} points")
         super().__init__()
         self.grid_type = GridType.RANDOM
         if nline_ori <= 0:
