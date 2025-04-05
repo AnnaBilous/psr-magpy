@@ -1,6 +1,7 @@
 import json
 import hashlib
 import itertools
+import logging
 from dataclasses import dataclass, asdict, replace, field
 from typing import List, Dict, Any, Union, Tuple
 
@@ -9,7 +10,9 @@ from copy import deepcopy
 import numpy as np
 
 from psr_magpy.field.components import MultipoleType, Parameters
+from psr_magpy.utils.logging_config import get_logger
 
+logger = get_logger(__name__, console_format_brief=True)
 
 @dataclass
 class FieldComponentFactory:
@@ -27,16 +30,19 @@ class FieldComponentFactory:
         """Convert moment_type to MultipoleType if it's a string."""
         if isinstance(self.moment_type, str):
             self.moment_type = MultipoleType(self.moment_type.lower())
+            logger.debug(f"Converted string moment_type to MultipoleType: {self.moment_type}")
         elif isinstance(self.moment_type, list):
             self.moment_type = [
                 MultipoleType(mt.lower()) if isinstance(mt, str) else mt
                 for mt in self.moment_type
             ]
+            logger.debug(f"Converted list of moment_types to MultipoleTypes")
         elif isinstance(self.moment_type, dict):
             self.moment_type = {
                 k: MultipoleType(v.lower()) if isinstance(v, str) else v
                 for k, v in self.moment_type.items()
             }
+            logger.debug(f"Converted dict of moment_types to MultipoleTypes")
 
     # Move to json serialization
     def to_dict(self) -> Dict[str, Any]:
@@ -107,16 +113,18 @@ class MultipoleFieldFactory:
 
     def __init__(self, *args: List[FieldComponentFactory]):
         if len(args) == 0:
+            logger.debug("Initializing empty MultipoleFieldFactory")
             self.components = [{}]
             return
 
         # Validate that each argument is a list
         for arg in args:
             if not isinstance(arg, list):
-                raise ValueError(
-                    f"Each argument must be a list of components, got {type(arg)}. "
-                    "Use: MultipoleFieldConfig([components]) for single set"
-                )
+                error_msg = f"Each argument must be a list of components, got {type(arg)}. Use: MultipoleFieldConfig([components]) for single set"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+        
+        logger.debug(f"Initializing MultipoleFieldFactory with {len(args)} component sets")
         self.components = args
 
     def _convert_to_parameters(self, component: FieldComponentFactory) -> Parameters:
@@ -137,7 +145,8 @@ class MultipoleFieldFactory:
         List[List[Parameters]]
             List of component sets, where each set is a list of Parameters objects
         """
-
+        logger.debug("Expanding parameters into all possible combinations")
+        
         component_dicts = [
             {f"component_{i}": comp for i, comp in enumerate(c)}
             for c in self.components
@@ -146,8 +155,9 @@ class MultipoleFieldFactory:
         whole_expanded_component_sets = []
         # Process each set of components separately
         for component_set in component_dicts:
-
+            logger.debug(f"Processing component set with {len(component_set)} components")
             expanded_components = self._expand_single_component_set(component_set)
+            logger.debug(f"Generated {len(expanded_components)} expanded component combinations")
 
             for component in expanded_components:
                 modified_component = deepcopy(component_set)
@@ -158,6 +168,7 @@ class MultipoleFieldFactory:
                 modified_component_set = [v for v in modified_component.values()]
                 whole_expanded_component_sets.append(modified_component_set)
 
+        logger.debug(f"Total expanded parameter combinations: {len(whole_expanded_component_sets)}")
         return whole_expanded_component_sets
 
     def _expand_single_component_set(
@@ -225,6 +236,7 @@ class MultipoleFieldFactory:
         Tuple[Dict, Dict]
             Parameter ranges and sets
         """
+        logger.debug("Collecting parameter ranges and sets")
         param_ranges = {}  # name -> list of values
         param_sets = {}  # name -> dict of values
 
@@ -234,8 +246,10 @@ class MultipoleFieldFactory:
                 if isinstance(param_value, list) and not isinstance(
                     param_value, np.ndarray
                 ):
+                    logger.debug(f"Found parameter range for {expanded_param_name}: {param_value}")
                     param_ranges[expanded_param_name] = param_value
                 elif isinstance(param_value, dict):
+                    logger.debug(f"Found parameter set for {expanded_param_name}: {param_value}")
                     param_sets[expanded_param_name] = param_value
 
         return param_ranges, param_sets
@@ -247,7 +261,8 @@ class MultipoleFieldFactory:
         ----------
         param_sets : Dict
         """
-
+        logger.debug(f"Expanding parameter sets: {list(param_sets.keys())}")
+        
         set_keys_union = set.union(
             *[set(param_dict.keys()) for param_dict in param_sets.values()]
         )
@@ -255,9 +270,9 @@ class MultipoleFieldFactory:
             *[set(param_dict.keys()) for param_dict in param_sets.values()]
         )
         if set_keys_intersection != set_keys_union:
-            raise ValueError(
-                "Parameter sets have different keys. Perhaps use ranges instead?"
-            )
+            error_msg = "Parameter sets have different keys. Perhaps use ranges instead?"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         set_names = list(param_sets.keys())
 
@@ -265,7 +280,8 @@ class MultipoleFieldFactory:
             {name: param_sets[name][key] for name in set_names}
             for key in set_keys_union
         ]
-
+        
+        logger.debug(f"Generated {len(set_combinations)} parameter set combinations")
         return set_combinations
 
     def _expand_parameter_ranges(self, param_ranges: Dict) -> List[Dict]:
@@ -275,20 +291,31 @@ class MultipoleFieldFactory:
         ----------
         param_ranges : Dict
         """
+        logger.debug(f"Expanding parameter ranges: {list(param_ranges.keys())}")
+        
         # Prepare all parameter combinations
         range_names = list(param_ranges.keys())
         range_values = list(param_ranges.values())
+        
+        # Calculate total combinations for logging
+        total_combinations = 1
+        for values in range_values:
+            total_combinations *= len(values)
+        logger.debug(f"Expecting {total_combinations} range combinations")
+        
         # Generate all combinations
-
         combinations = []
         for values in itertools.product(*range_values):
             combination = {name: value for name, value in zip(range_names, values)}
             combinations.append(combination)
 
+        logger.debug(f"Generated {len(combinations)} parameter range combinations")
         return combinations
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary for JSON serialization."""
+        logger.debug("Converting MultipoleFieldFactory to dictionary")
+        
         components_dict = []
         for component_set in self.components:
             component_set_dict = []
@@ -316,15 +343,20 @@ class MultipoleFieldFactory:
                     component_set_dict.append(comp)
             components_dict.append(component_set_dict)
 
+        logger.debug(f"Serialized {len(components_dict)} component sets")
         return {"components": components_dict}
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MultipoleFieldFactory":
         """Create config from dictionary."""
+        logger.debug("Creating MultipoleFieldFactory from dictionary")
+        
         components = [
             [FieldComponentFactory.from_dict(comp) for comp in component_set]
             for component_set in data["components"]
         ]
+        
+        logger.debug(f"Loaded {len(components)} component sets from dictionary")
         return cls(*components)
 
     def get_config_id(self, component_set_idx: int) -> str:
@@ -340,10 +372,15 @@ class MultipoleFieldFactory:
         str
             Unique identifier for the configuration
         """
+        logger.debug(f"Generating config ID for component set {component_set_idx}")
+        
         config_dict = self.components[component_set_idx][0].to_dict()
         # Convert to string and hash
         config_str = json.dumps(config_dict, sort_keys=True)
-        return hashlib.md5(config_str.encode()).hexdigest()[:8]
+        config_id = hashlib.md5(config_str.encode()).hexdigest()[:8]
+        
+        logger.debug(f"Generated config ID: {config_id}")
+        return config_id
 
     def __repr__(self) -> str:
         """Return a string representation of the MultipoleFieldFactory.

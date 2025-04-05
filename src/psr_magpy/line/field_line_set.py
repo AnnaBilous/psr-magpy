@@ -145,9 +145,7 @@ class FieldLineSet(FieldLine):
                 )
 
         logger.debug(f"Appending {len(field_lines)} individual field lines")
-        print(field_lines[0])
         for prop in PropertyName:
-            print(prop)
             if not getattr(self.save_flags, prop.flag_name):
                 logger.debug(f"Skipping disabled property: {prop.key_name}")
                 continue

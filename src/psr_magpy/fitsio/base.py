@@ -88,7 +88,7 @@ class FitsIO:
         Exception
             If saving to FITS file fails
         """
-        logger.info(f"Saving data to {filename}")
+        logger.debug(f"Saving data to {filename}")
         
         # Create directory if it doesn't exist
         directory = os.path.dirname(filename)
@@ -106,7 +106,7 @@ class FitsIO:
                 
             logger.debug(f"Writing HDU to {filename}")
             hdu.writeto(filename, overwrite=True)
-            logger.info(f"Successfully saved data to {filename}")
+            logger.debug(f"Successfully saved data to {filename}")
             
         except Exception as e:
             logger.error(f"Failed to save data to FITS: {e}")

@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass, asdict
 from typing import List, Optional, Union
 from pathlib import Path
+import numpy as np
 
 from psr_magpy.grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
 from psr_magpy.field.components import (
@@ -10,7 +11,10 @@ from psr_magpy.field.components import (
 )
 from psr_magpy.line.calculator import TracingConfig
 from psr_magpy.line.field_line import PropertyName
+from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.json_utils import NumpyEncoder
 
+logger = get_logger(__name__, console_format_brief=True)
 
 @dataclass
 class GridConfig:
@@ -31,30 +35,44 @@ class GridConfig:
 
     def __post_init__(self):
         """Convert grid_type from string to GridType if necessary."""
+        logger.debug(f"Initializing GridConfig with grid_type={self.grid_type}")
         if isinstance(self.grid_type, str):
             try:
                 self.grid_type = GridType(self.grid_type.lower())
+                logger.debug(f"Converted string grid_type to enum: {self.grid_type}")
             except ValueError:
-                raise ValueError(
-                    f"Invalid grid type: {self.grid_type}. Must be one of {[e.value for e in GridType]}"
-                )
+                error_msg = f"Invalid grid type: {self.grid_type}. Must be one of {[e.value for e in GridType]}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
     def create_grid(self) -> Union["HealpixGrid", "SphericalGrid", "RandomGrid"]:
         """Create a grid based on the configuration."""
+        logger.debug(f"Creating grid of type {self.grid_type}")
         if self.grid_type == GridType.HEALPIX:
             if self.nside is None:
-                raise ValueError("nside must be specified for healpix grid")
+                error_msg = "nside must be specified for healpix grid"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            logger.debug(f"Creating HEALPix grid with nside={self.nside}")
             return HealpixGrid(nside=self.nside)
         elif self.grid_type == GridType.SPHERICAL:
             if self.nlon is None or self.nlat is None:
-                raise ValueError("nlon and nlat must be specified for spherical grid")
+                error_msg = "nlon and nlat must be specified for spherical grid"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            logger.debug(f"Creating Spherical grid with nlon={self.nlon}, nlat={self.nlat}, pole_lat={self.pole_lat}")
             return SphericalGrid(nlon=self.nlon, nlat=self.nlat, pole_lat=self.pole_lat)
         elif self.grid_type == GridType.RANDOM:
             if self.n_random is None:
-                raise ValueError("n_random must be specified for random grid")
+                error_msg = "n_random must be specified for random grid"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            logger.debug(f"Creating Random grid with n_random={self.n_random}")
             return RandomGrid(nline_ori=self.n_random)
         else:
-            raise ValueError(f"Unknown grid type: {self.grid_type}")
+            error_msg = f"Unknown grid type: {self.grid_type}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
 
 @dataclass
@@ -68,20 +86,29 @@ class FieldComponentConfig:
 
     def create_component(self) -> Union[DipoleFieldComponent, QuadrupoleFieldComponent]:
         """Create a field component based on the configuration."""
+        logger.debug(f"Creating field component of type {self.type}")
         if self.type == "dipole":
+            logger.debug(f"Creating Dipole field component with B={self.B_magnitude}, "
+                       f"lat={self.moment_orientation_latitude_degree}°, "
+                       f"lon={self.moment_orientation_longitude_degree}°")
             return DipoleFieldComponent(
                 B_magnitude=self.B_magnitude,
                 moment_orientation_latitude_degree=self.moment_orientation_latitude_degree,
                 moment_orientation_longitude_degree=self.moment_orientation_longitude_degree,
             )
         elif self.type == "quadrupole":
+            logger.debug(f"Creating Quadrupole field component with B={self.B_magnitude}, "
+                       f"lat={self.moment_orientation_latitude_degree}°, "
+                       f"lon={self.moment_orientation_longitude_degree}°")
             return QuadrupoleFieldComponent(
                 B_magnitude=self.B_magnitude,
                 moment_orientation_latitude_degree=self.moment_orientation_latitude_degree,
                 moment_orientation_longitude_degree=self.moment_orientation_longitude_degree,
             )
         else:
-            raise ValueError(f"Unknown field component type: {self.type}")
+            error_msg = f"Unknown field component type: {self.type}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
 
 class OutputConfig:
@@ -95,6 +122,7 @@ class OutputConfig:
             file_prefix: Prefix to add to output filenames
             **kwargs: Save flags (e.g., save_r_max=True)
         """
+        logger.debug(f"Initializing OutputConfig with dir={output_dir}, prefix={file_prefix}")
         self.output_dir = output_dir
         self.file_prefix = file_prefix
 
@@ -106,10 +134,12 @@ class OutputConfig:
 
         # Update with provided kwargs
         for key, value in kwargs.items():
+            logger.debug(f"Setting output flag {key}={value}")
             setattr(self, key, value)
 
     def to_dict(self):
         """Convert to dictionary for serialization."""
+        logger.debug("Converting OutputConfig to dictionary")
         result = {"output_dir": self.output_dir, "file_prefix": self.file_prefix}
 
         # Add all save flags
@@ -124,6 +154,7 @@ class OutputConfig:
         Returns:
             dict: Dictionary of save flags for use with FieldLine constructor
         """
+        logger.debug("Getting save flags from OutputConfig")
         save_flags = {}
         for prop in PropertyName:
             flag_name = prop.flag_name
@@ -133,15 +164,19 @@ class OutputConfig:
     @classmethod
     def from_dict(cls, data):
         """Create instance from dictionary."""
+        logger.debug(f"Creating OutputConfig from dictionary: {data}")
         return cls(**data)
 
     def get_output_filename(self, extension=""):
+        """Get the full output filename with path."""
         if self.file_prefix:
             filename = f"{self.file_prefix}_{extension}"
         else:
             filename = f"{extension}"
 
-        return Path(self.output_dir) / filename
+        full_path = Path(self.output_dir) / filename
+        logger.debug(f"Generated output filename: {full_path}")
+        return full_path
 
 
 @dataclass
@@ -160,49 +195,111 @@ class ExperimentConfig:
     # Output configuration
     output: OutputConfig = OutputConfig()
 
+    def __post_init__(self):
+        """Log the creation of the experiment configuration."""
+        logger.debug(f"Created experiment configuration: {self.name}")
+        if self.description:
+            logger.debug(f"Description: {self.description}")
+        
+        # Log component counts
+        if self.field_components:
+            logger.debug(f"Number of field components: {len(self.field_components)}")
+        if self.grid:
+            logger.debug(f"Grid type: {self.grid.grid_type}")
+        if self.tracing:
+            logger.debug(f"Tracing config: R_max={self.tracing.R_max}, R_min={self.tracing.R_min}, dt={self.tracing.dt}")
+
     @classmethod
     def load(cls, filepath: Union[str, Path]) -> "ExperimentConfig":
         """Load configuration from a JSON file."""
-        with open(filepath, "r") as f:
-            data = json.load(f)
+        filepath = Path(filepath)
+        logger.info(f"Loading experiment configuration from {filepath}")
+        
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+                logger.debug(f"Successfully read JSON data from {filepath}")
+        except FileNotFoundError:
+            error_msg = f"Configuration file not found: {filepath}"
+            logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
+        except json.JSONDecodeError as e:
+            error_msg = f"Invalid JSON in configuration file {filepath}: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
-        # Convert field components data to proper config objects
-        if "field_components" in data:
-            data["field_components"] = [
-                FieldComponentConfig(**comp) for comp in data["field_components"]
-            ]
+        try:
+            # Convert field components data to proper config objects
+            if "field_components" in data:
+                logger.debug(f"Converting {len(data['field_components'])} field components")
+                data["field_components"] = [
+                    FieldComponentConfig(**comp) for comp in data["field_components"]
+                ]
 
-        # Convert nested configs
-        data["grid"] = GridConfig(**data["grid"])
-        data["tracing"] = TracingConfig(**data["tracing"])
-        data["output"] = OutputConfig.from_dict(data["output"])
+            # Convert nested configs
+            logger.debug("Converting grid configuration")
+            data["grid"] = GridConfig(**data["grid"])
+            
+            logger.debug("Converting tracing configuration")
+            data["tracing"] = TracingConfig(**data["tracing"])
+            
+            logger.debug("Converting output configuration")
+            data["output"] = OutputConfig.from_dict(data["output"])
 
-        return cls(**data)
+            config = cls(**data)
+            logger.info(f"Successfully loaded configuration for experiment: {config.name}")
+            return config
+            
+        except KeyError as e:
+            error_msg = f"Missing required field in configuration: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        except TypeError as e:
+            error_msg = f"Invalid configuration structure: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
     def save(self, filepath: Union[str, Path]) -> None:
         """Save configuration to a JSON file."""
+        filepath = Path(filepath)
+        logger.info(f"Saving experiment configuration to {filepath}")
+        
         # Convert to dictionary
         config_dict = asdict(self)
 
         # Convert grid_type to string
         if isinstance(config_dict["grid"]["grid_type"], GridType):
+            logger.debug("Converting grid_type enum to string")
             config_dict["grid"]["grid_type"] = config_dict["grid"]["grid_type"].value
 
         # Handle OutputConfig serialization
+        logger.debug("Converting output configuration to dictionary")
         config_dict["output"] = self.output.to_dict()
 
         # Convert output_dir Path to string if needed
         if isinstance(config_dict["output"]["output_dir"], Path):
+            logger.debug("Converting output_dir Path to string")
             config_dict["output"]["output_dir"] = str(
                 config_dict["output"]["output_dir"]
             )
 
         # Ensure directory exists
-        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            logger.debug(f"Creating directory if needed: {filepath.parent}")
+            filepath.parent.mkdir(parents=True, exist_ok=True)
 
-        # Save to file
-        with open(filepath, "w") as f:
-            json.dump(config_dict, f, indent=4)
+            # Save to file with the NumpyEncoder
+            with open(filepath, "w") as f:
+                json.dump(config_dict, f, indent=4, cls=NumpyEncoder)
+                logger.info(f"Configuration successfully saved to {filepath}")
+        except PermissionError:
+            error_msg = f"Permission denied when writing to {filepath}"
+            logger.error(error_msg)
+            raise PermissionError(error_msg)
+        except OSError as e:
+            error_msg = f"Error saving configuration to {filepath}: {str(e)}"
+            logger.error(error_msg)
+            raise
 
 
 def main():
@@ -218,8 +315,10 @@ def main():
     # Create a temporary directory for outputs
     output_dir = Path("temp_output")
     output_dir.mkdir(exist_ok=True)
+    logger.info(f"Created output directory: {output_dir}")
 
     # Create a sample configuration
+    logger.info("Creating sample experiment configuration")
     config = ExperimentConfig(
         name="example_experiment",
         description="Example experiment configuration",

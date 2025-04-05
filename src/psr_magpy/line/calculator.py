@@ -148,7 +148,7 @@ class FieldLineCalculator:
             Field line set if save_results is False, otherwise None
         """
         config = config or TracingConfig()
-        logger.info(f"Starting field line calculation with config: {config}")
+        logger.debug(f"Starting field line calculation with config: {config}")
 
         start_time = time.time()
 
@@ -176,6 +176,7 @@ class FieldLineCalculator:
             template, config.filename or "", tracer, results_manager, config, batch_size
         )
         elapsed = time.time() - start_time
+
         logger.info(f"Calculations completed in {elapsed:.1f} seconds")
         
         if config.save_results:
@@ -256,12 +257,19 @@ class FieldLineCalculator:
         Optional[FieldLineSet]
             Field line set if save_results is False, otherwise None
         """
-        logger.info(f"Processing {self.grid.nline} field lines in batches of {batch_size}")
+        
         
         all_indices = self.grid.indices
         results = None
-        total_batches = (self.grid.nline + batch_size - 1) // batch_size
+        if self.grid.nline < batch_size:
+            total_batches = 1
+            batch_size = self.grid.nline
+        else:
+            total_batches = (self.grid.nline + batch_size - 1) // batch_size
+            
+        logger.info(f"Processing {self.grid.nline} field lines in batches of {batch_size}")
         logger.debug(f"Total number of batches: {total_batches}")
+    
 
         with tqdm(total=self.grid.nline, desc="Processing field lines") as pbar:
             for start_idx in range(0, self.grid.nline, batch_size):
@@ -290,6 +298,7 @@ class FieldLineCalculator:
                 
 
         if config.save_results:
+            
             logger.info(f"Writing final results to disk: {filename}")
             results_manager.write_results_to_disk(filename, start_idx)
             results_manager.rename_batch_files(filename)

@@ -4,14 +4,16 @@ import os
 import time
 import traceback
 from datetime import datetime
+from pathlib import Path
 
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.calculator import FieldLineCalculator
 
 from .experiment_config import ExperimentConfig
+from psr_magpy.utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__, console_format_brief=True)
 
 
 def get_file_size(filepath, use_wildcard=False):
@@ -24,6 +26,8 @@ def get_file_size(filepath, use_wildcard=False):
     Returns:
         File size in MB
     """
+    logger.debug(f"Getting file size for: {filepath} (wildcard={use_wildcard})")
+    
     if use_wildcard:
         # Get the directory and filename pattern
         directory = os.path.dirname(filepath)
@@ -33,21 +37,30 @@ def get_file_size(filepath, use_wildcard=False):
         # Create the pattern for glob
         pattern = os.path.basename(filepath)
         full_pattern = os.path.join(directory, pattern)
+        logger.debug(f"Using glob pattern: {full_pattern}")
 
         # Find all matching files
         matching_files = glob.glob(full_pattern)
+        logger.debug(f"Found {len(matching_files)} matching files")
 
         # Sum the sizes
         total_size = 0
         for file_path in matching_files:
             if os.path.exists(file_path) and os.path.isfile(file_path):
-                total_size += os.path.getsize(file_path)
+                file_size = os.path.getsize(file_path)
+                total_size += file_size
+                logger.debug(f"File {file_path}: {file_size/1024/1024:.2f} MB")
 
-        return total_size / (1024 * 1024)  # Convert bytes to MB
+        size_mb = total_size / (1024 * 1024)  # Convert bytes to MB
+        logger.debug(f"Total size: {size_mb:.2f} MB")
+        return size_mb
     else:
         if not os.path.exists(filepath):
+            logger.debug(f"File does not exist: {filepath}")
             return 0
-        return os.path.getsize(filepath) / (1024 * 1024)  # Convert bytes to MB
+        size_mb = os.path.getsize(filepath) / (1024 * 1024)  # Convert bytes to MB
+        logger.debug(f"File size: {size_mb:.2f} MB")
+        return size_mb
 
 
 def log_experiment_status(
@@ -71,11 +84,17 @@ def log_experiment_status(
         file_sizes: Dictionary of file sizes in MB (optional)
     """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    logger.debug(f"Logging experiment status: {experiment_name} - {status}")
 
     # Create log directory if it doesn't exist
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+        logger.debug(f"Creating log directory: {log_dir}")
+        try:
+            os.makedirs(log_dir)
+        except OSError as e:
+            logger.error(f"Failed to create log directory {log_dir}: {e}")
+            raise
 
     # Format the log message
     log_message = (
@@ -96,11 +115,18 @@ def log_experiment_status(
         log_message += f"\nError: {error}"
 
     # Write to log file
-    with open(log_file, "a") as f:
-        f.write(log_message + "\n\n")
+    try:
+        with open(log_file, "a") as f:
+            f.write(log_message + "\n\n")
+        logger.debug(f"Successfully wrote to log file: {log_file}")
+    except IOError as e:
+        logger.error(f"Failed to write to log file {log_file}: {e}")
+        raise
 
     # Also log to console
-    logger.info(log_message)
+    logger.info(log_message.split('\n')[0])  # Only log the first line to console
+    if error:
+        logger.error(f"Experiment error: {error}")
 
 
 def run_experiment(config: ExperimentConfig, experiment_number=1, log_file=None):
@@ -197,55 +223,72 @@ def run_experiment(config: ExperimentConfig, experiment_number=1, log_file=None)
     FieldLineCalculator : Core calculator for field line tracing
     """
     start_time = time.time()
+    logger.debug(f"Starting experiment {experiment_number}: {config.name}")
 
     # Set default log file if not provided
     if log_file is None or not log_file:
         log_dir = config.output.output_dir
         log_file = os.path.join(log_dir, f"{config.name}_log.txt")
+        logger.debug(f"Using default log file: {log_file}")
 
     # Log experiment start
     log_experiment_status(log_file, experiment_number, config.name, "Started")
 
-    logger.info(f"Starting experiment: {config.name}")
 
     # Create output filename
     output_filename = str(config.output.get_output_filename(config.name))
+    logger.debug(f"Output filename: {output_filename}")
 
     try:
         # Create field components
-        field_components = [
-            comp_config.create_component() for comp_config in config.field_components
-        ]
+        logger.debug(f"Creating {len(config.field_components)} field components")
+        field_components = []
+        for i, comp_config in enumerate(config.field_components):
+            logger.debug(f"Creating field component {i+1}: {comp_config.type}")
+            component = comp_config.create_component()
+            field_components.append(component)
                 
+        logger.debug("Creating multipole field from components")
         field = MultipoleField(field_components)
 
         # Create grid
+        logger.debug(f"Creating grid of type {config.grid.grid_type}")
         grid = config.grid.create_grid()
-        logger.info(f"Created {config.grid.grid_type} grid with {grid.nline} points")
+        logger.debug(f"Created {config.grid.grid_type} grid with {grid.nline} points")
 
         # Configure template using save flags from OutputConfig
-        template = FieldLine(**config.output.get_save_flags())
-        logger.info(f"Successfully created template: {template}")
+        logger.debug("Creating field line template with save flags")
+        save_flags = config.output.get_save_flags()
+        logger.debug(f"Save flags: {save_flags}")
+        template = FieldLine(**save_flags)
+        logger.debug(f"Successfully created template: {template}")
 
         # Initialize calculator
+        logger.debug("Initializing field line calculator")
         calculator = FieldLineCalculator(field, grid)
-        logger.info(f"Successfully created calculator: {repr(calculator)}")
+        logger.debug(f"Successfully created calculator: {repr(calculator)}")
 
         config.tracing.filename = output_filename
+        logger.debug(f"Set tracing filename to: {output_filename}")
 
         # Calculate field lines
         logger.info("Starting field line calculations...")
-        results = calculator.get_field_lines(template=template, config=config.tracing)
-
-        # Save configuration
-        config_path = output_filename + "_config.json"
-        config.save(config_path)
-        logger.info(f"Configuration saved to: {config_path}")
+        try:
+            results = calculator.get_field_lines(template=template, config=config.tracing)
+            if results is None:
+                logger.info("Results are saved to disk")
+            else:
+                logger.info(f"Field line calculations completed with {len(results)} lines")
+        except Exception as e:
+            logger.error(f"Field line calculation failed: {e}")
+            raise
 
         # Calculate file sizes - use wildcard to find all data files
+        logger.debug("Calculating output file sizes")
         file_sizes = {
             "Data": get_file_size(output_filename + "*.fits", use_wildcard=True)
         }
+        logger.debug(f"Total data size: {file_sizes['Data']:.2f} MB")
 
         # Log experiment completion
         duration = time.time() - start_time

@@ -269,16 +269,17 @@ class ResultsManager:
         if self._results_in_memory is None or self._results_in_memory.n_field_lines == 0:
             logger.warning("No results in memory to write to disk")
             return
-            
+        
         output_filename = f"{filename}_batch_{suffix}.fits"
-        logger.info(f"Writing {self._results_in_memory.n_field_lines} field lines to {output_filename}")
+        
+        logger.debug(f"Writing {self._results_in_memory.n_field_lines} field lines to {output_filename}")
         
         try:
             line_io = FieldLineSetFitsIO(self._results_in_memory)
             line_io.save_to_fits(output_filename)
             
             logger.info(f"Successfully wrote results to {output_filename}")
-            logger.debug("Clearing in-memory results after writing to disk")
+            logger.info("Clearing in-memory results after writing to disk")
             
             # Reset in-memory storage
             self._results_in_memory_size = 0
@@ -295,6 +296,7 @@ class ResultsManager:
         Args:
             filename: The base filename without extension used for the output files.
         """
+        
         directory = os.path.dirname(filename)
         base_name = os.path.splitext(os.path.basename(filename))[0]
 
@@ -302,13 +304,14 @@ class ResultsManager:
         if directory:
             pattern = os.path.join(directory, pattern)
             
-        logger.debug(f"Searching for batch files with pattern: {pattern}")
-
+        logger.info(f"Searching for batch files with pattern: {pattern}")
+       
         # Find all batch files
         files = sorted(
             glob.glob(pattern),
-            key=lambda x: int(x.split("_batch_")[1].split("_")[0])
+            key=lambda x: int(x.split("_batch_")[1].split(".")[0])
         )
+        
         total_files = len(files)
 
         if total_files == 0:

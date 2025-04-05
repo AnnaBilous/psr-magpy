@@ -59,7 +59,7 @@ def setup_directories(base_dir=None, subdirs=None):
         base_dir = Path(base_dir)
 
     if subdirs is None:
-        subdirs = ["fits", "plots", "logs"]
+        subdirs = ["fits", "plots", "logs", "configs"]
 
     # Create base directory
     base_dir.mkdir(parents=True, exist_ok=True)
@@ -81,6 +81,7 @@ def setup_environment(
     debug_mode=False,
     show_filename=True,
     show_process_id=False,
+    subdirs=None,
 ):
     """
     Set up the environment for running psr-magpy.
@@ -116,7 +117,7 @@ def setup_environment(
     if output_dir is None:
         output_dir = project_root / "output"
 
-    directories = setup_directories(output_dir)
+    directories = setup_directories(output_dir, subdirs)
     
     # Override log level if debug mode is enabled
     if debug_mode and isinstance(log_level, str):
