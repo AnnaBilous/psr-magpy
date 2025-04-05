@@ -108,9 +108,9 @@ class ExperimentSeriesConfig:
             experiment_config = ExperimentConfig(
                 name=experiment_name,
                 description=(
-                    f"{self.description} (Variant {i})"
+                    f"{self.description} (experiment {i:04d})"
                     if self.description
-                    else f"Variant {i}"
+                    else f"experiment {i:04d}"
                 ),
                 grid=deepcopy(self.grid),
                 tracing=tracing_config,
