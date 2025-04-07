@@ -245,7 +245,7 @@ class ResultsManager:
         # Update size tracking
         self._results_in_memory_size = self._results_in_memory.estimate_size()
         memory_mb = self._results_in_memory_size / (1024 * 1024)
-        logger.info(f"Results in memory: {self._results_in_memory.n_field_lines} field lines, {memory_mb:.2f} MB")
+        logger.debug(f"Results in memory: {self._results_in_memory.n_field_lines} field lines, {memory_mb:.2f} MB")
 
         # Check if we need to write to disk
         if self.should_write_batch(memory_mb):

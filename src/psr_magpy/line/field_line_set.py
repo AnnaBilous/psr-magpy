@@ -216,7 +216,7 @@ class FieldLineSet(FieldLine):
             
             total_bytes += prop_size
 
-        logger.info(f"Total estimated size: {total_bytes} bytes ({total_bytes/1024/1024:.2f} MB)")
+        logger.debug(f"Total estimated size: {total_bytes} bytes ({total_bytes/1024/1024:.2f} MB)")
         return total_bytes
         
     def __repr__(self) -> str:
