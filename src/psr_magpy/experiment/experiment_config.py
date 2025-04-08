@@ -315,10 +315,10 @@ def main():
     # Create a temporary directory for outputs
     output_dir = Path("temp_output")
     output_dir.mkdir(exist_ok=True)
-    logger.info(f"Created output directory: {output_dir}")
+    logger.debug(f"Created output directory: {output_dir}")
 
     # Create a sample configuration
-    logger.info("Creating sample experiment configuration")
+    logger.debug("Creating sample experiment configuration")
     config = ExperimentConfig(
         name="example_experiment",
         description="Example experiment configuration",
@@ -340,20 +340,20 @@ def main():
     # Save the configuration to a file
     config_path = output_dir / "example_config.json"
     config.save(config_path)
-    logger.info(f"Configuration saved to: {config_path}")
+    logger.debug(f"Configuration saved to: {config_path}")
 
     # Load the configuration from the file
     loaded_config = ExperimentConfig.load(config_path)
-    logger.info("Successfully loaded configuration")
+    logger.debug("Successfully loaded configuration")
 
     # Print some details about the loaded configuration
-    logger.info(f"Experiment name: {loaded_config.name}")
-    logger.info(f"Grid type: {loaded_config.grid.grid_type}")
-    logger.info(f"Number of field components: {len(loaded_config.field_components)}")
+    logger.debug(f"Experiment name: {loaded_config.name}")
+    logger.debug(f"Grid type: {loaded_config.grid.grid_type}")
+    logger.debug(f"Number of field components: {len(loaded_config.field_components)}")
 
     # Example of how to access save flags
-    logger.info(f"Save r_max: {loaded_config.output.save_r_max}")
-    logger.info(f"Save r_line: {loaded_config.output.save_r_line}")
+    logger.debug(f"Save r_max: {loaded_config.output.save_r_max}")
+    logger.debug(f"Save r_line: {loaded_config.output.save_r_line}")
 
     return loaded_config
 

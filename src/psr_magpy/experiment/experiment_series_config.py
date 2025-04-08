@@ -228,6 +228,7 @@ def run_experiment_series(
     output_dir: Optional[str] = None,
     clear_log: bool = False,
     save_individual_configs: bool = True,
+    config_dir: Optional[str] = None,
 ):
     """Run a series of experiments based on the provided configuration.
 
@@ -274,8 +275,7 @@ def run_experiment_series(
             logger.debug(f"Experiment {exp.name}")
             
             # Save individual experiment configs if requested
-            if save_individual_configs:
-                config_dir = os.path.join(config.output.output_dir, "configs")
+            if save_individual_configs: 
                 os.makedirs(config_dir, exist_ok=True)
                 config_path = os.path.join(config_dir, f"{exp.name}_config.json")
                 try:

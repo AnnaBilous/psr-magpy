@@ -76,6 +76,7 @@ def setup_directories(base_dir=None, subdirs=None):
 
 def setup_environment(
     output_dir=None, 
+    log_file=None,
     log_level="INFO", 
     add_to_path=True,
     debug_mode=False,
@@ -90,6 +91,8 @@ def setup_environment(
     ----------
     output_dir : str or Path, optional
         Directory for outputs. If None, uses the current directory.
+    log_file : str or Path, optional
+        Log file name. If None, uses the current directory name.
     log_level : str, optional
         Logging level, by default 'INFO'
     add_to_path : bool, optional
@@ -123,7 +126,12 @@ def setup_environment(
     if debug_mode and isinstance(log_level, str):
         log_level = "DEBUG"
 
-    log_file = directories["logs"] / f"psr_magpy_{Path.cwd().name}.log"
+    if log_file is None:
+        log_file = directories["logs"] / f"psr_magpy_{Path.cwd().name}.log"
+    else:
+        log_file = directories["logs"] / log_file
+
+   
     root_logger = setup_logging(
         log_level=log_level, 
         log_file=log_file,
@@ -132,14 +140,12 @@ def setup_environment(
         show_process_id=show_process_id
     )
 
-    # Get a logger for this module
-    logger = logging.getLogger(__name__)
-    logger.info(f"Environment set up with output directory: {output_dir}")
-    logger.debug(f"Project root: {project_root}")
+    root_logger.info(f"Environment set up with output directory: {output_dir}")
+    root_logger.debug(f"Project root: {project_root}")
     if debug_mode:
-        logger.debug("Debug mode is enabled")
+        root_logger.debug("Debug mode is enabled")
 
-    return {"project_root": project_root, "directories": directories, "logger": logger}
+    return {"project_root": project_root, "directories": directories, "logger": root_logger}
 
 
 def main():
