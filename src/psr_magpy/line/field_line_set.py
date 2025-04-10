@@ -13,6 +13,9 @@ logger = get_logger(__name__, console_format_brief=True)
 class FieldLineSet(FieldLine):
     """Collection of field lines with array values"""
 
+    # List of properties that are stored as lists of arrays
+    ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.CURVATURE_LINE, PropertyName.PA_LINE]
+
     def __init__(
         self, field_lines: Union[List[FieldLine], FieldLine], copy_data: bool = True
     ) -> None:
@@ -108,8 +111,8 @@ class FieldLineSet(FieldLine):
                     logger.debug(f"Source data for {prop.key_name} is None, skipping")
                     continue
 
-                # Special handling for R_LINE which is a list of coordinate arrays
-                if prop == PropertyName.R_LINE:
+                # Special handling for properties that are lists of arrays
+                if prop in self.ARRAY_LIST_PROPERTIES:
                     if self._properties[prop] is None:
                         logger.debug(f"Initializing {prop.key_name} with source data")
                         self._properties[prop] = source_data.copy()  # Copy list of arrays
@@ -150,14 +153,11 @@ class FieldLineSet(FieldLine):
                 logger.debug(f"Skipping disabled property: {prop.key_name}")
                 continue
 
-            
-           
-            
             values = [line.get_property(prop) for line in field_lines]
             logger.debug(f"Collected {len(values)} values for {prop.key_name}")
 
-            # Special handling for R_LINE which is a list of coordinate arrays
-            if prop == PropertyName.R_LINE:
+            # Special handling for properties that are lists of arrays
+            if prop in self.ARRAY_LIST_PROPERTIES:
                 if self._properties[prop] is None:
                     logger.debug(f"Initializing {prop.key_name} with collected values")
                     self._properties[prop] = values  # List of arrays
@@ -200,10 +200,10 @@ class FieldLineSet(FieldLine):
 
             values = self._properties[prop]
 
-            # Special case for r_line which is a list of arrays
-            if prop == PropertyName.R_LINE:
-                prop_size = sum(r.nbytes for r in values if r is not None)
-                logger.debug(f"R_LINE size: {prop_size} bytes from {len(values)} arrays")
+            # Special case for properties that are lists of arrays
+            if prop in self.ARRAY_LIST_PROPERTIES:
+                prop_size = sum(r.nbytes for r in values if r is not None and hasattr(r, 'nbytes'))
+                logger.debug(f"{prop.key_name} size: {prop_size} bytes from {len(values)} arrays")
             else:
                 # For numpy arrays, use nbytes property
                 if isinstance(values, np.ndarray):

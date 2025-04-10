@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, asdict
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 from pathlib import Path
 import numpy as np
 
@@ -10,7 +10,7 @@ from psr_magpy.field.components import (
     QuadrupoleFieldComponent,
 )
 from psr_magpy.line.calculator import TracingConfig
-from psr_magpy.line.field_line import PropertyName
+from psr_magpy.line.field_line import PropertyName, PropertyGroup
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.json_utils import NumpyEncoder
 
@@ -120,22 +120,44 @@ class OutputConfig:
         Args:
             output_dir: Directory to save output files
             file_prefix: Prefix to add to output filenames
-            **kwargs: Save flags (e.g., save_r_max=True)
+            **kwargs: Save flags (e.g., save_r_max=True) or property groups (e.g., save_all=True)
+                      Available property groups:
+                      - save_all: Enable all properties
+                      - save_line_data: Enable r_line, pa_line, curvature_line
+                      - save_line_max: Enable r_max, r_cyl_max, z_abs_max
+                      - save_b_ini: Enable b_ini, b_r_ini_angle
         """
         logger.debug(f"Initializing OutputConfig with dir={output_dir}, prefix={file_prefix}")
         self.output_dir = output_dir
         self.file_prefix = file_prefix
 
+        # Process property groups first
+        property_flags: Dict[str, bool] = {}
+        
+        # Check for property groups
+        for group in PropertyGroup:
+            group_name = group.name.lower()
+            if group_name in kwargs and kwargs[group_name]:
+                # Enable all properties in this group
+                for prop in group.properties:
+                    property_flags[prop.flag_name] = True
+                logger.debug(f"Enabled property group: {group_name}")
+
         # Set default values for all save flags
         for prop in PropertyName:
             # FOOTPOINT_ID is always True, others default to False
-            default_value = prop == PropertyName.FOOTPOINT_ID
-            setattr(self, prop.flag_name, default_value)
+            default_value = True if prop == PropertyName.FOOTPOINT_ID else False
+            # Allow override from kwargs, but force footpoint_id to True
+            value = kwargs.get(prop.flag_name, property_flags.get(prop.flag_name, default_value))
+            if prop == PropertyName.FOOTPOINT_ID:
+                value = True
+            setattr(self, prop.flag_name, value)
 
-        # Update with provided kwargs
+        # Update with provided kwargs for any other attributes
         for key, value in kwargs.items():
-            logger.debug(f"Setting output flag {key}={value}")
-            setattr(self, key, value)
+            if not hasattr(self, key):
+                logger.debug(f"Setting additional output attribute {key}={value}")
+                setattr(self, key, value)
 
     def to_dict(self):
         """Convert to dictionary for serialization."""
@@ -145,6 +167,11 @@ class OutputConfig:
         # Add all save flags
         for prop in PropertyName:
             result[prop.flag_name] = getattr(self, prop.flag_name)
+
+        # Add any additional attributes
+        for key, value in vars(self).items():
+            if key not in result and not key.startswith('_'):
+                result[key] = value
 
         return result
 
@@ -159,6 +186,14 @@ class OutputConfig:
         for prop in PropertyName:
             flag_name = prop.flag_name
             save_flags[flag_name] = getattr(self, flag_name)
+        
+        # Add property groups
+        for group in PropertyGroup:
+            group_name = group.name.lower()
+            # Check if all properties in this group are enabled
+            all_enabled = all(getattr(self, prop.flag_name) for prop in group.properties)
+            save_flags[group_name] = all_enabled
+            
         return save_flags
 
     @classmethod
@@ -207,7 +242,7 @@ class ExperimentConfig:
         if self.grid:
             logger.debug(f"Grid type: {self.grid.grid_type}")
         if self.tracing:
-            logger.debug(f"Tracing config: R_max={self.tracing.R_max}, R_min={self.tracing.R_min}, dt={self.tracing.dt}")
+            logger.debug(f"Tracing config: R_max={self.tracing.R_max}, min_R_max_line={self.tracing.min_R_max_line}, dt={self.tracing.dt}")
 
     @classmethod
     def load(cls, filepath: Union[str, Path]) -> "ExperimentConfig":
@@ -323,7 +358,7 @@ def main():
         name="example_experiment",
         description="Example experiment configuration",
         grid=GridConfig(grid_type="random", n_random=50),
-        tracing=TracingConfig(R_max=10.0, R_min=1.0, dt=0.01),
+        tracing=TracingConfig(R_max=10.0, min_R_max_line=1.0, dt=0.01),
         field_components=[
             FieldComponentConfig(
                 type="dipole",

@@ -17,6 +17,9 @@ logger = get_logger(__name__, console_format_brief=True)
 class FieldLineSetFitsIO(FitsIO):
     """FITS I/O operations for field lines."""
 
+    # List of properties that are stored as lists of arrays
+    ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.CURVATURE_LINE, PropertyName.PA_LINE]
+
     def __init__(self, field_line_set: FieldLineSet):
         self.data = field_line_set
         logger.debug("Initialized FieldLineSetFitsIO")
@@ -52,7 +55,7 @@ class FieldLineSetFitsIO(FitsIO):
             value = self.data._properties[prop]
             logger.debug(f"Processing property: {prop.key_name}, type: {type(value)}")
 
-            # Special case for r_line which is a list of arrays
+            # Get FITS format for the property
             result[prop.key_name] = FitsIO.get_fits_format(value)
 
             logger.debug(
@@ -152,26 +155,33 @@ class FieldLineSetFitsIO(FitsIO):
             logger.info(f"Loading data from {fits_file}")
             with pf.open(fits_file) as hdul:
                 hdu = hdul["FIELD_LINES"]
-
+                
                 # Load each column
                 for col in hdu.columns:
                     try:
                         prop = PropertyName[col.name.upper()]
                         data = hdu.data[col.name]
-
-                        # Convert to numpy array if needed
-                        # if isinstance(data, np.ndarray) and data.dtype.kind == 'O':
-                        #    data = np.array([np.array(x) for x in data])
-                        if prop == PropertyName.R_LINE:
-                            data = [d.reshape(-1, 3) for d in data]
+                        
+                        # Special handling for array list properties
+                        if prop in cls.ARRAY_LIST_PROPERTIES:
+                            # For R_LINE, reshape to 3D coordinates
+                            if prop == PropertyName.R_LINE:
+                                data = [d.reshape(-1, 3) for d in data]
+                            # For other array properties, ensure they're properly shaped
+                            else:
+                                data = [np.array(d) for d in data]
 
                         # For first file, set the property
+                        
                         if fits_file == first_file:
-                            field_line_set._properties[prop] = data
+                            if prop in cls.ARRAY_LIST_PROPERTIES:
+                                field_line_set._properties[prop] = data
+                            else:
+                                field_line_set._properties[prop] = data
 
                         # For subsequent files, append the data
                         else:
-                            if prop == PropertyName.R_LINE:
+                            if prop in cls.ARRAY_LIST_PROPERTIES:
                                 field_line_set._properties[prop].extend(data)
                             else:
                                 field_line_set._properties[prop] = np.append(

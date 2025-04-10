@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
-from typing import Optional, Any, Union
-from enum import Enum
+from typing import Optional, Any, Union, Dict, Set, List
+from enum import Enum, auto
 
 from psr_magpy.utils.logging_config import get_logger
 
@@ -13,6 +13,8 @@ class PropertyName(Enum):
 
     FOOTPOINT_ID = "save_footpoint_id"
     R_LINE = "save_r_line"
+    PA_LINE = "save_pa_line"
+    CURVATURE_LINE = "save_curvature_line"
     R_MAX = "save_r_max"
     R_CYL_MAX = "save_r_cyl_max"
     Z_ABS_MAX = "save_z_abs_max"
@@ -30,6 +32,28 @@ class PropertyName(Enum):
         return self.name.lower()
 
 
+class PropertyGroup(Enum):
+    """Enum of property groups for convenience"""
+    
+    SAVE_ALL = auto()
+    SAVE_LINE_DATA = auto()
+    SAVE_LINE_MAX = auto()
+    SAVE_B_INI = auto()
+    
+    @property
+    def properties(self) -> Set[PropertyName]:
+        """Get the set of properties in this group"""
+        if self == PropertyGroup.SAVE_ALL:
+            return set(PropertyName)
+        elif self == PropertyGroup.SAVE_LINE_DATA:
+            return {PropertyName.R_LINE, PropertyName.PA_LINE, PropertyName.CURVATURE_LINE}
+        elif self == PropertyGroup.SAVE_LINE_MAX:
+            return {PropertyName.R_MAX, PropertyName.R_CYL_MAX, PropertyName.Z_ABS_MAX}
+        elif self == PropertyGroup.SAVE_B_INI:
+            return {PropertyName.B_INI, PropertyName.B_R_INI_ANGLE}
+        return set()
+
+
 @dataclass
 class SaveFlags:
     """Class holding boolean flags for which properties to save.
@@ -38,12 +62,23 @@ class SaveFlags:
     """
 
     def __init__(self, **kwargs):
+        # Process property groups first
+        property_flags = {}
+        
+        # Check for property groups
+        for group in PropertyGroup:
+            group_name = group.name.lower()
+            if group_name in kwargs and kwargs[group_name]:
+                # Enable all properties in this group
+                for prop in group.properties:
+                    property_flags[prop.flag_name] = True
+                
         # Set default values for all properties from PropertyName enum
         for prop in PropertyName:
             # footpoint_id is always True, others default to False
             default_value = True if prop == PropertyName.FOOTPOINT_ID else False
             # Allow override from kwargs, but force footpoint_id to True
-            value = kwargs.get(prop.flag_name, default_value)
+            value = kwargs.get(prop.flag_name, property_flags.get(prop.flag_name, default_value))
             if prop == PropertyName.FOOTPOINT_ID:
                 value = True
             setattr(self, prop.flag_name, value)
@@ -67,6 +102,12 @@ class FieldLine:
         Args:
             **kwargs: Boolean flags for which properties to save.
                      save_footpoint_id will always be True regardless of input.
+                     
+                     Property groups can be specified:
+                     - save_all: Enable all properties
+                     - save_line_data: Enable r_line, pa_line, curvature_line
+                     - save_line_max: Enable r_max, r_cyl_max, z_abs_max
+                     - save_b_ini: Enable b_ini, b_r_ini_angle
         """
         # Initialize save flags, ensuring footpoint_id is True
         kwargs["save_footpoint_id"] = True

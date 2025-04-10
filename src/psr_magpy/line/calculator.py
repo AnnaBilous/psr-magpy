@@ -24,7 +24,7 @@ class TracingConfig:
     """Configuration for field line tracing parameters and output settings."""
 
     R_max: float = 10.0
-    R_min: float = 1.0
+    min_R_max_line: float = 1.0
     dt: float = 0.01
     max_memory_mb: float = 100.0
     n_cores: Optional[int] = None
@@ -152,7 +152,7 @@ class FieldLineCalculator:
 
         start_time = time.time()
 
-        tracer = FieldLineTracer(self.field, config.R_max, config.R_min, config.dt)
+        tracer = FieldLineTracer(self.field, config.R_max, config.min_R_max_line, config.dt)
         memory_config = MemoryConfig(
             max_memory_mb=config.max_memory_mb,
             max_batch_size=config.max_batch_size,

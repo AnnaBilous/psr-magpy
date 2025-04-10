@@ -30,7 +30,7 @@ def create_sample_config() -> ExperimentConfig:
         grid=GridConfig(grid_type="random", n_random=100),
         tracing=TracingConfig(
             R_max=10.0,
-            R_min=1.0,
+            min_R_max_line=1.0,
             dt=0.01,
             max_memory_mb=100.0,
             n_cores=2,

@@ -1,5 +1,4 @@
 import glob
-import logging
 import os
 import psutil
 from dataclasses import dataclass

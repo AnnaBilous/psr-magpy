@@ -65,7 +65,7 @@ def plot_field_lines(field_lines, save_path=None):
     fig = plt.figure(figsize=(12, 12))
     ax = fig.add_subplot(111, projection="3d")
     r_lines = field_lines.get_property("r_line")
-
+    
     # Plot field lines
     line_count = 0
     for r_line in r_lines:
@@ -107,11 +107,11 @@ def main():
 
     # Configure tracing parameters
     config = TracingConfig(
-        R_max=10.0,  # Maximum radius for tracing
-        R_min=1.0,  # Minimum radius (star surface)
+        R_max=20.0,  # Maximum radius for tracing
+        min_R_max_line=2.0,  # Save lines with R_max > min_R_max_line
         dt=0.01,  # Integration time step
         max_memory_mb=5.0,  # Maximum memory usage per batch
-        n_cores=2,  # Number of CPU cores to use
+        n_cores=4,  # Number of CPU cores to use
         max_batch_size=100,  # Number of field lines to calculate per batch
         save_results=True,  # Save results to disk
         filename=output_filename,
@@ -122,33 +122,35 @@ def main():
     logger.info("Creating magnetic field configuration")
     dipole = DipoleFieldComponent(
         B_magnitude=1.0,
-        moment_orientation_latitude_degree=0.0,
+        moment_orientation_latitude_degree=90.0,
         moment_orientation_longitude_degree=0.0,
     )
     logger.debug(f"Dipole component: {dipole}")
 
     quadrupole = QuadrupoleFieldComponent(
         B_magnitude=0.5,
-        moment_orientation_latitude_degree=45.0,
+        moment_orientation_latitude_degree=90.0,
         moment_orientation_longitude_degree=0.0,
     )
     logger.debug(f"Quadrupole component: {quadrupole}")
 
-    field = MultipoleField([dipole, quadrupole])
+    #field = MultipoleField([dipole]) #, quadrupole])
+    field = MultipoleField([quadrupole])
     logger.debug(f"Combined field: {field}")
 
     # Create footpoint grid using HEALPix
     logger.info("Creating HEALPix grid for footpoints")
-    grid = HealpixGrid(nside=16)
+    grid = HealpixGrid(nside=8)
     logger.info(f"Number of field lines to calculate: {grid.nline}")
 
     # Configure which field line properties to save
     logger.info("Configuring field line properties to save")
-    template = FieldLine(
-        save_r_max=True,  # Save maximum radius reached
-        save_b_r_ini_angle=True,  # Save initial B_r angle
-        save_r_line=True,  # Save full field line coordinates
-    )
+    #template = FieldLine(
+    #    save_r_max=True,  # Save maximum radius reached
+    #    save_b_r_ini_angle=True,  # Save initial B_r angle
+    #    save_r_line=True,  # Save full field line coordinates
+    #)
+    template = FieldLine(save_all=True)
     logger.info(f"Template configuration: {template}")
 
     # Initialize calculator
@@ -158,7 +160,7 @@ def main():
     try:
         # Calculate field lines
         logger.info("Starting field line calculations...")
-        #results = calculator.get_field_lines(template=template, config=config)
+        results = calculator.get_field_lines(template=template, config=config)
 
         if config.save_results:
             logger.info(f"Results saved to: {output_filename}")
@@ -179,6 +181,7 @@ def main():
             # Create visualization of loaded data
             plot_path = os.path.join(plot_dir, f"field_lines_{timestamp}.png")
             plot_field_lines(loaded_field_lines, save_path=plot_path)
+            plt.show()
             logger.info(f"Plot saved to: {plot_path}")
 
     except MemoryError:
