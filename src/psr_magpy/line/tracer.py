@@ -2,9 +2,10 @@ import logging
 from typing import Dict, List, Optional, Union, Any, Tuple
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-from astropy.coordinates.representation import CartesianRepresentation
+from astropy.coordinates.representation import CartesianRepresentation, SphericalRepresentation
 
 from psr_magpy.line.field_line import FieldLine, PropertyName
 from psr_magpy.utils.logging_config import get_logger
@@ -28,7 +29,7 @@ class FieldLineTracer:
         """
         self.field = field
         self.R_max = R_max
-        self.min_R_max_line = min_R_max_line
+        self.min_R_max_line = min_R_max_line - dt/2
         self.dt = dt
         
         logger.info(f"Initialized FieldLineTracer with R_max={R_max}, min_R_max_line={min_R_max_line}, dt={dt}")
@@ -104,7 +105,8 @@ class FieldLineTracer:
         dotprod = np.dot(B_initial_norm, r_initial)
         K = np.sign(dotprod)
         if K == 0:
-            K = 1.0
+            K = 1.
+        
         # Include hit_Rmin event to ensure we don't trace too far down?
         field_line = solve_ivp(
             self._field_for_integration,
@@ -113,8 +115,8 @@ class FieldLineTracer:
             args=[K],
             dense_output=True,
             events=(self.hit_surface, self.hit_Rmax),
-            rtol=5.0e-8,
-            atol=5.0e-8,
+            rtol=5.0e-9,
+            atol=5.0e-9,
         )
 
         if isinstance(self.dt, int):
@@ -223,17 +225,7 @@ class FieldLineTracer:
         return r_line_save
     
     def prep_curvature_line(self, r: np.ndarray, line_R_max: float, template: FieldLine) -> np.ndarray:
-        """Calculate curvature along the field line.
-        
-        Parameters
-        ----------
-        r : np.ndarray
-            Position vectors along the field line
-            
-        Returns
-        -------
-        np.ndarray
-            Curvature values along the field line
+        """ To be added later. This is not used in the current implementation.
         """
         if template.save_flags.save_curvature_line:
             if line_R_max >= self.min_R_max_line:
@@ -266,37 +258,53 @@ class FieldLineTracer:
         np.ndarray
             Position angle values along the field line
         """
+ 
+            
         if template.save_flags.save_pa_line:
             if line_R_max >= self.min_R_max_line:
                 Npoints = r.shape[1]
-                dr = np.gradient(r, axis=1)
-                dr_norm = dr/np.linalg.norm(dr, axis=0)[np.newaxis,:]
-                n = np.gradient(dr_norm, axis=1)
-                n_abs = np.linalg.norm(n, axis=0)
-                n_abs[n_abs==0] = 1.0
-                n_norm = n/n_abs[np.newaxis,:]
-                dr_R = np.linalg.norm(dr, axis=0)
-                dr_theta = np.arccos(dr[2,:]/dr_R)
-                dr_theta[dr_R==0] = 0
-                dr_rp = (dr[0,:]**2+dr[1,:]**2)**0.5
-                dr_phi = np.arctan2(dr[1,:], dr[0,:])
-                dr_phi[dr_phi<0] += 2*np.pi
-                dr_phi[dr_rp==0] = 0
-        
+                t = np.gradient(r, axis=1)
+                t_abs = np.linalg.norm(t, axis=0, keepdims=True)
+                safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
+                t_norm = t/safe_t_abs
+                
+                n = np.gradient(t_norm, axis=1)
+                n_abs = np.linalg.norm(n, axis=0, keepdims=True)
+                safe_n_abs = np.where(n_abs == 0.0, 1.0, n_abs)
+                n_norm = n/safe_n_abs
+                                         
+
+                t_cart = CartesianRepresentation(t_norm)
+                t_sph = t_cart.represent_as(SphericalRepresentation)
+                t_phi = t_sph.lon.value
+                t_theta = np.pi/2 - t_sph.lat.value
+    
                 l0 = np.zeros((3,Npoints), dtype=float)
-                l0[0,:] = -np.sin(dr_phi)
-                l0[1,:] = np.cos(dr_phi)
+                l0[0,:] = -np.sin(t_phi)
+                l0[1,:] = np.cos(t_phi)
+                l0[2,:] = 0
 
                 m0 = np.zeros((3,Npoints), dtype=float)
-                m0[0,:] = np.cos(dr_theta)*np.cos(dr_phi)
-                m0[1,:] = np.cos(dr_theta)*np.sin(dr_phi)
-                m0[2,:] = -np.sin(dr_theta)
-                PA = np.arctan2( np.sum(n_norm*l0, axis=0), np.sum(n_norm*m0 , axis=0))
-
+                m0[0,:] = np.cos(t_theta)*np.cos(t_phi)
+                m0[1,:] = np.cos(t_theta)*np.sin(t_phi)
+                m0[2,:] = -np.sin(t_theta)
+                nom = np.sum(n_norm*l0, axis=0)
+                denom = np.sum(n_norm*m0 , axis=0)               
+                PA = np.arctan2(nom, denom)
+                
+                # PA is prone to numerical instability when FL tangent's azimuth is close to multiple of pi
+                # and LOS colatitude is close to 90 degrees.
+                # This is a hack to fix it.
+                eps = 0.01
+                cr_t_phi = (t_phi < eps) | (t_phi > 2*np.pi-eps) | (np.abs(t_phi-np.pi) < eps)
+                cr = cr_t_phi & (np.abs(t_theta-1.57) < 0.01)
+                PA[cr] = np.arctan2(-n[1, cr], n[0, cr])
+                
                 if B_dir == -1:
                     PA = PA + np.pi
-                PA[PA<-np.pi] += 2*np.pi
-                PA[PA>np.pi] -= 2*np.pi
+                PA[PA<=-np.pi] += 2*np.pi
+                PA[PA>=np.pi] -= 2*np.pi
+               
             else:
                 PA = np.array([])
         else:

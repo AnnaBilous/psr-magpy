@@ -14,7 +14,7 @@ class FieldLineSet(FieldLine):
     """Collection of field lines with array values"""
 
     # List of properties that are stored as lists of arrays
-    ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.CURVATURE_LINE, PropertyName.PA_LINE]
+    ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.PA_LINE]
 
     def __init__(
         self, field_lines: Union[List[FieldLine], FieldLine], copy_data: bool = True

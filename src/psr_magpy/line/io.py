@@ -18,7 +18,7 @@ class FieldLineSetFitsIO(FitsIO):
     """FITS I/O operations for field lines."""
 
     # List of properties that are stored as lists of arrays
-    ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.CURVATURE_LINE, PropertyName.PA_LINE]
+    ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.PA_LINE]
 
     def __init__(self, field_line_set: FieldLineSet):
         self.data = field_line_set

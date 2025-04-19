@@ -14,7 +14,6 @@ class PropertyName(Enum):
     FOOTPOINT_ID = "save_footpoint_id"
     R_LINE = "save_r_line"
     PA_LINE = "save_pa_line"
-    CURVATURE_LINE = "save_curvature_line"
     R_MAX = "save_r_max"
     R_CYL_MAX = "save_r_cyl_max"
     Z_ABS_MAX = "save_z_abs_max"
@@ -46,7 +45,7 @@ class PropertyGroup(Enum):
         if self == PropertyGroup.SAVE_ALL:
             return set(PropertyName)
         elif self == PropertyGroup.SAVE_LINE_DATA:
-            return {PropertyName.R_LINE, PropertyName.PA_LINE, PropertyName.CURVATURE_LINE}
+            return {PropertyName.R_LINE, PropertyName.PA_LINE}
         elif self == PropertyGroup.SAVE_LINE_MAX:
             return {PropertyName.R_MAX, PropertyName.R_CYL_MAX, PropertyName.Z_ABS_MAX}
         elif self == PropertyGroup.SAVE_B_INI:
@@ -105,7 +104,7 @@ class FieldLine:
                      
                      Property groups can be specified:
                      - save_all: Enable all properties
-                     - save_line_data: Enable r_line, pa_line, curvature_line
+                     - save_line_data: Enable r_line, pa_line
                      - save_line_max: Enable r_max, r_cyl_max, z_abs_max
                      - save_b_ini: Enable b_ini, b_r_ini_angle
         """
