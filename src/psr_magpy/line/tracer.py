@@ -119,8 +119,8 @@ class FieldLineTracer:
             atol=5.0e-9,
         )
 
-        if isinstance(self.dt, int):
-            t = np.linspace(field_line.t[0], field_line.t[-1] + self.dt, self.dt)
+        if isinstance(self.dt, int) or self.dt > 1:
+            t = np.linspace(field_line.t[0], field_line.t[-1], self.dt)
         else:
             t = np.arange(field_line.t[0], field_line.t[-1] + self.dt, self.dt)
 

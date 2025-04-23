@@ -227,7 +227,7 @@ def run_experiment_series(
     config: ExperimentSeriesConfig,
     output_dir: Optional[str] = None,
     clear_log: bool = False,
-    save_individual_configs: bool = True,
+    save_individual_configs: bool = False,
     config_dir: Optional[str] = None,
 ):
     """Run a series of experiments based on the provided configuration.
@@ -247,6 +247,9 @@ def run_experiment_series(
 
     logger = logging.getLogger(__name__)
     logger.info(f"Starting experiment series: {config.name}")
+    
+    if save_individual_configs and config_dir is None:
+        raise ValueError("config_dir must be provided if save_individual_configs is True")
 
     # Override output directory if provided
     if output_dir:
@@ -254,7 +257,7 @@ def run_experiment_series(
         config.output.output_dir = output_dir
 
     # Create log file path using the series name
-    log_file = os.path.join(config.output.output_dir, f"{config.name}_log.txt")
+    log_file = os.path.join(config.output.output_dir, "logs", f"{config.name}.log")
     logger.debug(f"Log file path: {log_file}")
 
     # Clear the log file if requested
@@ -339,7 +342,7 @@ def resume_experiment_series(
         config.output.output_dir = output_dir
 
     # Create log file path using the series name
-    log_file = os.path.join(config.output.output_dir, f"{config.name}_log.txt")
+    log_file = os.path.join(config.output.output_dir, "logs", f"{config.name}.log")
     logger.debug(f"Log file path: {log_file}")
 
     # Clear the log file if requested
@@ -441,7 +444,7 @@ def analyze_experiment_log(
         logger.debug(f"Using config output directory: {output_dir_path}")
 
     # Create log file path using the series name
-    log_file = os.path.join(output_dir_path, f"{config.name}_log.txt")
+    log_file = os.path.join(output_dir_path, "logs", f"{config.name}.log")
     logger.debug(f"Log file path: {log_file}")
 
     if not os.path.exists(log_file):

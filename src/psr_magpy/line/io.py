@@ -138,7 +138,7 @@ class FieldLineSetFitsIO(FitsIO):
             hdu = hdul["FIELD_LINES"]
 
             # Create template based on column names
-            from src.psr_magpy.line.field_line import FieldLine
+            from psr_magpy.line.field_line import FieldLine
 
             template = FieldLine()
             column_names = [col.name.upper() for col in hdu.columns]
