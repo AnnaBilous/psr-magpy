@@ -83,28 +83,36 @@ class FieldComponentConfig:
     B_magnitude: float
     moment_orientation_latitude_degree: float
     moment_orientation_longitude_degree: float
+    offset_r_ns: Optional[np.ndarray] = None
+    
 
     def create_component(self) -> Union[DipoleFieldComponent, QuadrupoleFieldComponent]:
         """Create a field component based on the configuration."""
         logger.debug(f"Creating field component of type {self.type}")
+        
+        # Common parameters
+        params = {
+            "B_magnitude": self.B_magnitude,
+            "moment_orientation_latitude_degree": self.moment_orientation_latitude_degree,
+            "moment_orientation_longitude_degree": self.moment_orientation_longitude_degree,
+        }
+        
+        # Add offset if provided
+        if self.offset_r_ns is not None:
+            params["offset_r_ns"] = self.offset_r_ns
+            
         if self.type == "dipole":
             logger.debug(f"Creating Dipole field component with B={self.B_magnitude}, "
                        f"lat={self.moment_orientation_latitude_degree}°, "
-                       f"lon={self.moment_orientation_longitude_degree}°")
-            return DipoleFieldComponent(
-                B_magnitude=self.B_magnitude,
-                moment_orientation_latitude_degree=self.moment_orientation_latitude_degree,
-                moment_orientation_longitude_degree=self.moment_orientation_longitude_degree,
-            )
+                       f"lon={self.moment_orientation_longitude_degree}°"
+                       f"{', offset=' + str(self.offset_r_ns) if self.offset_r_ns is not None else ''}")
+            return DipoleFieldComponent(**params)
         elif self.type == "quadrupole":
             logger.debug(f"Creating Quadrupole field component with B={self.B_magnitude}, "
                        f"lat={self.moment_orientation_latitude_degree}°, "
-                       f"lon={self.moment_orientation_longitude_degree}°")
-            return QuadrupoleFieldComponent(
-                B_magnitude=self.B_magnitude,
-                moment_orientation_latitude_degree=self.moment_orientation_latitude_degree,
-                moment_orientation_longitude_degree=self.moment_orientation_longitude_degree,
-            )
+                       f"lon={self.moment_orientation_longitude_degree}°"
+                       f"{', offset=' + str(self.offset_r_ns) if self.offset_r_ns is not None else ''}")
+            return QuadrupoleFieldComponent(**params)
         else:
             error_msg = f"Unknown field component type: {self.type}"
             logger.error(error_msg)

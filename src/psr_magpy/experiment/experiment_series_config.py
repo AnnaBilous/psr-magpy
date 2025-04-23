@@ -86,6 +86,7 @@ class ExperimentSeriesConfig:
                     B_magnitude=params.B_magnitude,
                     moment_orientation_latitude_degree=params.moment_orientation_latitude_degree,
                     moment_orientation_longitude_degree=params.moment_orientation_longitude_degree,
+                    offset_r_ns=params.offset_r_ns,
                 )
                 field_components.append(field_component)
 
