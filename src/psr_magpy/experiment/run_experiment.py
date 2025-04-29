@@ -9,6 +9,8 @@ from pathlib import Path
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.calculator import FieldLineCalculator
+from psr_magpy.grid.grid import FootpointGrid
+from psr_magpy.experiment.experiment_config import GridConfig
 
 from .experiment_config import ExperimentConfig
 from psr_magpy.utils.logging_config import get_logger
@@ -88,6 +90,7 @@ def log_experiment_status(
 
     # Create log directory if it doesn't exist
     log_dir = os.path.dirname(log_file)
+    
     if log_dir and not os.path.exists(log_dir):
         logger.debug(f"Creating log directory: {log_dir}")
         try:
@@ -243,19 +246,25 @@ def run_experiment(config: ExperimentConfig, experiment_number=1, log_file=None)
         # Create field components
         logger.debug(f"Creating {len(config.field_components)} field components")
         field_components = []
+        
         for i, comp_config in enumerate(config.field_components):
+            
             logger.debug(f"Creating field component {i+1}: {comp_config.type}")
             component = comp_config.create_component()
             field_components.append(component)
+        
                 
         logger.debug("Creating multipole field from components")
         field = MultipoleField(field_components)
 
         # Create grid
-        logger.debug(f"Creating grid of type {config.grid.grid_type}")
-        grid = config.grid.create_grid()
-        logger.debug(f"Created {config.grid.grid_type} grid with {grid.nline} points")
-
+        logger.debug(f"Creating grid")
+        if isinstance(config.grid, GridConfig):
+            grid = config.grid.create_grid()
+            logger.debug(f"Created {config.grid.grid_type} grid with {grid.nline} points")
+        elif isinstance(config.grid, str):
+            grid = FootpointGrid.load_from_fits(config.grid)
+            logger.debug(f"Loaded grid from {config.grid}")
         # Configure template using save flags from OutputConfig
         logger.debug("Creating field line template with save flags")
         save_flags = config.output.get_save_flags()

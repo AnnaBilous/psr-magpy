@@ -82,7 +82,7 @@ class FieldComponent(ABC):
             f"Initializing {self.__class__.__name__} with B={B_magnitude:.3g}, "
             f"lat={moment_orientation_latitude_degree:.2f}°, "
             f"lon={moment_orientation_longitude_degree:.2f}°, "
-            f"offset={offset_r_ns.tolist()}"
+            f"offset={offset_r_ns}"
         )
 
         try:

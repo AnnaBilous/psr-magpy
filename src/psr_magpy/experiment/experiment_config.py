@@ -1,8 +1,8 @@
 import json
 from dataclasses import dataclass, asdict
 from typing import List, Optional, Union, Dict, Any
-from pathlib import Path
 import numpy as np
+from pathlib import Path
 
 from psr_magpy.grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
 from psr_magpy.field.components import (
@@ -231,7 +231,7 @@ class ExperimentConfig:
     description: Optional[str] = None
 
     # Component configurations
-    grid: GridConfig = None
+    grid: Union[GridConfig, str, Path] = None  # Can be GridConfig or path to grid file
     tracing: TracingConfig = None
     field_components: List[FieldComponentConfig] = None
 
@@ -248,7 +248,10 @@ class ExperimentConfig:
         if self.field_components:
             logger.debug(f"Number of field components: {len(self.field_components)}")
         if self.grid:
-            logger.debug(f"Grid type: {self.grid.grid_type}")
+            if isinstance(self.grid, GridConfig):
+                logger.debug(f"Grid type: {self.grid.grid_type}")
+            else:
+                logger.debug(f"Grid from file: {self.grid}")
         if self.tracing:
             logger.debug(f"Tracing config: R_max={self.tracing.R_max}, min_R_max_line={self.tracing.min_R_max_line}, dt={self.tracing.dt}")
 
@@ -281,7 +284,9 @@ class ExperimentConfig:
 
             # Convert nested configs
             logger.debug("Converting grid configuration")
-            data["grid"] = GridConfig(**data["grid"])
+            if isinstance(data["grid"], dict):
+                data["grid"] = GridConfig(**data["grid"])
+            # If grid is a string, keep it as a path
             
             logger.debug("Converting tracing configuration")
             data["tracing"] = TracingConfig(**data["tracing"])
@@ -310,10 +315,16 @@ class ExperimentConfig:
         # Convert to dictionary
         config_dict = asdict(self)
 
-        # Convert grid_type to string
-        if isinstance(config_dict["grid"]["grid_type"], GridType):
-            logger.debug("Converting grid_type enum to string")
-            config_dict["grid"]["grid_type"] = config_dict["grid"]["grid_type"].value
+        # Handle grid - could be GridConfig or string path
+        if isinstance(self.grid, GridConfig):
+            # Convert grid_type to string
+            if isinstance(config_dict["grid"]["grid_type"], GridType):
+                logger.debug("Converting grid_type enum to string")
+                config_dict["grid"]["grid_type"] = config_dict["grid"]["grid_type"].value
+        # If grid is a string or Path, keep it as is
+        elif isinstance(self.grid, (str, Path)):
+            logger.debug(f"Grid is a path: {self.grid}")
+            config_dict["grid"] = str(self.grid)
 
         # Handle OutputConfig serialization
         logger.debug("Converting output configuration to dictionary")
