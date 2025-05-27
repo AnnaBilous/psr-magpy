@@ -192,7 +192,7 @@ class FootpointGrid(ABC):
         if logger.isEnabledFor(logging.DEBUG):
             # Only log indices in debug mode to avoid wall of text
             logger.debug(f"Subset indices: {grid_indices[:5]}... (showing first 5)")
-
+               
         invalid_indices: set[int] = set(grid_indices) - set(self.indices)
         if invalid_indices:
             error_msg = (

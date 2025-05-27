@@ -69,6 +69,7 @@ class FieldLineCalculator:
         self.grid = grid
         logger.info(f"Initialized FieldLineCalculator with {grid.nline} footpoints")
         logger.debug(f"Field: {field}, Grid: {grid}")
+        
 
     def _estimate_memory_requirements_and_time_for_completion(
         self,
@@ -101,8 +102,9 @@ class FieldLineCalculator:
         time_start = time.time()
         n_trial = min(self.grid.nline, n_trial)
 
-        trial_indices = np.random.choice(self.grid.nline, size=n_trial, replace=False)
+        trial_indices = np.arange(n_trial) #np.random.choice(self.grid.indices, size=n_trial, replace=False)
         trial_grid = self.grid.subset_grid(trial_indices)
+        
         logger.debug(f"Selected {n_trial} random footpoints for estimation")
 
         trial_results = self._process_batch(

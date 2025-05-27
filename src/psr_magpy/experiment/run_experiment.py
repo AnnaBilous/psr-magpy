@@ -261,10 +261,11 @@ def run_experiment(config: ExperimentConfig, experiment_number=1, log_file=None)
         logger.debug(f"Creating grid")
         if isinstance(config.grid, GridConfig):
             grid = config.grid.create_grid()
-            logger.debug(f"Created {config.grid.grid_type} grid with {grid.nline} points")
+            logger.info(f"Created {config.grid.grid_type} grid with {grid.nline} points")
         elif isinstance(config.grid, str):
             grid = FootpointGrid.load_from_fits(config.grid)
-            logger.debug(f"Loaded grid from {config.grid}")
+            logger.info(f"Loaded grid from {config.grid}")
+            
         # Configure template using save flags from OutputConfig
         logger.debug("Creating field line template with save flags")
         save_flags = config.output.get_save_flags()
