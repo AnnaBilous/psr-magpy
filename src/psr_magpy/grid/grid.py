@@ -27,6 +27,7 @@ class GridType(Enum):
     SPHERICAL = "spherical"
     HEALPIX = "healpix"
     RANDOM = "random"
+    CUSTOM = "custom"
 
 
 class FootpointGrid(ABC):
@@ -111,6 +112,7 @@ class FootpointGrid(ABC):
             GridType.SPHERICAL: SphericalGrid,
             GridType.HEALPIX: HealpixGrid,
             GridType.RANDOM: RandomGrid,
+            GridType.CUSTOM: CustomGrid,
         }
         grid_class = grid_classes.get(grid_type)
         if grid_class is None:
@@ -174,7 +176,7 @@ class FootpointGrid(ABC):
 
     def subset_grid(
         self, grid_indices: np.ndarray
-    ) -> Union["SphericalGrid", "HealpixGrid", "RandomGrid"]:
+    ) -> Union["SphericalGrid", "HealpixGrid", "RandomGrid", "CustomGrid"]:
         """Create a new grid instance with subset of indices.
 
         Args:
@@ -212,11 +214,14 @@ class FootpointGrid(ABC):
             elif isinstance(self, HealpixGrid):
                 logger.debug(f"Creating HealpixGrid subset with nside={self.nside}")
                 new_grid = HealpixGrid(self.nside)
-            else:  # RandomGrid
+            elif isinstance(self, RandomGrid):
                 logger.debug(
                     f"Creating RandomGrid subset with nline_ori={self.nline_ori}"
                 )
                 new_grid = RandomGrid(self.nline_ori)
+            elif isinstance(self, CustomGrid):
+                logger.debug(f"Creating CustomGrid subset with nline_ori={self.nline_ori}")
+                new_grid = CustomGrid(self.nline_ori)
 
             # Set subset properties
             new_grid.partial = True
@@ -530,4 +535,90 @@ class RandomGrid(FootpointGrid):
     def from_header(cls, header: pf.Header) -> "RandomGrid":
         """Create RandomGrid from FITS header."""
         logger.debug(f"Creating RandomGrid from header: NLINE={header['NLINE']}")
+        return cls(nline_ori=header["NLINE"])
+
+
+class CustomGrid(FootpointGrid):
+    """Custom grid with user-provided coordinates.
+
+    Creates a grid with coordinates specified by the user. Initializes with NaN values
+    that must be set either during initialization or via set_coordinates method.
+
+    Parameters
+    ----------
+    nline_ori : int
+        Number of points in the grid
+    coordinates : CartesianRepresentation, optional
+        Initial coordinates for grid points. If not provided, coordinates will be NaN.
+
+    Notes
+    -----
+    User must provide valid coordinates before using the grid for calculations.
+    Coordinates should be on a unit sphere.
+
+    Raises
+    ------
+    ValueError
+        If nline_ori is not positive or if provided coordinates have wrong shape
+    """
+
+    def __init__(self, nline_ori: int, coordinates: Optional[CartesianRepresentation] = None):
+        logger.debug(f"Initializing CustomGrid with {nline_ori} points")
+        super().__init__()
+        self.grid_type = GridType.CUSTOM
+        if nline_ori <= 0:
+            logger.error(f"Invalid number of points: {nline_ori} (must be positive)")
+            raise ValueError("Number of points must be positive")
+
+        self.nline_ori = nline_ori
+        if coordinates is not None:
+            if len(coordinates.x) != nline_ori:
+                error_msg = f"Coordinates length {len(coordinates.x)} != nline_ori {nline_ori}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            self.footpoint_coordinates = coordinates
+        else:
+            # Initialize with NaN values
+            nan_array = np.full(nline_ori, np.nan)
+            self.footpoint_coordinates = CartesianRepresentation(nan_array, nan_array, nan_array)
+        
+        self.indices = np.arange(nline_ori)
+        self.nline = nline_ori
+        logger.debug("CustomGrid initialization complete")
+
+    def __repr__(self) -> str:
+        return f"CustomGrid(nline_ori={self.nline_ori})"
+
+    def _add_params_to_header(self, header: pf.Header) -> None:
+        pass  # No additional parameters needed for custom grid
+
+    def _prepare_footpoints(self) -> CartesianRepresentation:
+        """Return current footpoint coordinates."""
+        return self.footpoint_coordinates
+
+    def set_coordinates(self, coordinates: CartesianRepresentation) -> None:
+        """Set new coordinates for grid points.
+
+        Parameters
+        ----------
+        coordinates : CartesianRepresentation
+            New coordinates for grid points
+
+        Raises
+        ------
+        ValueError
+            If coordinates length doesn't match nline_ori
+        """
+        if len(coordinates.x) != self.nline_ori:
+            error_msg = f"Coordinates length {len(coordinates.x)} != nline_ori {self.nline_ori}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        self.footpoint_coordinates = coordinates
+        logger.debug("CustomGrid coordinates updated")
+
+    @classmethod
+    def from_header(cls, header: pf.Header) -> "CustomGrid":
+        """Create CustomGrid from FITS header."""
+        logger.debug(f"Creating CustomGrid from header: NLINE={header['NLINE']}")
         return cls(nline_ori=header["NLINE"])
