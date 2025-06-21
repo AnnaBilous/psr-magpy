@@ -258,6 +258,7 @@ def run_experiment(config: ExperimentConfig, experiment_number=1, log_file=None)
         field = MultipoleField(field_components)
 
         # Create grid
+        
         logger.debug(f"Creating grid")
         if isinstance(config.grid, GridConfig):
             grid = config.grid.create_grid()
@@ -265,7 +266,7 @@ def run_experiment(config: ExperimentConfig, experiment_number=1, log_file=None)
         elif isinstance(config.grid, str):
             grid = FootpointGrid.load_from_fits(config.grid)
             logger.info(f"Loaded grid from {config.grid}")
-            
+     
         # Configure template using save flags from OutputConfig
         logger.debug("Creating field line template with save flags")
         save_flags = config.output.get_save_flags()
