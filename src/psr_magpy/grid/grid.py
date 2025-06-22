@@ -17,6 +17,7 @@ from astropy.io import fits as pf
 from astropy.nddata import CCDData
 
 from psr_magpy.utils.logging_config import get_logger
+from pydantic import BaseModel, Field, validator, model_validator
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -54,49 +55,35 @@ class FootpointGrid(ABC):
     """
 
     def __init__(self) -> None:
-        logger.debug("Initializing FootpointGrid")
         self.partial: bool = False
         self.footpoint_coordinates: Optional[CartesianRepresentation] = None
         self.nline_ori: Optional[int] = None
         self.indices: Optional[np.ndarray] = None
         self.nline: Optional[int] = None
         self.grid_type: Optional[GridType] = None
-        logger.debug("FootpointGrid initialized")
 
     @classmethod
     def load_from_fits(cls: Type[T], fitsname: str) -> T:
-        """Load grid from a FITS file.
-
-        Args:
-            fitsname: Path to FITS file
-
-        Returns:
-            Instance of the specific grid class that called this method
-        """
-        logger.debug(f"Loading grid from {fitsname}")
+        """Load grid from a FITS file."""
         try:
             with pf.open(fitsname) as hdulist:
                 header_main = hdulist[0].header
                 grid_type = GridType(header_main["GRIDTYPE"])
-                logger.debug(f"Grid type from file: {grid_type}")
 
                 # Delegate creation to specific grid class
                 grid = cls._create_grid_from_header(header_main, grid_type)
 
                 # Load coordinates
-                logger.debug("Loading coordinates from FITS file")
                 footpoint_coordinates = hdulist["FTP_CRD"].data
                 grid.footpoint_coordinates = CartesianRepresentation(
                     footpoint_coordinates
                 )
 
                 # Load indices
-                logger.debug("Loading indices from FITS file")
                 grid.indices = np.array([row[0] for row in hdulist["FTP_ID"].data])
                 grid.partial = header_main["PARTIAL"]
                 grid.nline = len(grid.indices)
                 
-                logger.debug(f"Successfully loaded grid with {grid.nline} points")
                 return grid
 
         except Exception as e:
@@ -119,7 +106,6 @@ class FootpointGrid(ABC):
             logger.error(f"Unknown grid type: {grid_type}")
             raise ValueError(f"Unknown grid type: {grid_type}")
         
-        logger.debug(f"Creating {grid_class.__name__} from header")
         return cast(T, grid_class.from_header(header))
 
     @property
@@ -157,85 +143,31 @@ class FootpointGrid(ABC):
 
     def _set_up_grid(self) -> None:
         """Calculate grid points and initialize grid properties."""
-        logger.debug(f"Setting up grid of type {self.grid_type}")
         try:
-            start_time = time.perf_counter()
             self.footpoint_coordinates = self._prepare_footpoints()
             self.nline_ori = len(self.footpoint_coordinates.x)
             self.indices = np.arange(self.nline_ori)
             self.nline = self.nline_ori
-            elapsed = time.perf_counter() - start_time
-            logger.debug(
-                f"Grid setup complete: {self.nline} points in {elapsed:.2f}s"
-            )
-            logger.debug(f"Grid details: type={self.grid_type}, points={self.nline}")
         except Exception as e:
             logger.error(f"Failed to set up grid: {str(e)}")
-            logger.debug("Grid setup error details", exc_info=True)
             raise
 
-    def subset_grid(
-        self, grid_indices: np.ndarray
-    ) -> Union["SphericalGrid", "HealpixGrid", "RandomGrid", "CustomGrid"]:
-        """Create a new grid instance with subset of indices.
-
-        Args:
-            grid_indices: Array of indices to include in the subset
-
-        Returns:
-            FootpointGrid: New grid instance with subset of points
-
-        Raises:
-            ValueError: If any indices are invalid
-        """
-        logger.debug(f"Creating subset with {len(grid_indices)} points")
-        logger.debug(f"Original grid size: {self.nline_ori} points")
+    def subset_grid(self, grid_indices: np.ndarray) -> "FootpointGrid":
+        """Create a new grid instance with subset of indices."""
+        # Validate indices
+        if not all(0 <= i < len(self.indices) for i in grid_indices):
+            raise ValueError(f"Invalid indices. Must be between 0 and {len(self.indices)-1}")
         
-        if logger.isEnabledFor(logging.DEBUG):
-            # Only log indices in debug mode to avoid wall of text
-            logger.debug(f"Subset indices: {grid_indices[:5]}... (showing first 5)")
-               
-        invalid_indices: set[int] = set(grid_indices) - set(self.indices)
-        if invalid_indices:
-            error_msg = (
-                f"Invalid indices found: {invalid_indices}. "
-                f"Indices must be between 0 and {len(self.indices)-1}"
-            )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        try:
-            # Create a new instance with same parameters
-            if isinstance(self, SphericalGrid):
-                logger.debug(
-                    f"Creating SphericalGrid subset with nlon={self.nlon}, nlat={self.nlat}"
-                )
-                new_grid = SphericalGrid(self.nlon, self.nlat, self.pole_lat.deg)
-            elif isinstance(self, HealpixGrid):
-                logger.debug(f"Creating HealpixGrid subset with nside={self.nside}")
-                new_grid = HealpixGrid(self.nside)
-            elif isinstance(self, RandomGrid):
-                logger.debug(
-                    f"Creating RandomGrid subset with nline_ori={self.nline_ori}"
-                )
-                new_grid = RandomGrid(self.nline_ori)
-            elif isinstance(self, CustomGrid):
-                logger.debug(f"Creating CustomGrid subset with nline_ori={self.nline_ori}")
-                new_grid = CustomGrid(self.nline_ori)
-
-            # Set subset properties
-            new_grid.partial = True
-            new_grid.footpoint_coordinates = self.footpoint_coordinates[grid_indices]
-            new_grid.indices = grid_indices
-            new_grid.nline = len(grid_indices)
-
-            logger.debug(f"Subset grid created with {new_grid.nline} points")
-            return new_grid
-
-        except Exception as e:
-            logger.error(f"Failed to create subset grid: {str(e)}")
-            logger.debug("Subset creation error details", exc_info=True)
-            raise
+        # Create new grid using copy
+        new_grid = self.copy()
+        
+        # Set subset properties
+        new_grid.partial = True
+        new_grid.footpoint_coordinates = self.footpoint_coordinates[grid_indices]
+        new_grid.indices = grid_indices
+        new_grid.nline = len(grid_indices)
+        
+        return new_grid
 
     def save_to_fits(self, fitsname: str) -> None:
         """Save grid to a FITS file."""
@@ -250,11 +182,9 @@ class FootpointGrid(ABC):
             header_main.set("PARTIAL", self.partial, "Partial grid")
 
             # Add grid-specific parameters to header
-            logger.debug("Adding grid-specific parameters to header")
             self._add_params_to_header(header_main)
 
             # Save coordinates
-            logger.debug("Saving coordinates to FITS file")
             data = CCDData(
                 self.footpoint_coordinates.xyz, unit=self.footpoint_coordinates.xyz.unit
             )
@@ -262,7 +192,6 @@ class FootpointGrid(ABC):
             hdu_footpoints.name = "FTP_CRD"
 
             # Save indices
-            logger.debug("Saving indices to FITS file")
             col = pf.Column(name="footpoint_id", format="K", array=self.indices)
             hdu_indices = pf.BinTableHDU.from_columns([col], name="FTP_ID")
 
@@ -273,7 +202,6 @@ class FootpointGrid(ABC):
 
         except Exception as e:
             logger.error(f"Failed to save grid to {fitsname}: {e}")
-            logger.debug("Save error details", exc_info=True)
             raise
 
     def plot_footpoint_coordinates(
@@ -284,7 +212,6 @@ class FootpointGrid(ABC):
         **kwargs: Any,
     ) -> plt.Axes:
         """Plot footpoint coordinates."""
-        logger.debug("Plotting footpoint coordinates")
         try:
             if ax is None:
                 _, ax = plt.subplots()
@@ -296,12 +223,21 @@ class FootpointGrid(ABC):
             ax.set_ylim(180, 0)
             ax.set_ylabel("Latitude, deg")
 
-            logger.debug("Footpoint coordinates plotted successfully")
             return ax
         except Exception as e:
             logger.error(f"Failed to plot footpoint coordinates: {e}")
-            logger.debug("Plot error details", exc_info=True)
             raise
+
+    @abstractmethod
+    def copy(self) -> "FootpointGrid":
+        """Create a copy of the grid with same parameters."""
+        pass
+
+
+class SphericalGridParams(BaseModel):
+    nlon: int = Field(gt=0, description="Number of longitude divisions")
+    nlat: int = Field(gt=0, description="Number of latitude divisions")
+    pole_lat: float = Field(default=0.0, description="Latitude of grid pole")
 
 
 class SphericalGrid(FootpointGrid):
@@ -335,23 +271,16 @@ class SphericalGrid(FootpointGrid):
     """
 
     def __init__(self, nlon: int, nlat: int, pole_lat: float = 0):
-        logger.debug(
-            f"Initializing SphericalGrid: nlon={nlon}, nlat={nlat}, pole_lat={pole_lat}"
-        )
         super().__init__()
         self.grid_type = GridType.SPHERICAL
-        if nlon <= 0 or nlat <= 0:
-            error_msg = (
-                f"Grid dimensions must be positive, got nlon={nlon}, nlat={nlat}"
-            )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        self.nlon = nlon
-        self.nlat = nlat
-        self.pole_lat = Angle(pole_lat * u.deg)
+        
+        # Pydantic validation
+        params = SphericalGridParams(nlon=nlon, nlat=nlat, pole_lat=pole_lat)
+        
+        self.nlon = params.nlon
+        self.nlat = params.nlat
+        self.pole_lat = Angle(params.pole_lat * u.deg)
         self._set_up_grid()
-        logger.debug("SphericalGrid initialization complete")
 
     def __repr__(self) -> str:
         return (
@@ -362,18 +291,13 @@ class SphericalGrid(FootpointGrid):
     @classmethod
     def from_header(cls, header: pf.Header) -> "SphericalGrid":
         """Create SphericalGrid from FITS header."""
-        logger.debug(f"Creating SphericalGrid from header: NLON={header['NLON']}, NLAT={header['NLAT']}")
         return cls(nlon=header["NLON"], nlat=header["NLAT"], pole_lat=header["POLELAT"])
 
     def _prepare_footpoints(self) -> CartesianRepresentation:
-        logger.debug("Preparing SphericalGrid footpoints")
-        start_time = time.perf_counter()
-
         # Create grid
         phi_grid = np.linspace(0, 2 * np.pi, self.nlon, endpoint=False)
         theta_grid = np.linspace(0, np.pi, self.nlat)
         lat_resolution = np.rad2deg(theta_grid[1] - theta_grid[0])
-        logger.debug(f"Latitude resolution: {lat_resolution:.2f} degrees")
 
         # Create mesh and handle poles
         phi_mesh, theta_mesh = np.meshgrid(phi_grid, theta_grid)
@@ -383,7 +307,6 @@ class SphericalGrid(FootpointGrid):
         duplicate = np.where(
             (phi_mesh > 0) & ((theta_mesh == 0) | (theta_mesh == np.pi))
         )
-        logger.debug(f"Removing {len(duplicate[0])} duplicate pole points")
 
         theta_pruned = np.delete(theta_mesh, duplicate)
         phi_pruned = np.delete(phi_mesh, duplicate)
@@ -396,23 +319,31 @@ class SphericalGrid(FootpointGrid):
 
         # Apply rotation if needed
         if not (self.pole_lat == 0):
-            logger.debug(
-                f"Applying rotation for pole_lat={self.pole_lat.deg:.2f} degrees"
-            )
             rotation_operator = rot.from_euler("yzx", [self.pole_lat.rad, 0, 0])
             rotated_xyz = rotation_operator.apply(footpoints_cart.xyz.value.T).T
             footpoints_cart = CartesianRepresentation(
                 rotated_xyz, unit=footpoints_cart.xyz.unit
             )
 
-        elapsed = time.perf_counter() - start_time
-        logger.debug(f"Footpoint preparation completed in {elapsed:.2f} seconds")
         return footpoints_cart
 
     def _add_params_to_header(self, header: pf.Header) -> None:
         header.set("NLON", self.nlon, "Number of longitude divisions")
         header.set("NLAT", self.nlat, "Number of latitude divisions")
         header.set("POLELAT", self.pole_lat.deg, "Latitude of grid pole, degree")
+
+    def copy(self) -> "SphericalGrid":
+        return SphericalGrid(self.nlon, self.nlat, self.pole_lat.deg)
+
+
+class HealpixGridParams(BaseModel):
+    nside: int = Field(gt=0, description="HEALPix resolution parameter")
+    
+    @validator('nside')
+    def validate_power_of_two(cls, v):
+        if not (v & (v - 1) == 0):
+            raise ValueError(f"nside must be a power of 2, got {v}")
+        return v
 
 
 class HealpixGrid(FootpointGrid):
@@ -443,16 +374,13 @@ class HealpixGrid(FootpointGrid):
     """
 
     def __init__(self, nside: int):
-        logger.debug(f"Initializing HealpixGrid with nside={nside}")
         super().__init__()
         self.grid_type = GridType.HEALPIX
-        if nside <= 0 or not (nside & (nside - 1) == 0):
-            logger.error(f"Invalid NSIDE value: {nside} (must be a positive power of 2)")
-            raise ValueError("NSIDE must be a positive power of 2")
-
-        self.nside = nside
+        
+        # Pydantic validation
+        params = HealpixGridParams(nside=nside)
+        self.nside = params.nside
         self._set_up_grid()
-        logger.debug("HealpixGrid initialization complete")
 
     def __repr__(self) -> str:
         return f"HealpixGrid(nside={self.nside})"
@@ -461,12 +389,9 @@ class HealpixGrid(FootpointGrid):
         header.set("NSIDE", self.nside, "Healpix parameter nside")
 
     def _prepare_footpoints(self) -> CartesianRepresentation:
-        logger.debug(f"Preparing HealpixGrid footpoints with nside={self.nside}")
         npix = hp.nside2npix(self.nside)
         resolution_deg = hp.nside2resol(self.nside, arcmin=True) / 60
         
-        logger.debug(f"HEALPix grid: nside={self.nside}, resolution={resolution_deg:.2f}°, points={npix}")
-
         theta_val, phi_val = hp.pix2ang(nside=self.nside, ipix=np.arange(npix))
         phi = Angle(phi_val * u.rad)
         theta = Angle(theta_val * u.rad)
@@ -477,8 +402,14 @@ class HealpixGrid(FootpointGrid):
     @classmethod
     def from_header(cls, header: pf.Header) -> "HealpixGrid":
         """Create HealpixGrid from FITS header."""
-        logger.debug(f"Creating HealpixGrid from header: NSIDE={header['NSIDE']}")
         return cls(nside=header["NSIDE"])
+
+    def copy(self) -> "HealpixGrid":
+        return HealpixGrid(self.nside)
+
+
+class RandomGridParams(BaseModel):
+    nline_ori: int = Field(gt=0, description="Number of random points")
 
 
 class RandomGrid(FootpointGrid):
@@ -506,16 +437,13 @@ class RandomGrid(FootpointGrid):
     """
 
     def __init__(self, nline_ori: int):
-        logger.debug(f"Initializing RandomGrid with {nline_ori} points")
         super().__init__()
         self.grid_type = GridType.RANDOM
-        if nline_ori <= 0:
-            logger.error(f"Invalid number of points: {nline_ori} (must be positive)")
-            raise ValueError("Number of random points must be positive")
-
-        self.nline_ori = nline_ori
+        
+        # Pydantic validation
+        params = RandomGridParams(nline_ori=nline_ori)
+        self.nline_ori = params.nline_ori
         self._set_up_grid()
-        logger.debug("RandomGrid initialization complete")
 
     def __repr__(self) -> str:
         return f"RandomGrid(nline_ori={self.nline_ori})"
@@ -524,7 +452,6 @@ class RandomGrid(FootpointGrid):
         pass  # No additional parameters needed for random grid
 
     def _prepare_footpoints(self) -> CartesianRepresentation:
-        logger.debug(f"Generating {self.nline_ori} random points on sphere")
         # Muller method for random points on a sphere
         u: np.ndarray = np.random.normal(loc=0, scale=1, size=(3, self.nline_ori))
         norm: np.ndarray = (np.sum(u**2, axis=0)) ** 0.5
@@ -534,8 +461,22 @@ class RandomGrid(FootpointGrid):
     @classmethod
     def from_header(cls, header: pf.Header) -> "RandomGrid":
         """Create RandomGrid from FITS header."""
-        logger.debug(f"Creating RandomGrid from header: NLINE={header['NLINE']}")
         return cls(nline_ori=header["NLINE"])
+
+    def copy(self) -> "RandomGrid":
+        return RandomGrid(self.nline_ori)
+
+
+class CustomGridParams(BaseModel):
+    nline_ori: int = Field(gt=0, description="Number of points")
+    coordinates: Optional[CartesianRepresentation] = Field(default=None, description="Initial coordinates")
+    
+    @model_validator(mode='after')
+    def validate_coordinates_length(self):
+        if self.coordinates is not None:
+            if len(self.coordinates.x) != self.nline_ori:
+                raise ValueError(f"Coordinates length {len(self.coordinates.x)} != nline_ori {self.nline_ori}")
+        return self
 
 
 class CustomGrid(FootpointGrid):
@@ -563,28 +504,16 @@ class CustomGrid(FootpointGrid):
     """
 
     def __init__(self, nline_ori: int, coordinates: Optional[CartesianRepresentation] = None):
-        logger.debug(f"Initializing CustomGrid with {nline_ori} points")
         super().__init__()
         self.grid_type = GridType.CUSTOM
-        if nline_ori <= 0:
-            logger.error(f"Invalid number of points: {nline_ori} (must be positive)")
-            raise ValueError("Number of points must be positive")
-
-        self.nline_ori = nline_ori
-        if coordinates is not None:
-            if len(coordinates.x) != nline_ori:
-                error_msg = f"Coordinates length {len(coordinates.x)} != nline_ori {nline_ori}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-            self.footpoint_coordinates = coordinates
-        else:
-            # Initialize with NaN values
-            nan_array = np.full(nline_ori, np.nan)
-            self.footpoint_coordinates = CartesianRepresentation(nan_array, nan_array, nan_array)
         
-        self.indices = np.arange(nline_ori)
-        self.nline = nline_ori
-        logger.debug("CustomGrid initialization complete")
+        # Pydantic validation
+        params = CustomGridParams(nline_ori=nline_ori, coordinates=coordinates)
+        
+        self.nline_ori = params.nline_ori
+        self._set_coordinates(params.coordinates)
+        self.indices = np.arange(self.nline_ori)
+        self.nline = self.nline_ori
 
     def __repr__(self) -> str:
         return f"CustomGrid(nline_ori={self.nline_ori})"
@@ -615,10 +544,11 @@ class CustomGrid(FootpointGrid):
             raise ValueError(error_msg)
         
         self.footpoint_coordinates = coordinates
-        logger.debug("CustomGrid coordinates updated")
 
     @classmethod
     def from_header(cls, header: pf.Header) -> "CustomGrid":
         """Create CustomGrid from FITS header."""
-        logger.debug(f"Creating CustomGrid from header: NLINE={header['NLINE']}")
         return cls(nline_ori=header["NLINE"])
+
+    def copy(self) -> "CustomGrid":
+        return CustomGrid(self.nline_ori)
