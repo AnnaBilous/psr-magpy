@@ -51,10 +51,14 @@ class FootpointGrid(ABC):
     @classmethod
     def load_from_fits(cls: Type[T], fitsname: str) -> T:
         """Load grid from FITS file."""
+        logger.info(f"Loading grid from {fitsname}")
+        start_time = time.time()
+        
         try:
             with pf.open(fitsname) as hdulist:
                 header_main = hdulist[0].header
                 grid_type = GridType(header_main["GRIDTYPE"])
+                logger.debug(f"Grid type: {grid_type.value}")
 
                 # Delegate creation to specific grid class
                 grid = cls._create_grid_from_header(header_main, grid_type)
@@ -70,10 +74,13 @@ class FootpointGrid(ABC):
                 grid.partial = header_main["PARTIAL"]
                 grid.nline = len(grid.indices)
                 
+                duration = time.time() - start_time
+                logger.info(f"Grid loaded: {grid.nline} points in {duration:.3f}s")
                 return grid
 
         except Exception as e:
-            logger.error(f"Failed to load grid from {fitsname}: {e}")
+            error_msg = f"Failed to load grid from {fitsname}: {e}"
+            logger.error(error_msg)
             raise
 
     @classmethod
@@ -87,8 +94,9 @@ class FootpointGrid(ABC):
         }
         grid_class = grid_classes.get(grid_type)
         if grid_class is None:
-            logger.error(f"Unknown grid type: {grid_type}")
-            raise ValueError(f"Unknown grid type: {grid_type}")
+            error_msg = f"Unknown grid type: {grid_type}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         return cast(T, grid_class.from_header(header))
 
@@ -116,19 +124,38 @@ class FootpointGrid(ABC):
     def _set_up_grid(self) -> None:
         """Set up grid coordinates and indices."""
         try:
+            logger.debug(f"Preparing footpoint coordinates for {self.grid_type.value} grid")
+            start_time = time.time()
+            
             self.footpoint_coordinates = self._prepare_footpoints()
             self.nline_ori = len(self.footpoint_coordinates.x)
             self.indices = np.arange(self.nline_ori)
             self.nline = self.nline_ori
+            
+            duration = time.time() - start_time
+            logger.info(f"Grid setup: {self.nline} points in {duration:.3f}s")
+            logger.debug(f"Grid type: {self.grid_type.value}, partial: {self.partial}")
+            
         except Exception as e:
-            logger.error(f"Failed to set up grid: {str(e)}")
+            error_msg = f"Failed to set up grid: {str(e)}"
+            logger.error(error_msg)
             raise
 
     def subset_grid(self, grid_indices: np.ndarray) -> "FootpointGrid":
         """Create subset of grid points."""
+        logger.debug(f"Creating subset: {len(grid_indices)}/{len(self.indices)} points")
+        
+        # Check for empty indices
+        if len(grid_indices) == 0:
+            error_msg = "Cannot create subset with empty indices"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
         # Validate indices
         if not all(0 <= i < len(self.indices) for i in grid_indices):
-            raise ValueError(f"Invalid indices. Must be between 0 and {len(self.indices)-1}")
+            error_msg = f"Invalid indices. Must be between 0 and {len(self.indices)-1}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         
         # Create new grid using copy
         new_grid = self.copy()
@@ -139,6 +166,7 @@ class FootpointGrid(ABC):
         new_grid.indices = grid_indices
         new_grid.nline = len(grid_indices)
         
+        logger.info(f"Subset created: {new_grid.nline} points")
         return new_grid
 
     def save_to_fits(self, fitsname: str) -> None:
@@ -173,7 +201,8 @@ class FootpointGrid(ABC):
             logger.info(f"Grid successfully saved to {fitsname}")
 
         except Exception as e:
-            logger.error(f"Failed to save grid to {fitsname}: {e}")
+            error_msg = f"Failed to save grid to {fitsname}: {e}"
+            logger.error(error_msg)
             raise
 
     def plot_footpoint_coordinates(self, ax: Optional[plt.Axes] = None, 
@@ -193,7 +222,8 @@ class FootpointGrid(ABC):
 
             return ax
         except Exception as e:
-            logger.error(f"Failed to plot footpoint coordinates: {e}")
+            error_msg = f"Failed to plot footpoint coordinates: {e}"
+            logger.error(error_msg)
             raise
 
     @abstractmethod
@@ -201,15 +231,26 @@ class FootpointGrid(ABC):
         """Create a copy of the grid."""
         pass
 
+    def _copy_attributes(self, copied: "FootpointGrid") -> None:
+        """Copy common attributes to the copied grid."""
+        copied.footpoint_coordinates = self.footpoint_coordinates
+        copied.indices = self.indices.copy() if self.indices is not None else None
+        copied.partial = self.partial
+        copied.nline = self.nline
+
     @classmethod
     def _extract_params(cls, header: pf.Header, required_params: List[str]) -> Dict[str, Any]:
         """Extract parameters from header with consistent error handling."""
+        logger.debug(f"Extracting parameters: {required_params}")
         params = {}
         for param in required_params:
             try:
                 params[param] = header[param]
+                logger.debug(f"Found parameter {param}: {header[param]}")
             except KeyError:
-                raise ValueError(f"Missing {param} parameter in header")
+                error_msg = f"Missing {param} parameter in header"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
         return params
 
     def _get_header_params(self) -> Dict[str, Any]:
@@ -257,6 +298,8 @@ class SphericalGrid(FootpointGrid):
         self.nlon = params.nlon
         self.nlat = params.nlat
         self.pole_lat = Angle(params.pole_lat * u.deg)
+        
+        logger.debug(f"Initializing SphericalGrid: {nlon}x{nlat}, pole_lat={pole_lat}°")
         self._set_up_grid()
 
     def __repr__(self) -> str:
@@ -310,7 +353,9 @@ class SphericalGrid(FootpointGrid):
 
     def copy(self) -> "SphericalGrid":
         """Create a copy of the grid."""
-        return SphericalGrid(self.nlon, self.nlat, self.pole_lat.deg)
+        copied = SphericalGrid(self.nlon, self.nlat, self.pole_lat.deg)
+        self._copy_attributes(copied)
+        return copied
 
 
 class HealpixGridParams(BaseModel):
@@ -320,7 +365,9 @@ class HealpixGridParams(BaseModel):
     @model_validator(mode='after')
     def validate_power_of_two(self):
         if not (self.nside & (self.nside - 1) == 0):
-            raise ValueError(f"nside must be a power of 2, got {self.nside}")
+            error_msg = f"nside must be a power of 2, got {self.nside}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         return self
 
 
@@ -379,7 +426,9 @@ class HealpixGrid(FootpointGrid):
 
     def copy(self) -> "HealpixGrid":
         """Create a copy of the grid."""
-        return HealpixGrid(self.nside)
+        copied = HealpixGrid(self.nside)
+        self._copy_attributes(copied)
+        return copied
 
 
 class RandomGridParams(BaseModel):
@@ -425,7 +474,9 @@ class RandomGrid(FootpointGrid):
 
     def copy(self) -> "RandomGrid":
         """Create a copy of the grid."""
-        return RandomGrid(self.nline_ori)
+        copied = RandomGrid(self.nline_ori)
+        self._copy_attributes(copied)
+        return copied
 
 
 class CustomGridParams(BaseModel):
@@ -439,7 +490,9 @@ class CustomGridParams(BaseModel):
     def validate_coordinates_length(self):
         if self.coordinates is not None:
             if len(self.coordinates.x) != self.nline_ori:
-                raise ValueError(f"Coordinates length {len(self.coordinates.x)} != nline_ori {self.nline_ori}")
+                error_msg = f"Coordinates length {len(self.coordinates.x)} != nline_ori {self.nline_ori}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
         return self
 
 
@@ -502,7 +555,9 @@ class CustomGrid(FootpointGrid):
 
     def copy(self) -> "CustomGrid":
         """Create a copy of the grid."""
-        return CustomGrid(self.nline_ori)
+        copied = CustomGrid(self.nline_ori)
+        self._copy_attributes(copied)
+        return copied
 
 
 """Grid classes for magnetic field line tracing.

@@ -54,3 +54,8 @@ Key Conventions:
 Prompting:
 
 When the prompt begins with "Any ideas on refactoring", do not suggest direct code modifications, output the list of suggested global changes with explanations. Do not provide example refactor.
+
+For error handling use this pattern:
+error_msg = "Descriptive error message"
+logger.error(error_msg)
+raise <>Error(error_msg) 

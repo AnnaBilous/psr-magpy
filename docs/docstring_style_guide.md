@@ -2,13 +2,14 @@
 
 This document outlines the docstring standards for the psr-magpy project.
 
-## NumPy Docstring Format
+## Docstring Format
 
-All code in psr-magpy should use NumPy-style docstrings. This format was chosen for:
+All code in psr-magpy should use concise, clear docstrings that prioritize readability and practical usage. The format emphasizes:
 
-1. Clear separation of sections
-2. Good support for scientific notation and units
-3. Compatibility with Sphinx documentation generation
+1. **Brief, descriptive summaries** - One-line descriptions that capture the essence
+2. **Practical information** - Focus on usage rather than exhaustive documentation
+3. **Type hints** - Use type hints for parameters and return values instead of duplicating in docstrings
+4. **Consistency** - Follow established patterns in the codebase
 
 ## Required Sections
 
@@ -19,32 +20,113 @@ All code in psr-magpy should use NumPy-style docstrings. This format was chosen 
 
 ### For Functions and Methods
 
-- **Parameters**: All parameters with types, descriptions, and units when applicable
-- **Returns**: What the function returns, with type and description
+- **Parameters**: Document only non-obvious parameters or those requiring special attention
+- **Returns**: What the function returns (when not obvious from type hints)
 - **Raises**: Exceptions that may be raised (when applicable)
 
 ### For Classes
 
-- **Parameters**: Constructor parameters
-- **Attributes**: Class attributes
-- **Methods**: Brief description of key methods (optional, can be in class docstring)
+- **Purpose**: What the class represents and its main functionality
+- **Key methods**: Brief mention of important methods (optional)
 
 ### Optional Sections (When Relevant)
 
-- **See Also**: Related functions or classes
+- **Examples**: Usage examples for complex functionality
 - **Notes**: Implementation details, mathematical background
-- **Examples**: Usage examples
-- **References**: Citations to papers or books
+- **See Also**: Related functions or classes
+
+## Docstring Patterns
+
+### Simple Functions/Methods
+
+```python
+def colatitude(self) -> np.ndarray:
+    """Get colatitude values in degrees."""
+    # implementation
+```
+
+### Methods with Parameters
+
+```python
+def subset_grid(self, grid_indices: np.ndarray) -> "FootpointGrid":
+    """Create subset of grid points."""
+    # implementation
+```
+
+### Classes
+
+```python
+class SphericalGrid(FootpointGrid):
+    """Regular spherical grid with uniform spacing in longitude and latitude."""
+    
+    def __init__(self, nlon: int, nlat: int, pole_lat: float = 0):
+        """Initialize spherical grid.
+        
+        Args:
+            nlon: Number of longitude divisions
+            nlat: Number of latitude divisions
+            pole_lat: Latitude of grid pole in degrees (default: 0)
+        """
+```
+
+### Complex Methods
+
+```python
+def set_coordinates(self, coordinates: Optional[CartesianRepresentation]) -> None:
+    """Set new coordinates for grid points.
+    
+    Args:
+        coordinates: New coordinates for grid points (can be None)
+        
+    Raises:
+        ValueError: If coordinates length doesn't match nline_ori
+    """
+```
 
 ## Units and Mathematical Notation
 
-- Always include units in square brackets: `distance : float, Distance to pulsar [km]`
-- Use LaTeX for equations with the `.. math::` directive
-- Define coordinate systems and conventions clearly
+- Include units in parameter descriptions when relevant: `pole_lat: Latitude of grid pole in degrees`
+- Use clear, descriptive names rather than mathematical symbols in docstrings
+- Reserve mathematical notation for comments or separate documentation
+
+## Error Handling Documentation
+
+Document exceptions that are raised:
+
+```python
+def validate_power_of_two(self):
+    """Validate that nside is a power of 2."""
+    if not (self.nside & (self.nside - 1) == 0):
+        error_msg = f"nside must be a power of 2, got {self.nside}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+```
 
 ## Examples
 
-Examples should be runnable code that demonstrates usage. Include expected output as comments or in doctest format.
+Include examples for complex functionality:
+
+```python
+def copy(self) -> "FootpointGrid":
+    """Create a copy of the grid.
+    
+    Examples:
+        >>> grid = SphericalGrid(12, 6)
+        >>> copied = grid.copy()
+        >>> np.allclose(copied.footpoint_coordinates.xyz.value,
+        ...             grid.footpoint_coordinates.xyz.value)
+        True
+    """
+```
+
+## Style Guidelines
+
+1. **Be concise** - Prefer shorter, clearer descriptions over verbose documentation
+2. **Focus on usage** - Explain what the code does, not how it does it
+3. **Use type hints** - Let type hints carry parameter information
+4. **Document exceptions** - Always document custom exceptions that may be raised
+5. **Be consistent** - Follow established patterns in the codebase
+6. **Include examples** - For complex functionality, provide usage examples
 
 ## Reference
 

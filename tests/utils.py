@@ -18,7 +18,7 @@ import astropy
 astropy.conf.logging_level = "WARNING"
 
 # Import project utilities
-from src.utils.logging_config import setup_logging, LogLevels
+from src.psr_magpy.utils.logging_config import setup_logging, LogLevels
 
 
 def setup_test_logger(test_name: str) -> logging.Logger:
