@@ -1,0 +1,242 @@
+"""Field line property calculation module.
+
+Provides classes for calculating various properties of field lines including
+position vectors, maximum radii, magnetic field properties, curvature,
+and position angle along the field line.
+
+Classes:
+    PropertyCalculator: Calculates field line properties
+
+Example:
+    >>> from psr_magpy.line.property_calculator import PropertyCalculator
+    >>> from psr_magpy.line.field_line import FieldLine
+    >>> calculator = PropertyCalculator(min_R_max_line=1.0)
+    >>> props = calculator.calculate_line_properties(footpoint_id, r, B_initial, dotprod, K, template)
+"""
+
+import logging
+from typing import Dict, List, Optional, Union, Any
+
+import numpy as np
+
+from psr_magpy.line.field_line import FieldLine, PropertyName
+from psr_magpy.utils.logging_config import get_logger
+
+logger = get_logger(__name__, console_format_brief=True)
+
+
+class PropertyCalculator:
+    """Calculates properties for field lines.
+    
+    Handles calculation of various field line properties including
+    position vectors, maximum radii, magnetic field properties,
+    curvature, and position angle along the field line.
+    
+    Attributes:
+        min_R_max_line: Minimum value for R_max to save the line
+    """
+    
+    def __init__(self, min_R_max_line: float):
+        """Initialize property calculator.
+        
+        Parameters
+        ----------
+        min_R_max_line : float
+            Minimum value for R_max to save the line
+        """
+        self.min_R_max_line = min_R_max_line
+        logger.debug(f"Initialized PropertyCalculator with min_R_max_line={min_R_max_line}")
+    
+    def calculate_line_properties(self, footpoint_id: int, r: np.ndarray, 
+                                 B_initial: np.ndarray, dotprod: float, 
+                                 K: float, template: FieldLine) -> Dict[str, Any]:
+        """Calculate properties for a field line.
+        
+        Parameters
+        ----------
+        footpoint_id : int
+            ID of the footpoint
+        r : np.ndarray
+            Position vectors along the field line
+        B_initial : np.ndarray
+            Initial magnetic field vector
+        dotprod : float
+            Dot product of normalized initial B field and position
+        K : float
+            Field direction multiplier
+        template : FieldLine
+            Template specifying which properties to save
+            
+        Returns
+        -------
+        Dict[str, Any]
+            Dictionary of calculated properties
+        """
+        line_R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
+        props: Dict[str, Any] = {}
+        
+        logger.debug(f"Calculating properties for field line {footpoint_id} with R_max={line_R_max}")
+        
+        for prop in PropertyName:
+            if prop.key_name == "footpoint_id":
+                props[prop.key_name] = footpoint_id
+            elif prop.key_name == "r_line":
+                props[prop.key_name] = self.prep_r_line(r, line_R_max, template)
+            elif prop.key_name == "r_max":
+                props[prop.key_name] = line_R_max if getattr(template.save_flags, prop.flag_name) else None
+            elif prop.key_name == "r_cyl_max":
+                props[prop.key_name] = (
+                    np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
+                    if getattr(template.save_flags, prop.flag_name)
+                    else None
+                )
+            elif prop.key_name == "z_abs_max":
+                props[prop.key_name] = (
+                    np.max(np.abs(r[2, :])) if getattr(template.save_flags, prop.flag_name) else None
+                )
+            elif prop.key_name == "b_ini":
+                props[prop.key_name] = (
+                    np.sum(B_initial**2) ** 0.5 if getattr(template.save_flags, prop.flag_name) else None
+                )
+            elif prop.key_name == "b_r_ini_angle":
+                props[prop.key_name] = (
+                    np.arccos(dotprod) if getattr(template.save_flags, prop.flag_name) else None
+                )
+            elif prop.key_name == "pa_line":
+                props[prop.key_name] = self.prep_pa_line(r, K, line_R_max, template)
+                
+        # Remove None values from kwargs
+        props = {k: v for k, v in props.items() if v is not None}
+        logger.debug(f"Calculated {len(props)} properties for field line {footpoint_id}")
+        return props
+    
+    def prep_r_line(self, r: np.ndarray, line_R_max: float, 
+                   template: FieldLine) -> Optional[np.ndarray]:
+        """Prepare position vectors for saving.
+        
+        Parameters
+        ----------
+        r : np.ndarray
+            Position vectors along the field line
+        line_R_max : float
+            Maximum radius of the field line
+        template : FieldLine
+            Template specifying which properties to save
+            
+        Returns
+        -------
+        Optional[np.ndarray]
+            Position vectors to save, or None if not saving
+        """
+        if getattr(template.save_flags, PropertyName.R_LINE.flag_name):
+            if line_R_max >= self.min_R_max_line:
+                r_line_save = r.T
+                logger.debug(f"Prepared r_line with {r_line_save.shape[0]} points")
+            else:                
+                r_line_save = np.array([])  # Line traced but didn't reach min_R_max_line
+                logger.debug("Line did not reach min_R_max_line, saving empty array")
+        else:
+                r_line_save = None  # Don't save line at all
+                logger.debug("r_line saving disabled")
+        return r_line_save
+    
+    def prep_curvature_line(self, r: np.ndarray, line_R_max: float, template: FieldLine) -> Optional[np.ndarray]:
+        """Calculate curvature along field line.
+        
+        To be added later. This is not used in the current implementation.
+        
+        Parameters
+        ----------
+        r : np.ndarray
+            Position vectors along the field line
+        line_R_max : float
+            Maximum radius of the field line
+        template : FieldLine
+            Template specifying which properties to save
+            
+        Returns
+        -------
+        Optional[np.ndarray]
+            Curvature values along the field line, or None if not saving
+        """
+        # Note: CURVATURE_LINE is not in PropertyName enum, so this method is not used
+        # Keeping for future implementation
+        return None
+
+    def prep_pa_line(self, r: np.ndarray, B_dir: float, line_R_max: float, template: FieldLine) -> Optional[np.ndarray]:
+        """Calculate position angle along the field line.
+        
+        Computes the position angle (PA) along the field line using
+        the tangent vector and its gradient. Handles numerical instabilities
+        near coordinate singularities.
+        
+        Parameters
+        ----------
+        r : np.ndarray
+            Position vectors along the field line
+        B_dir : float
+            Field direction multiplier
+        line_R_max : float
+            Maximum radius of the field line
+        template : FieldLine
+            Template specifying which properties to save
+            
+        Returns
+        -------
+        Optional[np.ndarray]
+            Position angle values along the field line, or None if not saving
+        """
+        if getattr(template.save_flags, PropertyName.PA_LINE.flag_name):
+            if line_R_max >= self.min_R_max_line:
+                Npoints = r.shape[1]
+                t = np.gradient(r, axis=1)
+                t_abs = np.linalg.norm(t, axis=0, keepdims=True)
+                safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
+                t_norm = t/safe_t_abs
+                
+                n = np.gradient(t_norm, axis=1)
+                n_abs = np.linalg.norm(n, axis=0, keepdims=True)
+                safe_n_abs = np.where(n_abs == 0.0, 1.0, n_abs)
+                n_norm = n/safe_n_abs
+                                         
+                # Convert to spherical coordinates manually to avoid astropy issues
+                x, y, z = t_norm
+                r_sph = np.sqrt(x**2 + y**2 + z**2)
+                t_phi = np.arctan2(y, x)
+                t_theta = np.arccos(z / np.where(r_sph == 0, 1, r_sph))
+    
+                l0 = np.zeros((3,Npoints), dtype=float)
+                l0[0,:] = -np.sin(t_phi)
+                l0[1,:] = np.cos(t_phi)
+                l0[2,:] = 0
+
+                m0 = np.zeros((3,Npoints), dtype=float)
+                m0[0,:] = np.cos(t_theta)*np.cos(t_phi)
+                m0[1,:] = np.cos(t_theta)*np.sin(t_phi)
+                m0[2,:] = -np.sin(t_theta)
+                nom = np.sum(n_norm*l0, axis=0)
+                denom = np.sum(n_norm*m0 , axis=0)               
+                PA = np.arctan2(nom, denom)
+                
+                # PA is prone to numerical instability when FL tangent's azimuth is close to multiple of pi
+                # and LOS colatitude is close to 90 degrees.
+                # This is a hack to fix it.
+                eps = 0.01
+                cr_t_phi = (t_phi < eps) | (t_phi > 2*np.pi-eps) | (np.abs(t_phi-np.pi) < eps)
+                cr = cr_t_phi & (np.abs(t_theta-1.57) < 0.01)
+                PA[cr] = np.arctan2(-n[1, cr], n[0, cr])
+                
+                if B_dir == -1:
+                    PA = PA + np.pi
+                PA[PA<=-np.pi] += 2*np.pi
+                PA[PA>=np.pi] -= 2*np.pi
+                
+                logger.debug(f"Calculated PA line with {len(PA)} points")
+               
+            else:
+                PA = np.array([])
+                logger.debug("Line did not reach min_R_max_line, saving empty PA array")
+        else:
+            PA = None
+            logger.debug("PA line saving disabled")
+        return PA 

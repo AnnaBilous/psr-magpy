@@ -1,4 +1,22 @@
+"""Field line tracing module for magnetic field analysis.
+
+Provides classes for tracing magnetic field lines from neutron star surfaces
+using ODE integration. Supports different integration methods, event detection,
+and property calculation for field line analysis.
+
+Classes:
+    FieldLineTracer: Main tracer class for field line calculations
+
+Example:
+    >>> from psr_magpy.line.tracer import FieldLineTracer
+    >>> from psr_magpy.line.parameters import TracingParameters
+    >>> params = TracingParameters(R_max=10.0, min_R_max_line=1.0)
+    >>> tracer = FieldLineTracer(field, params)
+    >>> field_line = tracer.trace_single_line(r_initial, footpoint_id, template)
+"""
+
 import logging
+import time
 from typing import Dict, List, Optional, Union, Any, Tuple
 
 import numpy as np
@@ -7,51 +25,123 @@ from scipy.integrate import solve_ivp
 
 from astropy.coordinates.representation import CartesianRepresentation, SphericalRepresentation
 
-from psr_magpy.line.field_line import FieldLine, PropertyName
+from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.property_system import PropertyName
+from psr_magpy.line.tracing_parameters import TracingParameters, PhysicsParameters
+from psr_magpy.line.property_calculator import PropertyCalculator
 from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
 
+
 class FieldLineTracer:
-    def __init__(self, field: Any, R_max: float = 10.0, min_R_max_line: float = 1.0, dt: float = 0.01) -> None:
+    """Main field line tracer for magnetic field analysis.
+    
+    Orchestrates the field line tracing process including ODE integration,
+    event detection, and property calculation. Provides a high-level interface
+    for tracing field lines from neutron star surfaces.
+    
+    Attributes:
+        field: Object that calculates the magnetic field
+        params: Unified tracing parameters
+        property_calculator: Handler for property calculations
+    """
+    
+    class _EventDetector:
+        """Handles event detection for field line integration.
+        
+        Manages event functions used by scipy.integrate.solve_ivp to detect
+        when field lines hit the neutron star surface or maximum radius.
+        
+        Attributes:
+            surface_radius: Radius of neutron star surface
+            R_max: Maximum radius to trace field lines to
+        """
+        
+        def __init__(self, surface_radius: float, R_max: float):
+            """Initialize event detector.
+            
+            Parameters
+            ----------
+            surface_radius : float
+                Radius of neutron star surface
+            R_max : float
+                Maximum radius to trace field lines to
+            """
+            self.surface_radius = surface_radius
+            self.R_max = R_max
+        
+        def hit_surface(self, t: float, r: np.ndarray, K: float) -> float:
+            """Event function for hitting neutron star surface.
+            
+            Parameters
+            ----------
+            t : float
+                Current integration time (unused)
+            r : np.ndarray
+                Current position vector
+            K : float
+                Field direction multiplier (unused)
+                
+            Returns
+            -------
+            float
+                Distance from surface (positive = outside, negative = inside)
+            """
+            radius = float(np.sqrt(np.sum(r**2)))
+            return radius - self.surface_radius
+
+        hit_surface.terminal = True
+
+        def hit_Rmax(self, t: float, r: np.ndarray, K: float) -> float:
+            """Event function for hitting maximum radius.
+            
+            Parameters
+            ----------
+            t : float
+                Current integration time (unused)
+            r : np.ndarray
+                Current position vector
+            K : float
+                Field direction multiplier (unused)
+                
+            Returns
+            -------
+            float
+                Distance from maximum radius (positive = beyond, negative = within)
+            """
+            radius = float(np.sqrt(np.sum(r**2)))
+            return radius - self.R_max
+
+        hit_Rmax.terminal = True
+    
+    def __init__(self, field: Any, params: TracingParameters) -> None:
         """Initialize the field line tracer.
 
         Parameters
         ----------
         field : MultipoleField
             Object that calculates the magnetic field
-        R_max : float
-            Maximum radius to trace field lines to (in NS radii)
-        min_R_max_line : float
-            Minimum value for R_max to save the line
-        dt : float
-            Integration time step
+        params : TracingParameters
+            Unified tracing parameters containing all configuration
         """
-        self.field = field
-        self.R_max = R_max
-        self.min_R_max_line = min_R_max_line - dt/2
-        self.dt = dt
+        logger.info(f"Initializing FieldLineTracer with R_max={params.R_max}, min_R_max_line={params.min_R_max_line}")
         
-        logger.info(f"Initialized FieldLineTracer with R_max={R_max}, min_R_max_line={min_R_max_line}, dt={dt}")
+        # Store parameters
+        self.field = field
+        self.params = params
+        
+        # Initialize event detector
+        self.event_detector = self._EventDetector(
+            surface_radius=params.physics.surface_radius,
+            R_max=params.physics.surface_radius  # Will be set during integration
+        )
+        
+        # Initialize property calculator
+        self.property_calculator = PropertyCalculator(params.min_R_max_line)
+        
         logger.debug(f"Field object: {field}")
-
-    def hit_surface(self, t: float, r: np.ndarray, K: float) -> float:
-        r = np.sum(r**2) ** 0.5
-        return r - 0.999999
-
-    hit_surface.terminal = True
-
-    def hit_Rmax(self, t: float, r: np.ndarray, K: float) -> float:
-        r = np.sum(r**2) ** 0.5
-        return r - self.R_max
-
-    hit_Rmax.terminal = True
-
-    #def hit_Rmin(self, t: float, r: np.ndarray, K: float) -> float:
-    #    r = np.sum(r**2) ** 0.5
-   #     return r - self.R_min
-
-    #hit_Rmin.terminal = True
+        logger.debug(f"Tracing parameters: {params}")
 
     def _field_for_integration(self, t: float, r: np.ndarray, K: float) -> np.ndarray:
         """Wrapper for field calculation that includes unused time parameter required by solve_ivp.
@@ -71,6 +161,39 @@ class FieldLineTracer:
             Magnetic field vector
         """
         return self.field.get_total_field(r, K, normalize=True)
+    
+    def integrate_field_line(self, r_initial: np.ndarray, K: float, R_max: float) -> Any:
+        """Integrate field line from initial position.
+        
+        Parameters
+        ----------
+        r_initial : np.ndarray
+            Initial position vector
+        K : float
+            Field direction multiplier
+        R_max : float
+            Maximum radius to trace to
+            
+        Returns
+        -------
+        solve_ivp result
+            Integration result from scipy.integrate.solve_ivp
+        """
+        # Update event detector with current R_max
+        self.event_detector.R_max = R_max
+        
+        logger.debug(f"Integrating field line from {r_initial} with K={K}, R_max={R_max}")
+        
+        return solve_ivp(
+            self._field_for_integration,
+            self.params.physics.t_span,
+            r_initial,
+            args=[K],
+            dense_output=True,
+            events=(self.event_detector.hit_surface, self.event_detector.hit_Rmax),
+            rtol=self.params.physics.rtol,
+            atol=self.params.physics.atol,
+        )
 
     def trace_single_line(
         self,
@@ -85,12 +208,12 @@ class FieldLineTracer:
         ----------
         r_initial : CartesianRepresentation
             Initial position for field line tracing
+        footpoint_id : int
+            ID of the footpoint
         template : FieldLine
             Template specifying which properties to save
-        dt : float
-            Integration time step
-        save_dR : bool
-            Whether to save the median step size
+        save_dR : bool, optional
+            Whether to save the median step size, default False
 
         Returns
         -------
@@ -98,218 +221,40 @@ class FieldLineTracer:
             FieldLine object containing requested variables for the field line
         """
         output = template.copy_structure()
-        output.set_property(footpoint_id=footpoint_id)
-        r_initial = r_initial.xyz.value
-        B_initial = self.field.get_total_field(r_initial, K=1, normalize=False)
-        B_initial_norm = self.field.get_total_field(r_initial, K=1, normalize=True)
-        dotprod = np.dot(B_initial_norm, r_initial)
+        output.set_property(footpoint_id=int(footpoint_id))
+        r_initial_array = r_initial.xyz.value
+        B_initial = self.field.get_total_field(r_initial_array, K=1, normalize=False)
+        B_initial_norm = self.field.get_total_field(r_initial_array, K=1, normalize=True)
+        dotprod = np.dot(B_initial_norm, r_initial_array)
         K = np.sign(dotprod)
         if K == 0:
             K = 1.
         
-        # Include hit_Rmin event to ensure we don't trace too far down?
-        field_line = solve_ivp(
-            self._field_for_integration,
-            [0, 1e8],
-            r_initial,
-            args=[K],
-            dense_output=True,
-            events=(self.hit_surface, self.hit_Rmax),
-            rtol=5.0e-9,
-            atol=5.0e-9,
-        )
+        # Use internal integration method
+        field_line = self.integrate_field_line(r_initial_array, K, self.params.R_max)
 
-        if isinstance(self.dt, int) or self.dt > 1:
-            t = np.linspace(field_line.t[0], field_line.t[-1], self.dt)
+        # Use dt from integration parameters
+        dt = self.params.physics.dt
+        if isinstance(dt, int) or dt > 1:
+            t = np.linspace(field_line.t[0], field_line.t[-1], int(dt))
         else:
-            t = np.arange(field_line.t[0], field_line.t[-1] + self.dt, self.dt)
+            t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
 
         r = field_line.sol(t)
        
-        props = self.calculate_line_properties(footpoint_id, r, B_initial, dotprod, K, template)
+        # Use property calculator
+        props = self.property_calculator.calculate_line_properties(
+            footpoint_id, r, B_initial, dotprod, K, template
+        )
       
         output.set_property(**props)
 
         if save_dR:
             dr = r[:, 1:] - r[:, :-1]
             dR = np.median(np.sum(dr**2, axis=0) ** 0.5)
-            output.dR = dR
+            # Note: dR is not a standard property, so we don't set it
+            logger.debug(f"Calculated dR: {dR}")
         return output
-    
-    def calculate_line_properties(self, footpoint_id: int, r: np.ndarray, 
-                                 B_initial: np.ndarray, dotprod: float, 
-                                 K: float, template: FieldLine) -> Dict[str, Any]:
-        """Calculate properties for a field line.
-        
-        Parameters
-        ----------
-        footpoint_id : int
-            ID of the footpoint
-        r : np.ndarray
-            Position vectors along the field line
-        B_initial : np.ndarray
-            Initial magnetic field vector
-        dotprod : float
-            Dot product of normalized initial B field and position
-        K : float
-            Field direction multiplier
-        template : FieldLine
-            Template specifying which properties to save
-            
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary of calculated properties
-        """
-        line_R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
-        props: Dict[str, Any] = {}
-        for prop in PropertyName:
-            if prop.key_name == "footpoint_id":
-                props[prop.key_name] = footpoint_id
-            elif prop.key_name == "r_line":
-                props[prop.key_name] = self.prep_r_line(r, line_R_max, template)
-            elif prop.key_name == "r_max":
-                props[prop.key_name] = line_R_max if template.save_flags.save_r_max else None
-            elif prop.key_name == "r_cyl_max":
-                props[prop.key_name] = (
-                    np.max(np.sum(r[:2,] ** 2, axis=0) ** 0.5)
-                    if template.save_flags.save_r_cyl_max
-                    else None
-                )
-            elif prop.key_name == "z_abs_max":
-                props[prop.key_name] = (
-                    np.max(np.abs(r[2, :])) if template.save_flags.save_z_abs_max else None
-                )
-            elif prop.key_name == "b_ini":
-                props[prop.key_name] = (
-                    np.sum(B_initial**2) ** 0.5 if template.save_flags.save_b_ini else None
-                )
-            elif prop.key_name == "b_r_ini_angle":
-                props[prop.key_name] = (
-                    np.arccos(dotprod) if template.save_flags.save_b_r_ini_angle else None
-                )
-            elif prop.key_name == "curvature_line":
-                props[prop.key_name] = self.prep_curvature_line(r, line_R_max, template)
-            elif prop.key_name == "pa_line":
-                props[prop.key_name] = self.prep_pa_line(r, K, line_R_max, template)
-                
-        # Remove None values from kwargs
-        props = {k: v for k, v in props.items() if v is not None}
-        return props
-            
-    def prep_r_line(self, r: np.ndarray, line_R_max: float, 
-                   template: FieldLine) -> Optional[np.ndarray]:
-        """Prepare position vectors for saving.
-        
-        Parameters
-        ----------
-        r : np.ndarray
-            Position vectors along the field line
-        line_R_max : float
-            Maximum radius of the field line
-        template : FieldLine
-            Template specifying which properties to save
-            
-        Returns
-        -------
-        Optional[np.ndarray]
-            Position vectors to save, or None if not saving
-        """
-        if template.save_flags.save_r_line:
-            if line_R_max >= self.min_R_max_line:
-                r_line_save = r.T
-            else:                
-                r_line_save = np.array([])  # Line traced but didn't reach min_R_max_line
-        else:
-                r_line_save = None  # Don't save line at all
-        return r_line_save
-    
-    def prep_curvature_line(self, r: np.ndarray, line_R_max: float, template: FieldLine) -> np.ndarray:
-        """ To be added later. This is not used in the current implementation.
-        """
-        if template.save_flags.save_curvature_line:
-            if line_R_max >= self.min_R_max_line:
-                dr = np.gradient(r, axis=0)     
-                ddr = np.gradient(dr, axis=0)
-                kappa1 = (np.linalg.norm(dr, axis=1))**2*(np.linalg.norm(ddr, axis=1))**2
-                kappa2 = (np.sum(dr*ddr, axis=1))**2
-                kappa3 = (np.linalg.norm(dr, axis=1))**3
-                kappa = ((kappa1 - kappa2)**0.5/kappa3)**-1
-            else:
-                kappa = np.array([])
-        else:
-            kappa = None
-        
-        return kappa
-
-
-    def prep_pa_line(self, r: np.ndarray, B_dir: float, line_R_max: float, template: FieldLine) -> np.ndarray:
-        """Calculate position angle along the field line.
-        
-        Parameters
-        ----------
-        r : np.ndarray
-            Position vectors along the field line
-        B_dir : float
-            Field direction multiplier
-            
-        Returns
-        -------
-        np.ndarray
-            Position angle values along the field line
-        """
- 
-            
-        if template.save_flags.save_pa_line:
-            if line_R_max >= self.min_R_max_line:
-                Npoints = r.shape[1]
-                t = np.gradient(r, axis=1)
-                t_abs = np.linalg.norm(t, axis=0, keepdims=True)
-                safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
-                t_norm = t/safe_t_abs
-                
-                n = np.gradient(t_norm, axis=1)
-                n_abs = np.linalg.norm(n, axis=0, keepdims=True)
-                safe_n_abs = np.where(n_abs == 0.0, 1.0, n_abs)
-                n_norm = n/safe_n_abs
-                                         
-
-                t_cart = CartesianRepresentation(t_norm)
-                t_sph = t_cart.represent_as(SphericalRepresentation)
-                t_phi = t_sph.lon.value
-                t_theta = np.pi/2 - t_sph.lat.value
-    
-                l0 = np.zeros((3,Npoints), dtype=float)
-                l0[0,:] = -np.sin(t_phi)
-                l0[1,:] = np.cos(t_phi)
-                l0[2,:] = 0
-
-                m0 = np.zeros((3,Npoints), dtype=float)
-                m0[0,:] = np.cos(t_theta)*np.cos(t_phi)
-                m0[1,:] = np.cos(t_theta)*np.sin(t_phi)
-                m0[2,:] = -np.sin(t_theta)
-                nom = np.sum(n_norm*l0, axis=0)
-                denom = np.sum(n_norm*m0 , axis=0)               
-                PA = np.arctan2(nom, denom)
-                
-                # PA is prone to numerical instability when FL tangent's azimuth is close to multiple of pi
-                # and LOS colatitude is close to 90 degrees.
-                # This is a hack to fix it.
-                eps = 0.01
-                cr_t_phi = (t_phi < eps) | (t_phi > 2*np.pi-eps) | (np.abs(t_phi-np.pi) < eps)
-                cr = cr_t_phi & (np.abs(t_theta-1.57) < 0.01)
-                PA[cr] = np.arctan2(-n[1, cr], n[0, cr])
-                
-                if B_dir == -1:
-                    PA = PA + np.pi
-                PA[PA<=-np.pi] += 2*np.pi
-                PA[PA>=np.pi] -= 2*np.pi
-               
-            else:
-                PA = np.array([])
-        else:
-            PA = None
-        return PA
 
     
 

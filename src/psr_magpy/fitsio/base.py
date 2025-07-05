@@ -1,9 +1,12 @@
 """Base classes for FITS I/O operations."""
 
 import logging
-from typing import Dict, Any, List, Optional, Union, Type
+from typing import Dict, Any, List, Optional, Union, Type, TypeVar, ClassVar
+from pathlib import Path
 import os
 
+import numpy as np
+from numpy.typing import NDArray
 from numpy import ndarray, integer, floating
 
 import astropy.io.fits as pf
@@ -16,6 +19,9 @@ logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
 logger = get_logger(__name__, console_format_brief=True)
 
+# Type variable for generic FitsIO subclasses
+T = TypeVar('T', bound='FitsIO')
+
 
 class FitsIO:
     """Base class for FITS I/O operations.
@@ -26,7 +32,7 @@ class FitsIO:
     Subclasses should implement the specific methods for their data types.
     """
 
-    FITS_TYPE_MAPPING = {
+    FITS_TYPE_MAPPING: ClassVar[Dict[Type, str]] = {
         float: "D",
         int: "I",
         str: "10A",
@@ -75,12 +81,12 @@ class FitsIO:
         logger.warning(f"No format mapping found for type {type(value).__name__}, using default")
         return FitsIO.FITS_TYPE_MAPPING[type(value)]
 
-    def save_to_fits(self, filename: str) -> None:
+    def save_to_fits(self, filename: Union[str, Path]) -> None:
         """Save data to a FITS file.
 
         Parameters
         ----------
-        filename : str
+        filename : Union[str, Path]
             Path to the output FITS file
 
         Raises
@@ -90,23 +96,26 @@ class FitsIO:
         """
         logger.debug(f"Saving data to {filename}")
         
+        # Convert Path to string if needed
+        filename_str = str(filename)
+        
         # Create directory if it doesn't exist
-        directory = os.path.dirname(filename)
+        directory = os.path.dirname(filename_str)
         if directory and not os.path.exists(directory):
             logger.debug(f"Creating directory: {directory}")
             os.makedirs(directory, exist_ok=True)
             
         try:
-            logger.debug(f"Creating HDU for {filename}")
+            logger.debug(f"Creating HDU for {filename_str}")
             hdu = self.create_hdu()
             
             # Check if file exists
-            if os.path.exists(filename):
-                logger.debug(f"File {filename} exists, will be overwritten")
+            if os.path.exists(filename_str):
+                logger.debug(f"File {filename_str} exists, will be overwritten")
                 
-            logger.debug(f"Writing HDU to {filename}")
-            hdu.writeto(filename, overwrite=True)
-            logger.debug(f"Successfully saved data to {filename}")
+            logger.debug(f"Writing HDU to {filename_str}")
+            hdu.writeto(filename_str, overwrite=True)
+            logger.debug(f"Successfully saved data to {filename_str}")
             
         except Exception as e:
             logger.error(f"Failed to save data to FITS: {e}")
@@ -131,7 +140,7 @@ class FitsIO:
             column_info = self.generate_column_info()
             logger.debug(f"Creating {len(column_info)} columns")
             
-            columns = []
+            columns: List[pf.Column] = []
             for key in column_info.keys():
                 logger.debug(f"Creating column '{key}' with format '{column_info[key]}'")
                 columns.append(self.create_column(key, column_info[key]))
@@ -196,17 +205,17 @@ class FitsIO:
         raise NotImplementedError("Subclasses must implement create_column")
 
     @classmethod
-    def load_from_fits(cls, filename_or_hdu: Union[str, pf.BinTableHDU]) -> "FitsIO":
+    def load_from_fits(cls: Type[T], filename_or_hdu: Union[str, Path, pf.BinTableHDU]) -> T:
         """Load data from a FITS file or HDU.
 
         Parameters
         ----------
-        filename_or_hdu : Union[str, pf.BinTableHDU]
+        filename_or_hdu : Union[str, Path, pf.BinTableHDU]
             FITS filename or HDU containing the data
 
         Returns
         -------
-        FitsIO
+        T
             Instance of the class
 
         Raises
@@ -214,10 +223,11 @@ class FitsIO:
         Exception
             If loading from FITS file fails
         """
-        if isinstance(filename_or_hdu, str):
-            logger.info(f"Loading data from FITS file: {filename_or_hdu}")
+        if isinstance(filename_or_hdu, (str, Path)):
+            filename_str = str(filename_or_hdu)
+            logger.info(f"Loading data from FITS file: {filename_str}")
             try:
-                with pf.open(filename_or_hdu) as hdul:
+                with pf.open(filename_str) as hdul:
                     # Find the first BinTableHDU
                     for hdu in hdul:
                         if isinstance(hdu, pf.BinTableHDU):
@@ -225,10 +235,10 @@ class FitsIO:
                             return cls._load_from_hdu(hdu)
                     
                     # If we get here, no BinTableHDU was found
-                    logger.error(f"No BinTableHDU found in {filename_or_hdu}")
-                    raise ValueError(f"No BinTableHDU found in {filename_or_hdu}")
+                    logger.error(f"No BinTableHDU found in {filename_str}")
+                    raise ValueError(f"No BinTableHDU found in {filename_str}")
             except Exception as e:
-                logger.error(f"Failed to load data from FITS file {filename_or_hdu}: {e}")
+                logger.error(f"Failed to load data from FITS file {filename_str}: {e}")
                 logger.debug("FITS load error details", exc_info=True)
                 raise
         else:
@@ -236,7 +246,7 @@ class FitsIO:
             return cls._load_from_hdu(filename_or_hdu)
     
     @classmethod
-    def _load_from_hdu(cls, hdu: pf.BinTableHDU) -> "FitsIO":
+    def _load_from_hdu(cls: Type[T], hdu: pf.BinTableHDU) -> T:
         """Load data from a FITS HDU.
 
         Parameters
@@ -246,7 +256,7 @@ class FitsIO:
 
         Returns
         -------
-        FitsIO
+        T
             Instance of the class
 
         Raises
@@ -255,8 +265,8 @@ class FitsIO:
             If loading from FITS HDU fails
         """
         try:
-            data = hdu.data
-            n_components = data.shape[0]
+            data: pf.FITS_rec = hdu.data
+            n_components: int = data.shape[0]
             logger.info(f"Successfully loaded {n_components} components from HDU")
            
             return cls(data)

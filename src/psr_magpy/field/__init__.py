@@ -1,22 +1,24 @@
-"""Field package for magnetic field calculations.
-
-This package provides classes and utilities for working with magnetic multipole fields.
-"""
+"""Field module for magnetic field calculations and visualization."""
 
 from .components import (
-    MultipoleType,
     FieldComponent,
     DipoleFieldComponent,
     QuadrupoleFieldComponent,
+    MultipoleType,
+    FieldComponentParams,
 )
-from .multipole import MultipoleField
+from .multipole import MultipoleField, MultipoleFieldParams
+from .visualization import FieldVisualizer
 
 __all__ = [
-    "MultipoleType",
     "FieldComponent",
-    "DipoleFieldComponent",
+    "DipoleFieldComponent", 
     "QuadrupoleFieldComponent",
+    "MultipoleType",
+    "FieldComponentParams",
     "MultipoleField",
+    "MultipoleFieldParams",
+    "FieldVisualizer",
 ]
 
 """Magnetic field components and calculations."""

@@ -7,55 +7,27 @@ from tqdm import tqdm
 from typing import Tuple, Optional
 
 import numpy as np
+from astropy.coordinates.representation import CartesianRepresentation
 
 from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.field.multipole import MultipoleField
-from psr_magpy.line.memory_manager import ResultsManager, MemoryConfig
+from psr_magpy.line.memory_manager import MemoryManager
+from psr_magpy.line.progress_tracker import ProgressTracker
+from psr_magpy.line.tracing_parameters import TracingParameters
+from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.line.batch_processor import BatchProcessor
 
 logger = get_logger(__name__)
-
-
-@dataclass
-class TracingConfig:
-    """Configuration for field line tracing parameters and output settings."""
-
-    R_max: float = 10.0
-    min_R_max_line: float = 1.0
-    dt: float = 0.01
-    max_memory_mb: float = 100.0
-    n_cores: Optional[int] = None
-    max_batch_size: int = 100
-    save_results: bool = True
-    filename: Optional[str] = "dummy"
-
-    def __post_init__(self):
-        """Validate configuration after initialization."""
-        if self.save_results and not self.filename:
-            logger.error("Filename must be specified when save_results is True")
-            raise ValueError("filename must be specified when save_results is True")
-        if not self.save_results and self.filename:
-            logger.warning("Filename specified but save_results is False")
-            raise ValueError(
-                "filename should not be specified when save_results is False"
-            )
-
-        if self.filename:
-            directory = os.path.dirname(self.filename)
-            if directory and not os.path.exists(directory):
-                logger.error(f"Output directory does not exist: {directory}")
-                raise ValueError(f"Output directory does not exist: {directory}")
-                
-        logger.debug(f"TracingConfig initialized: {self}")
 
 
 class FieldLineCalculator:
     """Calculator for field lines based on a magnetic field and grid."""
     
-    def __init__(self, field: MultipoleField, grid: FootpointGrid):
+    def __init__(self, field: MultipoleField, grid: FootpointGrid, params: Optional[TracingParameters] = None):
         """Initialize field line calculator.
 
         Parameters
@@ -64,249 +36,116 @@ class FieldLineCalculator:
             Object that calculates the magnetic field
         grid : FootpointGrid
             Grid of footpoints to trace field lines from
+        params : Optional[TracingParameters], optional
+            Unified tracing parameters, by default None (uses defaults)
         """
-        self.field = field
-        self.grid = grid
+        self.context = CalculationContext(field, grid, params)
         logger.info(f"Initialized FieldLineCalculator with {grid.nline} footpoints")
         logger.debug(f"Field: {field}, Grid: {grid}")
         
 
-    def _estimate_memory_requirements_and_time_for_completion(
-        self,
-        template: FieldLine,
-        tracer: FieldLineTracer,
-        results_manager: ResultsManager,
-        n_trial: int = 100,
-    ) -> Tuple[float, float, float]:
-        """Estimate memory requirements by processing a small random subset.
-
-        Parameters
-        ----------
-        template : FieldLine
-            Template field line containing configuration
-        tracer : FieldLineTracer
-            Tracer object for field line calculations
-        results_manager : ResultsManager
-            Manager for handling memory and results
-        n_trial : int, optional
-            Number of trial field lines to calculate, by default 100
-
-        Returns
-        -------
-        Tuple[float, float, float]
-            - batch_size: Calculated batch size
-            - random_size: Size of random sample in MB
-            - elapsed: Time taken for estimation in seconds
-        """
-        logger.info(f"Estimating memory requirements with {n_trial} trial field lines")
-        time_start = time.time()
-        n_trial = min(self.grid.nline, n_trial)
-
-        trial_indices = np.arange(n_trial) #np.random.choice(self.grid.indices, size=n_trial, replace=False)
-        trial_grid = self.grid.subset_grid(trial_indices)
-        
-        logger.debug(f"Selected {n_trial} random footpoints for estimation")
-
-        trial_results = self._process_batch(
-            trial_grid, template, tracer, results_manager.memory_config.n_cores
-        )
-
-        trial_size = trial_results.estimate_size() / n_trial
-        trial_size_mb = trial_size / (1024 * 1024)
-
-        logger.debug(f"Estimated memory size per line: {trial_size_mb:.4f} MB")
-
-        elapsed = time.time() - time_start
-        logger.debug(f"Time taken to estimate memory size: {elapsed:.2f} seconds")
-        
-        completion_time = elapsed * self.grid.nline / n_trial
-        logger.info(
-            f"Estimated time to complete calculation: {completion_time:.1f} seconds "
-            f"({completion_time/60:.1f} minutes, {completion_time/3600:.2f} hours)"
-        )
-
-        return trial_size, completion_time
-
     def get_field_lines(
         self,
         template: FieldLine,
-        config: Optional[TracingConfig] = None,
-        max_batch_size: int = 100,
     ) -> Optional[FieldLineSet]:
-        """Calculate field lines in batches and save to FITS file.
-        
-        Parameters
-        ----------
-        template : FieldLine
-            Template field line containing configuration
-        config : Optional[TracingConfig], optional
-            Configuration for tracing, by default None
-        max_batch_size : int, optional
-            Maximum batch size, by default 100
-            
-        Returns
-        -------
-        Optional[FieldLineSet]
-            Field line set if save_results is False, otherwise None
-        """
-        config = config or TracingConfig()
-        logger.debug(f"Starting field line calculation with config: {config}")
-
-        start_time = time.time()
-
-        tracer = FieldLineTracer(self.field, config.R_max, config.min_R_max_line, config.dt)
-        memory_config = MemoryConfig(
-            max_memory_mb=config.max_memory_mb,
-            max_batch_size=config.max_batch_size,
-            n_cores=config.n_cores,
-        )
-        results_manager = ResultsManager(memory_config, tracer)
-        logger.debug(f"Created ResultsManager with memory config: {memory_config}")
-
-        trial_size, completion_time = (
-            self._estimate_memory_requirements_and_time_for_completion(
-                template, tracer, results_manager
+        with self.context.progress_tracker.track_calculation("Field line calculation"):
+            trial_size, completion_time = self._estimate_memory(template)
+            optimal_batch_size = self._configure_batch(trial_size)
+            batch_processor = BatchProcessor(
+                self.context.grid,
+                optimal_batch_size,
+                n_cores=self.context.params.performance.n_cores or 1,
+                progress_tracker=self.context.progress_tracker
             )
-        )
-
-        memory_max_batch_size = results_manager.find_batch_size(trial_size)
-        batch_size = min(memory_config.max_batch_size, memory_max_batch_size)
-        logger.info(f"Setting batch size to {batch_size} field lines")
-
-        logger.info(f"Starting field line calculations at {time.strftime('%H:%M:%S')}")
-        results = self._process_all_batches(
-            template, config.filename or "", tracer, results_manager, config, batch_size
-        )
-        elapsed = time.time() - start_time
-
-        logger.info(f"Calculations completed in {elapsed:.1f} seconds")
-        
-        if config.save_results:
-            logger.info(f"Results saved to {config.filename}")
-        else:
-            logger.info(f"Returning {results.n_field_lines} field lines in memory")
-
+            batch_processor.process(
+                template,
+                self._process_batch,
+                self.context.add_results,
+                self.context.params.output.filename or "",
+                self.context.params.output.save_results
+            )
+            results = self.context.memory_manager.results_in_memory
+            self._finalize_results(results)
         return results
+
+    def _estimate_memory(self, template):
+        trial_size, completion_time = self.context.estimate_memory_requirements(template)
+        trial_size_mb = trial_size / (1024 * 1024)
+        self.context.progress_tracker.log_memory_estimation(
+            self.context.params.performance.n_trial, trial_size_mb, completion_time
+        )
+        return trial_size, completion_time
+
+    def _configure_batch(self, trial_size):
+        optimal_batch_size = self.context.calculate_batch_size(trial_size)
+        self.context.progress_tracker.log_batch_size_setting(optimal_batch_size)
+        self.context.progress_tracker.log_calculation_start()
+        return optimal_batch_size
+
+    def _finalize_results(self, results):
+        elapsed = time.time() - self.context.progress_tracker.start_time if self.context.progress_tracker.start_time else 0
+        self.context.progress_tracker.log_calculation_completion(
+            elapsed, self.context.params.output.save_results, self.context.params.output.filename or "",
+            results.n_field_lines if results else 0
+        )
 
     def _process_batch(
         self,
         subset_grid: FootpointGrid,
         template: FieldLine,
-        tracer: FieldLineTracer,
-        n_cores: Optional[int],
     ) -> FieldLineSet:
-        """Process a batch of field lines using multiprocessing.
-
-        Parameters
-        ----------
-        subset_grid : FootpointGrid
-            Grid containing the batch of footpoints to process
-        template : FieldLine
-            Template field line containing configuration
-        tracer : FieldLineTracer
-            Tracer object for field line calculations
-        n_cores : Optional[int]
-            Number of cores to use for multiprocessing
-
-        Returns
-        -------
-        FieldLineSet
-            Processed batch results
-        """
-        logger.debug(f"Processing batch of {subset_grid.nline} field lines with {n_cores} cores")
-        
-        batch_args = [
-            (subset_grid.footpoint_coordinates[idx], subset_grid.indices[idx], template)
-            for idx in range(subset_grid.nline)
-        ]
-
-        with Pool(n_cores) as pool:
-            logger.debug(f"Created multiprocessing pool with {n_cores} workers")
-            line_list = pool.starmap(tracer.trace_single_line, batch_args)
-            
-        logger.debug(f"Processed {len(line_list)} field lines")
-        result = FieldLineSet(field_lines=line_list, copy_data=True)
-        return result
-
-    def _process_all_batches(
-        self,
-        template: FieldLine,
-        filename: str,
-        tracer: FieldLineTracer,
-        results_manager: ResultsManager,
-        config: TracingConfig,
-        batch_size: int,
-    ) -> Optional[FieldLineSet]:
-        """Process all field lines in batches.
-        
-        Parameters
-        ----------
-        template : FieldLine
-            Template field line containing configuration
-        filename : str
-            Output filename for results
-        tracer : FieldLineTracer
-            Tracer object for field line calculations
-        results_manager : ResultsManager
-            Manager for handling memory and results
-        config : TracingConfig
-            Configuration for tracing
-        batch_size : int
-            Batch size for processing
-            
-        Returns
-        -------
-        Optional[FieldLineSet]
-            Field line set if save_results is False, otherwise None
-        """
-        
-        
-        all_indices = self.grid.indices
-        results = None
-        if self.grid.nline < batch_size:
-            total_batches = 1
-            batch_size = self.grid.nline
+        logger.debug(f"Processing batch with {subset_grid.nline} field lines using {self.context.params.performance.n_cores} cores")
+        if subset_grid.nline is None:
+            error_msg = "Subset grid nline is None, cannot process batch"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        if subset_grid.footpoint_coordinates is None or subset_grid.indices is None:
+            error_msg = "Subset grid coordinates or indices are None, cannot process batch"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        coordinates: CartesianRepresentation = subset_grid.footpoint_coordinates
+        indices: np.ndarray = subset_grid.indices
+        if self.context.params.performance.n_cores is None or self.context.params.performance.n_cores == 1:
+            field_lines = []
+            for i in range(subset_grid.nline):
+                r_initial = coordinates[i]
+                assert r_initial is not None  # Type assertion for linter
+                footpoint_id = indices[i]
+                field_line = self.context.tracer.trace_single_line(r_initial, footpoint_id, template)
+                field_lines.append(field_line)
+            return FieldLineSet(field_lines)
         else:
-            total_batches = (self.grid.nline + batch_size - 1) // batch_size
-            
-        logger.info(f"Processing {self.grid.nline} field lines in batches of {batch_size}")
-        logger.debug(f"Total number of batches: {total_batches}")
-    
+            with Pool(processes=self.context.params.performance.n_cores) as pool:
+                args = [
+                    (coordinates[i], indices[i], template)
+                    for i in range(subset_grid.nline)
+                ]
+                field_lines = pool.starmap(self.context.tracer.trace_single_line, args)
+                return FieldLineSet(field_lines)
 
-        with tqdm(total=self.grid.nline, desc="Processing field lines") as pbar:
-            for start_idx in range(0, self.grid.nline, batch_size):
-                batch_indices = all_indices[start_idx : start_idx + batch_size]
-                subset_grid = self.grid.subset_grid(batch_indices)
-                
-                batch_num = (start_idx // batch_size) + 1
-                logger.debug(f"Processing batch {batch_num}/{total_batches} with {len(batch_indices)} field lines")
+    def _subset_by_indices(self, indices: np.ndarray) -> FootpointGrid:
+        grid = self.context.grid
+        if grid.indices is None or grid.nline is None:
+            error_msg = "Grid indices or nline is None, cannot subset grid"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        if len(indices) == 0:
+            error_msg = "Cannot create subset with empty indices"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not all(0 <= i < grid.nline for i in indices):
+            error_msg = f"Invalid indices. Must be between 0 and {grid.nline-1}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        logger.debug(f"Subsetting grid: {len(indices)} points")
+        return grid.subset_grid(indices)
 
-                batch_results = self._process_batch(
-                    subset_grid, template, tracer, results_manager.memory_config.n_cores
-                )
-
-                results = results_manager.add_results(
-                    batch_results, filename, start_idx
-                )
-
-                # Update progress bar
-                pbar.update(len(batch_indices))
-                pbar.set_postfix(
-                    {
-                        "Batch": f"{batch_num}/{total_batches}",
-                        "Lines": f"{min(start_idx + batch_size, self.grid.nline)}/{self.grid.nline}",
-                    }
-                )
-                
-
-        if config.save_results:
-            
-            logger.info(f"Writing final results to disk: {filename}")
-            results_manager.write_results_to_disk(filename, start_idx)
-            results_manager.rename_batch_files(filename)
-            logger.info("All batch files renamed and finalized")
-            return None
-        else:
-            logger.info(f"Returning complete results with {results.n_field_lines} field lines")
-            return results
+    def _get_batch_indices(self, start: int, batch_size: int) -> np.ndarray:
+        grid = self.context.grid
+        if grid.nline is None or grid.indices is None:
+            error_msg = "Grid nline or indices is None, cannot get batch indices"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        end = min(start + batch_size, grid.nline)
+        return grid.indices[start:end]
 

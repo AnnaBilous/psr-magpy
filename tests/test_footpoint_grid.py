@@ -6,12 +6,12 @@ from pathlib import Path
 import tempfile
 
 from utils import setup_test_logger
-from src.footpoint_grid.grid import HealpixGrid, SphericalGrid, RandomGrid, GridType
+from psr_magpy.grid.grid import HealpixGrid, SphericalGrid, RandomGrid, GridType
 
 logger = setup_test_logger(__name__)
 
 
-@pytest.fixture
+@pytest.fixture  # type: ignore
 def temp_fits_file():
     """Provide temporary file path for FITS testing."""
     with tempfile.NamedTemporaryFile(suffix=".fits") as f:
@@ -33,22 +33,22 @@ class TestHealpixGrid:
 
     def test_invalid_nside(self):
         """Test initialization with invalid nside."""
-        with pytest.raises(ValueError, match="NSIDE must be a positive power of 2"):
+        with pytest.raises(ValueError, match="nside must be a power of 2, got 3"):  # type: ignore
             HealpixGrid(nside=3)
-        with pytest.raises(ValueError, match="NSIDE must be a positive power of 2"):
+        with pytest.raises(ValueError, match="Input should be greater than 0"):  # type: ignore
             HealpixGrid(nside=0)
 
     def test_coordinates(self):
         """Test coordinate generation."""
         grid = HealpixGrid(nside=4)
         assert grid.footpoint_coordinates is not None
-        assert len(grid.footpoint_coordinates.x) == grid.nline
+        assert len(grid.footpoint_coordinates.xyz[0]) == grid.nline
 
         # Test unit vectors
         r = np.sqrt(
-            grid.footpoint_coordinates.x**2
-            + grid.footpoint_coordinates.y**2
-            + grid.footpoint_coordinates.z**2
+            grid.footpoint_coordinates.xyz[0]**2
+            + grid.footpoint_coordinates.xyz[1]**2
+            + grid.footpoint_coordinates.xyz[2]**2
         )
         np.testing.assert_allclose(r, 1.0, rtol=1e-10)
 
@@ -61,6 +61,8 @@ class TestHealpixGrid:
         assert loaded.nside == original.nside
         assert loaded.nline == original.nline
         assert loaded.grid_type == original.grid_type
+        assert loaded.footpoint_coordinates is not None
+        assert original.footpoint_coordinates is not None
         np.testing.assert_array_equal(
             loaded.footpoint_coordinates.xyz.value,
             original.footpoint_coordinates.xyz.value,
@@ -80,9 +82,9 @@ class TestSphericalGrid:
 
     def test_invalid_params(self):
         """Test initialization with invalid parameters."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError):  # type: ignore
             SphericalGrid(nlon=0, nlat=6)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError):  # type: ignore
             SphericalGrid(nlon=12, nlat=0)
 
     def test_pole_tilt(self):
@@ -106,7 +108,7 @@ class TestRandomGrid:
 
     def test_invalid_npoints(self):
         """Test initialization with invalid number of points."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError):  # type: ignore
             RandomGrid(nline_ori=0)
 
 
