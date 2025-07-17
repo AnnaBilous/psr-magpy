@@ -4,7 +4,6 @@ Provides classes for tracking progress, timing, and logging during
 field line calculations with support for progress bars and detailed logging.
 """
 
-import logging
 import time
 from contextlib import contextmanager
 from typing import Optional, Any

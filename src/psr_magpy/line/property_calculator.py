@@ -5,8 +5,7 @@ Calculates various properties of field lines including maximum distances,
 magnetic field properties, and geometric characteristics.
 """
 
-from typing import Optional, Any, Union, List, Dict
-from astropy.coordinates import CartesianRepresentation
+from typing import Optional, Any, Dict
 import numpy as np
 
 from psr_magpy.line.field_line import FieldLine

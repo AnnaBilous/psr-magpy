@@ -1,5 +1,4 @@
-from typing import List, Optional, Any, Union, Dict
-from astropy.coordinates import CartesianRepresentation
+from typing import List, Union
 from sys import getsizeof
 import numpy as np
 
@@ -7,8 +6,7 @@ from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.property_system import PropertyName
 
-if False:
-    from .field_line_set import FieldLineSet
+
 
 logger = get_logger(__name__, console_format_brief=True)
 

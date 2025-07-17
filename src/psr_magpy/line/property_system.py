@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from pydantic import BaseModel, field_validator, ValidationError
 
 from psr_magpy.utils.logging_config import get_logger
-from psr_magpy.grid.grid import HealpixGrid, SphericalGrid, RandomGrid, GridType
 
 logger = get_logger(__name__)
 
