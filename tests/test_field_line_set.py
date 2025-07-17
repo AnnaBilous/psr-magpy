@@ -355,6 +355,111 @@ class TestFieldLineSetProperties:
         assert len(b_ini) == 1
         assert len(b_r_ini_angle) == 1
 
+    def test_get_property_method_with_string(self):
+        """Test get_property method with string parameter."""
+        # Test with enabled property using key_name format
+        r_max = self.field_line_set.get_property(PropertyName.R_MAX.key_name)
+        assert r_max is not None
+        assert isinstance(r_max, np.ndarray)
+        
+        # Test with enabled array list property
+        r_line = self.field_line_set.get_property(PropertyName.R_LINE.key_name) 
+        assert r_line is not None
+        assert isinstance(r_line, list)
+        
+        # Test case insensitive with enum name
+        r_max_upper = self.field_line_set.get_property('R_MAX')
+        assert r_max_upper is not None
+        assert np.array_equal(r_max, r_max_upper)
+        
+        # Test with disabled property
+        template_limited = FieldLine(save_r_max=True)  # Only r_max enabled
+        field_line_limited = self._create_sample_field_line(template_limited, 1)
+        field_line_set_limited = FieldLineSet(field_line_limited, copy_data=True)
+        
+        # r_line should be None since it's not enabled
+        r_line_disabled = field_line_set_limited.get_property(PropertyName.R_LINE.key_name)
+        assert r_line_disabled is None
+    
+    def test_get_property_method_with_enum(self):
+        """Test get_property method with PropertyName enum parameter."""
+        # Test with enabled property
+        r_max = self.field_line_set.get_property(PropertyName.R_MAX)
+        assert r_max is not None
+        assert isinstance(r_max, np.ndarray)
+        
+        # Test with enabled array list property
+        r_line = self.field_line_set.get_property(PropertyName.R_LINE)
+        assert r_line is not None
+        assert isinstance(r_line, list)
+        
+        # Test with disabled property
+        template_limited = FieldLine(save_r_max=True)  # Only r_max enabled
+        field_line_limited = self._create_sample_field_line(template_limited, 1)
+        field_line_set_limited = FieldLineSet(field_line_limited, copy_data=True)
+        
+        # r_line should be None since it's not enabled
+        r_line_disabled = field_line_set_limited.get_property(PropertyName.R_LINE)
+        assert r_line_disabled is None
+    
+    def test_get_property_method_invalid_name(self):
+        """Test get_property method with invalid property name."""
+        # Test with invalid string
+        result = self.field_line_set.get_property('invalid_property')
+        assert result is None
+        
+        # Test with empty string
+        result = self.field_line_set.get_property('')
+        assert result is None
+    
+    def test_dynamic_property_access(self):
+        """Test dynamic property access through __getattr__."""
+        # Test with enabled properties using key_name format
+        r_max = self.field_line_set.r_max
+        assert r_max is not None
+        assert isinstance(r_max, np.ndarray)
+        
+        # Test with enabled array list property
+        r_line = self.field_line_set.r_line
+        assert r_line is not None
+        assert isinstance(r_line, list)
+        
+        # Test case sensitivity (should be case sensitive)
+        pa_line = self.field_line_set.pa_line
+        assert pa_line is not None
+        assert isinstance(pa_line, list)
+        
+        # Test that results match get_property method
+        r_max_explicit = self.field_line_set.get_property(PropertyName.R_MAX.key_name)
+        assert r_max_explicit is not None
+        assert np.array_equal(r_max, r_max_explicit)
+    
+    def test_dynamic_property_access_disabled_property(self):
+        """Test dynamic property access with disabled property."""
+        # Create field line set with limited properties
+        template_limited = FieldLine(save_r_max=True)  # Only r_max enabled
+        field_line_limited = self._create_sample_field_line(template_limited, 1)
+        field_line_set_limited = FieldLineSet(field_line_limited, copy_data=True)
+        
+        # Accessing enabled property should work
+        r_max = field_line_set_limited.r_max
+        assert r_max is not None
+        
+        # Accessing disabled property should raise AttributeError
+        with pytest.raises(AttributeError, match="'FieldLineSet' object has no attribute 'r_line'"):
+            _ = field_line_set_limited.r_line
+    
+    def test_dynamic_property_access_invalid_property(self):
+        """Test dynamic property access with invalid property name."""
+        # Test with invalid property name
+        with pytest.raises(AttributeError, match="'FieldLineSet' object has no attribute 'invalid_property'"):
+            _ = self.field_line_set.invalid_property
+        
+        # Test with existing method/attribute that's not a property
+        # This should work normally since n_field_lines is a real attribute
+        n_lines = self.field_line_set.n_field_lines
+        assert n_lines == 1
+
 
 class TestFieldLineSetMemoryEstimation:
     """Test FieldLineSet memory estimation functionality."""

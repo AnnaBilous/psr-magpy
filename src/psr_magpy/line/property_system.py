@@ -2,10 +2,6 @@
 
 This module provides a consolidated property management system that combines
 property names, validation, storage, and save flags management into a single cohesive interface.
-
-Classes:
-    PropertySystem: Unified property management with validation, storage, and save flags
-    SaveFlags: Dataclass for holding boolean flags
 """
 
 import logging
@@ -148,26 +144,16 @@ class PropertyValue(BaseModel):
 
 
 class PropertySystem:
-    """Unified property management system with validation, storage, and save flags.
-    
-    This class consolidates all property-related operations including:
-    - Property name validation and conversion
-    - Property value validation and storage
-    - Property access control
-    - Save flags management
-    - Comprehensive error handling
-    """
+    """Unified property management system with validation, storage, and save flags."""
     
     def __init__(self, **kwargs):
         """Initialize property system with save flags.
         
-        Parameters
-        ----------
-        **kwargs : bool
-            Boolean flags for which properties to save.
-            Examples:
-            - save_r_line=True, save_r_max=True
-            - save_all=True (enables all properties)
+        Args:
+            **kwargs: Boolean flags for which properties to save.
+                     Examples:
+                     - save_r_line=True, save_r_max=True
+                     - save_all=True (enables all properties)
         """
         # Process save flags
         self.save_flags = self._process_flags(**kwargs)
@@ -178,13 +164,7 @@ class PropertySystem:
         logger.debug(f"Enabled properties: {self.get_enabled_property_names()}")
     
     def get_enabled_properties(self) -> Set[PropertyName]:
-        """Get set of enabled PropertyName enums.
-        
-        Returns
-        -------
-        Set[PropertyName]
-            Set of enabled property enums
-        """
+        """Get set of enabled PropertyName enums."""
         enabled_properties = set()
         for prop in PropertyName:
             if getattr(self.save_flags, prop.flag_name):
@@ -192,28 +172,11 @@ class PropertySystem:
         return enabled_properties
     
     def get_enabled_property_names(self) -> list:
-        """Get list of enabled property key names.
-        
-        Returns
-        -------
-        list
-            List of enabled property key names (lowercase)
-        """
+        """Get list of enabled property key names."""
         return [prop.key_name for prop in self.get_enabled_properties()]
     
     def is_property_enabled(self, prop: Union[PropertyName, str]) -> bool:
-        """Check if a specific property is enabled.
-        
-        Parameters
-        ----------
-        prop : Union[PropertyName, str]
-            Property to check
-            
-        Returns
-        -------
-        bool
-            True if property is enabled, False otherwise
-        """
+        """Check if a specific property is enabled."""
         try:
             property_enum = self._validate_property_name(prop)
             return getattr(self.save_flags, property_enum.flag_name, False)
@@ -221,13 +184,7 @@ class PropertySystem:
             return False
     
     def get_flags_dict(self) -> Dict[str, bool]:
-        """Get save flags as a dictionary.
-        
-        Returns
-        -------
-        Dict[str, bool]
-            Dictionary mapping flag names to boolean values
-        """
+        """Get save flags as a dictionary."""
         return {
             flag: getattr(self.save_flags, flag) 
             for flag in vars(self.save_flags)
@@ -249,18 +206,7 @@ class PropertySystem:
         logger.debug("Save flags validation passed")
     
     def _process_flags(self, **kwargs) -> SaveFlags:
-        """Process kwargs to create SaveFlags instance.
-        
-        Parameters
-        ----------
-        **kwargs : bool
-            Boolean flags for properties
-            
-        Returns
-        -------
-        SaveFlags
-            Processed save flags instance
-        """
+        """Process kwargs to create SaveFlags instance."""
         # Handle save_all flag
         if kwargs.get('save_all', False):
             # Enable all properties
@@ -288,11 +234,6 @@ class PropertySystem:
     def _validate_flags_internal(self, save_flags: SaveFlags) -> None:
         """Internal validation of save flags.
         
-        Parameters
-        ----------
-        save_flags : SaveFlags
-            Save flags to validate
-            
         Raises
         ------
         ValueError
@@ -315,16 +256,6 @@ class PropertySystem:
     def get_property(self, prop: Union[PropertyName, str]) -> Optional[Any]:
         """Get a property value if it's enabled.
         
-        Parameters
-        ----------
-        prop : Union[PropertyName, str]
-            Property to get, either as PropertyName enum or string
-            
-        Returns
-        -------
-        Optional[Any]
-            Property value or None if not set
-            
         Raises
         ------
         PropertyValidationError
@@ -341,11 +272,6 @@ class PropertySystem:
     def set_property(self, **kwargs: Any) -> None:
         """Set multiple property values if they're enabled.
         
-        Parameters
-        ----------
-        **kwargs : Any
-            Property values to set, where keys are PropertyName.key_name
-            
         Raises
         ------
         PropertyValidationError
@@ -367,23 +293,11 @@ class PropertySystem:
                 raise
     
     def get_property_names(self) -> list:
-        """Get list of enabled property key names.
-        
-        Returns
-        -------
-        list
-            List of enabled property key names (lowercase)
-        """
+        """Get list of enabled property key names."""
         return [prop.key_name for prop in self.enabled_properties]
     
     def get_property_values(self) -> Dict[str, Any]:
-        """Get dictionary of property values for enabled properties.
-        
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary mapping property key names to their values
-        """
+        """Get dictionary of property values for enabled properties."""
         return {
             prop.key_name: self._properties[prop]
             for prop in self.enabled_properties
@@ -398,16 +312,6 @@ class PropertySystem:
     def validate_property_set(self, **kwargs: Any) -> Dict[str, Any]:
         """Validate multiple property values for setting.
         
-        Parameters
-        ----------
-        **kwargs : Any
-            Property values to validate, where keys are PropertyName.key_name
-            
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary of validated property values
-            
         Raises
         ------
         PropertyValidationError
@@ -440,13 +344,7 @@ class PropertySystem:
         return validated_properties
     
     def get_validation_summary(self) -> Dict[str, Any]:
-        """Get a summary of validation configuration.
-        
-        Returns
-        -------
-        Dict[str, Any]
-            Summary of validation settings and enabled properties
-        """
+        """Get a summary of validation configuration."""
         return {
             'enabled_properties': [prop.key_name for prop in self.enabled_properties],
             'total_properties': len(PropertyName),
@@ -465,16 +363,6 @@ class PropertySystem:
     def _validate_property_name(self, prop: Union[PropertyName, str]) -> PropertyName:
         """Validate and convert property name to PropertyName enum.
         
-        Parameters
-        ----------
-        prop : Union[PropertyName, str]
-            Property name to validate
-            
-        Returns
-        -------
-        PropertyName
-            Validated PropertyName enum
-            
         Raises
         ------
         PropertyValidationError
@@ -503,11 +391,6 @@ class PropertySystem:
     def _validate_property_access(self, prop: PropertyName) -> None:
         """Validate that a property is enabled for access.
         
-        Parameters
-        ----------
-        prop : PropertyName
-            Property to validate access for
-            
         Raises
         ------
         PropertyValidationError
@@ -524,18 +407,6 @@ class PropertySystem:
     def _validate_property_value(self, prop: PropertyName, value: Any) -> Any:
         """Validate a property value using Pydantic.
         
-        Parameters
-        ----------
-        prop : PropertyName
-            Property to validate value for
-        value : Any
-            Value to validate
-            
-        Returns
-        -------
-        Any
-            Validated value
-            
         Raises
         ------
         PropertyValidationError

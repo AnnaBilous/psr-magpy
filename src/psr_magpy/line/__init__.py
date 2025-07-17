@@ -9,7 +9,7 @@ from .tracer import FieldLineTracer
 from .field_line import FieldLine
 from .field_line_set import FieldLineSet
 from .property_system import PropertySystem, PropertyName, SaveFlags
-from .tracing_parameters import TracingParameters, PhysicsParameters, PerformanceParameters, OutputParameters
+from .tracing_parameters import TracingParameters, IntegrationParameters, PerformanceParameters, OutputParameters
 from .property_calculator import PropertyCalculator
 from .progress_tracker import ProgressTracker
 from .memory_manager import MemoryManager
@@ -22,7 +22,7 @@ __all__ = [
     'FieldLineSet',
     'FieldLineTracer',
     'TracingParameters',
-    'PhysicsParameters',
+    'IntegrationParameters',
     'PerformanceParameters',
     'OutputParameters',
     'PropertySystem',

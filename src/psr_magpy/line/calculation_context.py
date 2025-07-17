@@ -2,8 +2,7 @@
 Calculation context for field line tracing.
 
 Provides a clean interface to all calculation components with explicit
-initialization and validation. Replaces CalculatorConfig with better
-separation of concerns and immediate initialization.
+initialization and validation.
 """
 
 import logging
@@ -23,11 +22,7 @@ logger = get_logger(__name__)
 
 
 class CalculationContext:
-    """Runtime context for field line calculations.
-    
-    Provides a clean interface to all calculation components
-    with explicit initialization and validation.
-    """
+    """Runtime context for field line calculations."""
 
     def __init__(
         self,
@@ -36,19 +31,7 @@ class CalculationContext:
         params: Optional[TracingParameters] = None,
         max_file_size_mb: float = 100.0
     ):
-        """Initialize calculation context.
-        
-        Parameters
-        ----------
-        field : MultipoleField
-            Magnetic field for calculations
-        grid : FootpointGrid
-            Grid of footpoints
-        params : Optional[TracingParameters], optional
-            Calculation parameters, by default None (uses defaults)
-        max_file_size_mb : float, optional
-            Maximum allowed file size in MB for each results file (default: 100.0)
-        """
+        """Initialize calculation context."""
         self.field = field
         self.grid = grid
         self.params = params or TracingParameters()
@@ -59,11 +42,15 @@ class CalculationContext:
         
         # Initialize tracer
         self._tracer = FieldLineTracer(self.field, self.params)
-        logger.debug(f"Created FieldLineTracer with R_max={self.params.R_max}")
-        
+ 
         # Initialize memory manager (consolidated)
-        self._memory_manager = MemoryManager(self.params.performance, self._tracer, max_file_size_mb=max_file_size_mb)
-        logger.debug(f"Created MemoryManager with max_file_size_mb={max_file_size_mb}")
+        self._memory_manager = MemoryManager(
+            self.params.performance, 
+            self._tracer, 
+            max_file_size_mb=max_file_size_mb,
+            save_results=self.params.output.save_results
+        )
+        logger.debug(f"Created MemoryManager with max_file_size_mb={max_file_size_mb}, save_results={self.params.output.save_results}")
         
         # Initialize progress tracker
         self._progress_tracker = ProgressTracker()
@@ -84,17 +71,9 @@ class CalculationContext:
         """Get the progress tracker."""
         return self._progress_tracker
 
-    def trace_single_line(self, r_initial, footpoint_id: int, template: FieldLine):
-        """Trace a single field line."""
-        return self.tracer.trace_single_line(r_initial, footpoint_id, template)
-
     def estimate_memory_requirements(self, template: FieldLine, n_trial: int = 10) -> Tuple[float, float]:
         """Estimate memory requirements using simplified heuristics."""
         return self.memory_manager.estimate_memory_requirements(template, self.grid, n_trial)
-
-    def calculate_batch_size(self, estimated_line_size: float) -> int:
-        """Calculate optimal batch size."""
-        return self.memory_manager.calculate_batch_size(estimated_line_size)
 
     def add_results(self, batch_results, filename: str, batch_idx: int):
         """Add batch results to memory manager."""

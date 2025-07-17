@@ -3,16 +3,6 @@
 Provides classes for tracing magnetic field lines from neutron star surfaces
 using ODE integration. Supports different integration methods, event detection,
 and property calculation for field line analysis.
-
-Classes:
-    FieldLineTracer: Main tracer class for field line calculations
-
-Example:
-    >>> from psr_magpy.line.tracer import FieldLineTracer
-    >>> from psr_magpy.line.parameters import TracingParameters
-    >>> params = TracingParameters(R_max=10.0, min_R_max_line=1.0)
-    >>> tracer = FieldLineTracer(field, params)
-    >>> field_line = tracer.trace_single_line(r_initial, footpoint_id, template)
 """
 
 import logging
@@ -27,7 +17,7 @@ from astropy.coordinates.representation import CartesianRepresentation, Spherica
 
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.property_system import PropertyName
-from psr_magpy.line.tracing_parameters import TracingParameters, PhysicsParameters
+from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters
 from psr_magpy.line.property_calculator import PropertyCalculator
 from psr_magpy.utils.logging_config import get_logger
 
@@ -35,97 +25,34 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 class FieldLineTracer:
-    """Main field line tracer for magnetic field analysis.
-    
-    Orchestrates the field line tracing process including ODE integration,
-    event detection, and property calculation. Provides a high-level interface
-    for tracing field lines from neutron star surfaces.
-    
-    Attributes:
-        field: Object that calculates the magnetic field
-        params: Unified tracing parameters
-        property_calculator: Handler for property calculations
-    """
-    
+    """Main field line tracer for magnetic field analysis."""
+
     class _EventDetector:
-        """Handles event detection for field line integration.
-        
-        Manages event functions used by scipy.integrate.solve_ivp to detect
-        when field lines hit the neutron star surface or maximum radius.
-        
-        Attributes:
-            surface_radius: Radius of neutron star surface
-            R_max: Maximum radius to trace field lines to
-        """
-        
-        def __init__(self, surface_radius: float, R_max: float):
-            """Initialize event detector.
-            
-            Parameters
-            ----------
-            surface_radius : float
-                Radius of neutron star surface
-            R_max : float
-                Maximum radius to trace field lines to
-            """
+        """Handles event detection for field line integration."""
+
+        def __init__(self, surface_radius: float, max_integration_radius: float):
+            """Initialize event detector."""
             self.surface_radius = surface_radius
-            self.R_max = R_max
-        
-        def hit_surface(self, t: float, r: np.ndarray, K: float) -> float:
-            """Event function for hitting neutron star surface.
+            self.max_integration_radius = max_integration_radius
             
-            Parameters
-            ----------
-            t : float
-                Current integration time (unused)
-            r : np.ndarray
-                Current position vector
-            K : float
-                Field direction multiplier (unused)
-                
-            Returns
-            -------
-            float
-                Distance from surface (positive = outside, negative = inside)
-            """
+        def hit_surface(self, t: float, r: np.ndarray, K: float) -> float:
+            """Event function for hitting neutron star surface."""
             radius = float(np.sqrt(np.sum(r**2)))
+            
             return radius - self.surface_radius
 
         hit_surface.terminal = True
 
         def hit_Rmax(self, t: float, r: np.ndarray, K: float) -> float:
-            """Event function for hitting maximum radius.
-            
-            Parameters
-            ----------
-            t : float
-                Current integration time (unused)
-            r : np.ndarray
-                Current position vector
-            K : float
-                Field direction multiplier (unused)
-                
-            Returns
-            -------
-            float
-                Distance from maximum radius (positive = beyond, negative = within)
-            """
+            """Event function for hitting maximum radius."""
             radius = float(np.sqrt(np.sum(r**2)))
-            return radius - self.R_max
+            return radius - self.max_integration_radius  
 
         hit_Rmax.terminal = True
     
     def __init__(self, field: Any, params: TracingParameters) -> None:
-        """Initialize the field line tracer.
-
-        Parameters
-        ----------
-        field : MultipoleField
-            Object that calculates the magnetic field
-        params : TracingParameters
-            Unified tracing parameters containing all configuration
-        """
-        logger.info(f"Initializing FieldLineTracer with R_max={params.R_max}, min_R_max_line={params.min_R_max_line}")
+        """Initialize the field line tracer."""
+        logger.info(f"Initializing FieldLineTracer with max_integration_radius={params.integration.max_integration_radius}, threshold_line_distance={params.threshold_line_distance}")
         
         # Store parameters
         self.field = field
@@ -133,67 +60,64 @@ class FieldLineTracer:
         
         # Initialize event detector
         self.event_detector = self._EventDetector(
-            surface_radius=params.physics.surface_radius,
-            R_max=params.physics.surface_radius  # Will be set during integration
+            surface_radius=params.integration.surface_radius,
+            max_integration_radius=params.integration.max_integration_radius
         )
         
         # Initialize property calculator
-        self.property_calculator = PropertyCalculator(params.min_R_max_line)
+        self.property_calculator = PropertyCalculator(params.threshold_line_distance)
         
         logger.debug(f"Field object: {field}")
         logger.debug(f"Tracing parameters: {params}")
 
+    def _setup_event_detector(self, surface_radius: float, max_integration_radius: float) -> None:
+        """Update event detector parameters."""
+        self.event_detector.surface_radius = surface_radius
+        self.event_detector.max_integration_radius = max_integration_radius
+    
     def _field_for_integration(self, t: float, r: np.ndarray, K: float) -> np.ndarray:
-        """Wrapper for field calculation that includes unused time parameter required by solve_ivp.
-
-        Parameters
-        ----------
-        t : float
-            Time parameter (unused, required by solve_ivp)
-        r : ndarray
-            Position vector
-        K : float
-            Field direction multiplier
-
-        Returns
-        -------
-        ndarray
-            Magnetic field vector
-        """
+        """Wrapper for field calculation that includes unused time parameter required by solve_ivp."""
         return self.field.get_total_field(r, K, normalize=True)
     
-    def integrate_field_line(self, r_initial: np.ndarray, K: float, R_max: float) -> Any:
-        """Integrate field line from initial position.
+    def integrate_field_line(self, r_initial: np.ndarray, K: float, max_integration_radius: float) -> Any:
+        """Integrate field line from initial position."""
+        # Determine if this is backward integration based on starting radius
+        r_initial_radius = np.sqrt(np.sum(r_initial**2))
+        is_open_line = r_initial_radius > 1.001
+        if not(is_open_line):
+            r_initial = r_initial/np.linalg.norm(r_initial)
         
-        Parameters
-        ----------
-        r_initial : np.ndarray
-            Initial position vector
-        K : float
-            Field direction multiplier
-        R_max : float
-            Maximum radius to trace to
+        # Setup event detector parameters
+        surface_radius = self.params.integration.surface_radius
+        if (self.params.integration.trace_open_lines_backwards) and (is_open_line):
+            t_span = (self.params.integration.t_span[0], -self.params.integration.t_span[1])
+            effective_max_integration_radius = max_integration_radius * 1.1         
+        else:
+            t_span = self.params.integration.t_span
+            effective_max_integration_radius = max_integration_radius
             
-        Returns
-        -------
-        solve_ivp result
-            Integration result from scipy.integrate.solve_ivp
-        """
-        # Update event detector with current R_max
-        self.event_detector.R_max = R_max
+        self._setup_event_detector(surface_radius, effective_max_integration_radius)
+
+        rtol = self.params.integration.rtol
+        atol = self.params.integration.atol
         
-        logger.debug(f"Integrating field line from {r_initial} with K={K}, R_max={R_max}")
+        logger.debug(f"Integrating field line from {r_initial} with K={K}, max_integration_radius={max_integration_radius}")
         
-        return solve_ivp(
-            self._field_for_integration,
-            self.params.physics.t_span,
-            r_initial,
-            args=[K],
-            dense_output=True,
-            events=(self.event_detector.hit_surface, self.event_detector.hit_Rmax),
-            rtol=self.params.physics.rtol,
-            atol=self.params.physics.atol,
-        )
+        # Prepare solve_ivp arguments
+        solve_ivp_args = {
+            'fun': self._field_for_integration,
+            't_span': t_span,
+            'y0': r_initial,
+            'args': [K],
+            'dense_output': True,
+            'events': (self.event_detector.hit_surface, self.event_detector.hit_Rmax),
+            'rtol': rtol,
+            'atol': atol,
+            'max_step': self.params.integration.max_step
+        }
+        
+        
+        return solve_ivp(**solve_ivp_args)
 
     def trace_single_line(
         self,
@@ -202,27 +126,13 @@ class FieldLineTracer:
         template: FieldLine,
         save_dR: bool = False,
     ) -> FieldLine:
-        """Trace a single field line from the given initial position.
-
-        Parameters
-        ----------
-        r_initial : CartesianRepresentation
-            Initial position for field line tracing
-        footpoint_id : int
-            ID of the footpoint
-        template : FieldLine
-            Template specifying which properties to save
-        save_dR : bool, optional
-            Whether to save the median step size, default False
-
-        Returns
-        -------
-        FieldLine
-            FieldLine object containing requested variables for the field line
-        """
+        """Trace a single field line from the given initial position."""
+        r_initial_array = r_initial.xyz.value
+        
         output = template.copy_structure()
         output.set_property(footpoint_id=int(footpoint_id))
-        r_initial_array = r_initial.xyz.value
+        
+        # Calculate field direction naturally (no radius-based override)
         B_initial = self.field.get_total_field(r_initial_array, K=1, normalize=False)
         B_initial_norm = self.field.get_total_field(r_initial_array, K=1, normalize=True)
         dotprod = np.dot(B_initial_norm, r_initial_array)
@@ -230,17 +140,36 @@ class FieldLineTracer:
         if K == 0:
             K = 1.
         
+        # Use natural field direction - time span handles forward/backward
+        logger.debug(f"Using natural field direction: K={K}")
+        
         # Use internal integration method
-        field_line = self.integrate_field_line(r_initial_array, K, self.params.R_max)
-
+        field_line = self.integrate_field_line(r_initial_array, K, self.params.integration.max_integration_radius)
+        
         # Use dt from integration parameters
-        dt = self.params.physics.dt
+        dt = self.params.integration.dt
         if isinstance(dt, int) or dt > 1:
             t = np.linspace(field_line.t[0], field_line.t[-1], int(dt))
         else:
-            t = np.arange(field_line.t[0], field_line.t[-1] + dt, dt)
+            # Handle both positive and negative time spans
+            t_start, t_end = field_line.t[0], field_line.t[-1]
+            if t_end >= t_start:
+                # Forward time integration
+                t = np.append(np.arange(t_start, t_end, dt), t_end)
+            else:
+                # Backward time integration (t_end < t_start)
+                t = np.append(np.arange(t_start, t_end, -dt), t_end)
+                
+        # Ensure we don't have empty time array
+        if len(t) == 0:
+            # Fallback to linspace with minimum 2 points
+            t = np.linspace(field_line.t[0], field_line.t[-1], max(int(dt), 2))
 
         r = field_line.sol(t)
+        
+        # Log final radius for debugging
+        final_radius = np.sqrt(np.sum(r[:, -1]**2))
+        logger.debug(f"Field line final radius: {final_radius:.6f}, integration success: {field_line.success}")
        
         # Use property calculator
         props = self.property_calculator.calculate_line_properties(

@@ -3,12 +3,6 @@
 This module consolidates all configuration parameters used throughout
 the field line tracing system into a single, well-organized parameter
 hierarchy with validation and documentation.
-
-Classes:
-    TracingParameters: Main configuration container
-    PhysicsParameters: Physics and integration settings
-    PerformanceParameters: Memory and processing settings
-    OutputParameters: File I/O and output settings
 """
 
 import os
@@ -23,31 +17,18 @@ from psr_magpy.utils.logging_config import get_logger
 logger = get_logger(__name__, console_format_brief=True)
 
 
-class PhysicsParameters(BaseModel):
-    """Physics and integration parameters for field line tracing.
-    
-    Configures the physics of field line tracing including integration
-    tolerances, time span, surface radius, and tracing limits.
-    
-    Attributes:
-        R_max: Maximum radius to trace field lines to
-        min_R_max_line: Minimum value for R_max to save the line
-        t_span: Integration time span (start, end)
-        rtol: Relative tolerance for integration
-        atol: Absolute tolerance for integration
-        surface_radius: Radius of neutron star surface
-        dt: Integration time step for output sampling
-    """
-    
-    R_max: float = Field(
+class IntegrationParameters(BaseModel):
+    """Physics and integration parameters for field line tracing."""
+
+    max_integration_radius: float = Field(
         default=10.0,
         gt=0,
         description="Maximum radius to trace field lines to (in NS radii)"
     )
-    min_R_max_line: float = Field(
+    threshold_line_distance: float = Field(
         default=1.0,
         gt=0,
-        description="Minimum value for R_max to save the line"
+        description="Threshold maximum line distance from star surface to save the line"
     )
     t_span: Tuple[float, float] = Field(
         default=(0.0, 1e8),
@@ -64,7 +45,7 @@ class PhysicsParameters(BaseModel):
         description="Absolute tolerance for integration"
     )
     surface_radius: float = Field(
-        default=0.999999,
+        default=1.0 - 1.e-8,
         gt=0,
         description="Radius of neutron star surface"
     )
@@ -73,12 +54,21 @@ class PhysicsParameters(BaseModel):
         gt=0,
         description="Integration time step for output sampling"
     )
+    max_step: float = Field(
+        default=0.01,
+        gt=0,
+        description="Maximum step size for integration"
+    )
+    trace_open_lines_backwards: bool = Field(
+        default=False,
+        description="Whether to trace open field lines backwards"
+    )
     
     @model_validator(mode='after')
     def validate_radii(self):
-        """Validate that min_R_max_line is less than R_max."""
-        if self.min_R_max_line >= self.R_max:
-            error_msg = f"min_R_max_line ({self.min_R_max_line}) must be < R_max ({self.R_max})"
+        """Validate that threshold_line_distance is less than max_integration_radius."""
+        if self.threshold_line_distance >= self.max_integration_radius:
+            error_msg = f"threshold_line_distance ({self.threshold_line_distance}) must be < max_integration_radius ({self.max_integration_radius})"
             logger.error(error_msg)
             raise ValueError(error_msg)
         return self
@@ -105,22 +95,8 @@ class PhysicsParameters(BaseModel):
 
 
 class PerformanceParameters(BaseModel):
-    """Memory and processing parameters.
-    
-    Configures memory limits, batch processing, CPU cores, and
-    performance tuning for field line calculations.
-    
-    Attributes:
-        max_memory_mb: Maximum memory allowed for processing in megabytes
-        safety_factor: Fraction of available memory to leave as buffer
-        max_batch_size: Maximum batch size to process
-        check_interval_sec: How often to check memory usage
-        n_cores: Number of CPU cores to use
-        n_trial: Number of trial field lines for estimation
-        progress_bar: Whether to show progress bars
-        verbose: Verbosity level for logging
-    """
-    
+    """Memory and processing parameters."""
+
     max_memory_mb: float = Field(
         default=100.0,
         gt=0,
@@ -160,6 +136,10 @@ class PerformanceParameters(BaseModel):
         default=False,
         description="Verbosity level for logging"
     )
+    skip_memory_estimation: bool = Field(
+        default=False,
+        description="Whether to skip memory estimation and process all field lines at once"
+    )
     
     @model_validator(mode='after')
     def setup_cores(self):
@@ -184,11 +164,6 @@ class PerformanceParameters(BaseModel):
     def validate_against_grid(self, grid_size: int) -> None:
         """Validate n_trial against grid size.
         
-        Parameters
-        ----------
-        grid_size : int
-            Number of field lines in the grid
-            
         Raises
         ------
         ValueError
@@ -201,18 +176,8 @@ class PerformanceParameters(BaseModel):
 
 
 class OutputParameters(BaseModel):
-    """Output and file I/O parameters.
-    
-    Configures file output settings, including save options,
-    filename patterns, and output formats.
-    
-    Attributes:
-        save_results: Whether to save results to disk
-        filename: Base filename for output (without extension)
-        output_format: Output file format
-        overwrite: Whether to overwrite existing files
-    """
-    
+    """Output and file I/O parameters."""
+
     save_results: bool = Field(
         default=True,
         description="Whether to save results to disk"
@@ -255,19 +220,10 @@ class OutputParameters(BaseModel):
 
 
 class TracingParameters(BaseModel):
-    """Main configuration container for field line tracing.
-    
-    Consolidates all parameters needed for field line tracing into
-    a single, validated configuration object with 3 core parameter groups.
-    
-    Attributes:
-        physics: Physics and integration parameters
-        performance: Memory and processing parameters
-        output: Output and file I/O parameters
-    """
-    
-    physics: PhysicsParameters = Field(
-        default_factory=PhysicsParameters,
+    """Main configuration container for field line tracing."""
+
+    integration: IntegrationParameters = Field(
+        default_factory=IntegrationParameters,
         description="Physics and integration parameters"
     )
     performance: PerformanceParameters = Field(
@@ -279,18 +235,8 @@ class TracingParameters(BaseModel):
         description="Output and file I/O parameters"
     )
     
-    # Convenience properties for backward compatibility
+    # Convenience property for common access
     @property
-    def R_max(self) -> float:
-        """Maximum radius to trace field lines to."""
-        return self.physics.R_max
-    
-    @property
-    def min_R_max_line(self) -> float:
-        """Minimum value for R_max to save the line."""
-        return self.physics.min_R_max_line
-    
-    @property
-    def integration(self) -> PhysicsParameters:
-        """Integration parameters (alias for physics)."""
-        return self.physics 
+    def threshold_line_distance(self) -> float:
+        """Minimum value for max_integration_radius to save the line."""
+        return self.integration.threshold_line_distance 

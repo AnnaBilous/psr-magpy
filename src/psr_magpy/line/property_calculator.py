@@ -3,15 +3,6 @@
 Provides classes for calculating various properties of field lines including
 position vectors, maximum radii, magnetic field properties, curvature,
 and position angle along the field line.
-
-Classes:
-    PropertyCalculator: Calculates field line properties
-
-Example:
-    >>> from psr_magpy.line.property_calculator import PropertyCalculator
-    >>> from psr_magpy.line.field_line import FieldLine
-    >>> calculator = PropertyCalculator(min_R_max_line=1.0)
-    >>> props = calculator.calculate_line_properties(footpoint_id, r, B_initial, dotprod, K, template)
 """
 
 import logging
@@ -26,52 +17,17 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 class PropertyCalculator:
-    """Calculates properties for field lines.
-    
-    Handles calculation of various field line properties including
-    position vectors, maximum radii, magnetic field properties,
-    curvature, and position angle along the field line.
-    
-    Attributes:
-        min_R_max_line: Minimum value for R_max to save the line
-    """
-    
-    def __init__(self, min_R_max_line: float):
-        """Initialize property calculator.
-        
-        Parameters
-        ----------
-        min_R_max_line : float
-            Minimum value for R_max to save the line
-        """
-        self.min_R_max_line = min_R_max_line
-        logger.debug(f"Initialized PropertyCalculator with min_R_max_line={min_R_max_line}")
+    """Calculates properties for field lines."""
+
+    def __init__(self, threshold_line_distance: float):
+        """Initialize property calculator."""
+        self.threshold_line_distance = threshold_line_distance
+        logger.debug(f"Initialized PropertyCalculator with threshold_line_distance={threshold_line_distance}")
     
     def calculate_line_properties(self, footpoint_id: int, r: np.ndarray, 
                                  B_initial: np.ndarray, dotprod: float, 
                                  K: float, template: FieldLine) -> Dict[str, Any]:
-        """Calculate properties for a field line.
-        
-        Parameters
-        ----------
-        footpoint_id : int
-            ID of the footpoint
-        r : np.ndarray
-            Position vectors along the field line
-        B_initial : np.ndarray
-            Initial magnetic field vector
-        dotprod : float
-            Dot product of normalized initial B field and position
-        K : float
-            Field direction multiplier
-        template : FieldLine
-            Template specifying which properties to save
-            
-        Returns
-        -------
-        Dict[str, Any]
-            Dictionary of calculated properties
-        """
+        """Calculate properties for a field line."""
         line_R_max = np.max(np.sum(r**2, axis=0) ** 0.5)
         props: Dict[str, Any] = {}
         
@@ -112,29 +68,14 @@ class PropertyCalculator:
     
     def prep_r_line(self, r: np.ndarray, line_R_max: float, 
                    template: FieldLine) -> Optional[np.ndarray]:
-        """Prepare position vectors for saving.
-        
-        Parameters
-        ----------
-        r : np.ndarray
-            Position vectors along the field line
-        line_R_max : float
-            Maximum radius of the field line
-        template : FieldLine
-            Template specifying which properties to save
-            
-        Returns
-        -------
-        Optional[np.ndarray]
-            Position vectors to save, or None if not saving
-        """
+        """Prepare position vectors for saving."""
         if getattr(template.save_flags, PropertyName.R_LINE.flag_name):
-            if line_R_max >= self.min_R_max_line:
+            if line_R_max >= self.threshold_line_distance:
                 r_line_save = r.T
                 logger.debug(f"Prepared r_line with {r_line_save.shape[0]} points")
             else:                
-                r_line_save = np.array([])  # Line traced but didn't reach min_R_max_line
-                logger.debug("Line did not reach min_R_max_line, saving empty array")
+                r_line_save = np.array([])  # Line traced but didn't reach threshold_line_distance
+                logger.debug("Line did not reach threshold_line_distance, saving empty array")
         else:
                 r_line_save = None  # Don't save line at all
                 logger.debug("r_line saving disabled")
@@ -144,20 +85,6 @@ class PropertyCalculator:
         """Calculate curvature along field line.
         
         To be added later. This is not used in the current implementation.
-        
-        Parameters
-        ----------
-        r : np.ndarray
-            Position vectors along the field line
-        line_R_max : float
-            Maximum radius of the field line
-        template : FieldLine
-            Template specifying which properties to save
-            
-        Returns
-        -------
-        Optional[np.ndarray]
-            Curvature values along the field line, or None if not saving
         """
         # Note: CURVATURE_LINE is not in PropertyName enum, so this method is not used
         # Keeping for future implementation
@@ -169,25 +96,9 @@ class PropertyCalculator:
         Computes the position angle (PA) along the field line using
         the tangent vector and its gradient. Handles numerical instabilities
         near coordinate singularities.
-        
-        Parameters
-        ----------
-        r : np.ndarray
-            Position vectors along the field line
-        B_dir : float
-            Field direction multiplier
-        line_R_max : float
-            Maximum radius of the field line
-        template : FieldLine
-            Template specifying which properties to save
-            
-        Returns
-        -------
-        Optional[np.ndarray]
-            Position angle values along the field line, or None if not saving
         """
         if getattr(template.save_flags, PropertyName.PA_LINE.flag_name):
-            if line_R_max >= self.min_R_max_line:
+            if line_R_max >= self.threshold_line_distance:
                 Npoints = r.shape[1]
                 t = np.gradient(r, axis=1)
                 t_abs = np.linalg.norm(t, axis=0, keepdims=True)
@@ -235,7 +146,7 @@ class PropertyCalculator:
                
             else:
                 PA = np.array([])
-                logger.debug("Line did not reach min_R_max_line, saving empty PA array")
+                logger.debug("Line did not reach threshold_line_distance, saving empty PA array")
         else:
             PA = None
             logger.debug("PA line saving disabled")

@@ -8,15 +8,11 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 class FieldLine:
-    """Base class for field lines with configurable properties.
-
-    This class provides the basic structure for storing field line properties
-    and managing which properties should be saved.
-    """
+    """Base class for field lines with configurable properties."""
 
     def __init__(self, **kwargs):
         """Initialize field line with optional save flags.
-
+        
         Args:
             **kwargs: Boolean flags for which properties to save.
                      save_footpoint_id will always be True regardless of input.
@@ -80,11 +76,7 @@ class FieldLine:
         self.property_system.set_property(**kwargs)
 
     def copy_structure(self) -> "FieldLine":
-        """Create a new instance with the same save flags configuration.
-
-        Returns:
-            A new FieldLineBase instance with the same save flags but empty properties
-        """
+        """Create a new instance with the same save flags configuration."""
         # Get the current save flags as a dictionary
         save_flags_dict = self.property_system.get_flags_dict()
 
@@ -96,54 +88,30 @@ class FieldLine:
 
     @classmethod
     def template_all(cls) -> "FieldLine":
-        """Create template with all properties enabled.
-        
-        Returns:
-            FieldLine with all properties enabled
-        """
+        """Create template with all properties enabled."""
         return cls(save_all=True)
     
     @classmethod
     def template_all_except_line_and_PA(cls) -> "FieldLine":
-        """Create template with all properties enabled except line coordinates and PA.
-        
-        Returns:
-            FieldLine with all properties enabled except line coordinates and PA
-        """
+        """Create template with all properties enabled except line coordinates and PA."""
         return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True, save_b_ini=True, save_b_r_ini_angle=True)
     
     @classmethod
     def template_OFL_calc(cls) -> "FieldLine":
-        """Create template with properties for open field line calculation (r_max, r_cyl_max, z_abs_max).
-        
-        Returns:
-            FieldLine with basic properties enabled
-        """
+        """Create template with properties for open field line calculation (r_max, r_cyl_max, z_abs_max)."""
         return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True)
     
     @classmethod
     def template_coordinates_only(cls) -> "FieldLine":
-        """Create template with line coordinates only (r_line).
-        
-        Returns:
-            FieldLine with line coordinates enabled
-        """
+        """Create template with line coordinates only (r_line)."""
         return cls(save_r_line=True)
     
     @classmethod
     def template_coordinates_and_PA(cls) -> "FieldLine":
-        """Create template with line coordinates and PA (r_line, pa_line).
-        
-        Returns:
-            FieldLine with line coordinates and PA enabled
-        """
+        """Create template with line coordinates and PA (r_line, pa_line)."""
         return cls(save_r_line=True, save_pa_line=True)
     
     @classmethod
     def template_surface_properties(cls) -> "FieldLine":
-        """Create template with surface properties (b_ini, b_r_ini_angle).
-        
-        Returns:
-            FieldLine with surface properties enabled
-        """
+        """Create template with surface properties (b_ini, b_r_ini_angle)."""
         return cls(save_b_ini=True, save_b_r_ini_angle=True)

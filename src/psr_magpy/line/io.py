@@ -25,21 +25,11 @@ class FieldLineSetFitsIO(FitsIO):
         logger.debug("Initialized FieldLineSetFitsIO")
 
     def get_hdu_name(self) -> str:
-        """Get the name for the FITS HDU.
-
-        Returns
-        -------
-        str
-            Name for the FITS HDU
-        """
+        """Get the name for the FITS HDU."""
         return "FIELD_LINES"
 
     def generate_column_info(self):
-        """Generate column information for field line data.
-
-        Returns:
-            dict: Mapping of property names to their FITS format strings
-        """
+        """Generate column information for field line data."""
         result = {}
 
         # Process each enabled property
@@ -65,15 +55,7 @@ class FieldLineSetFitsIO(FitsIO):
         return result
 
     def create_column(self, key: str, format: str):
-        """Create a FITS column for field line data.
-
-        Args:
-            key: Column name (property key name).
-            format: FITS format string.
-
-        Returns:
-            FITS column object.
-        """
+        """Create a FITS column for field line data."""
         # Get property by key name
         prop = PropertyName[key.upper()]
         value = self.data._properties[prop]
@@ -85,16 +67,6 @@ class FieldLineSetFitsIO(FitsIO):
     @classmethod
     def load_from_fits(cls, fitsname: str) -> FieldLineSet:
         """Load field line data from one or more FITS files.
-
-        Parameters
-        ----------
-        fitsname : str
-            Base name for FITS files (without .fits extension)
-
-        Returns
-        -------
-        FieldLineSet
-            Combined field line set from all matching files
 
         Raises
         ------
@@ -109,7 +81,9 @@ class FieldLineSetFitsIO(FitsIO):
         fits_files = list(base_path.glob(pattern))
 
         if not fits_files:
-            raise ValueError(f"No FITS files found matching {fitsname}*.fits")
+            error_msg = f"No FITS files found matching {fitsname}*.fits"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         # Calculate total size of all FITS files
         total_size = sum(f.stat().st_size for f in fits_files)
@@ -122,10 +96,12 @@ class FieldLineSetFitsIO(FitsIO):
         logger.info(f"Available memory: {available_memory/1e6:.1f} MB")
 
         if total_size > available_memory * memory_threshold:
-            raise ValueError(
+            error_msg = (
                 f"Total FITS size ({total_size/1e6:.1f} MB) exceeds {memory_threshold*100}% "
                 f"of available memory ({available_memory/1e6:.1f} MB)"
             )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         # Load first file to get template
         first_file = fits_files[0]
@@ -133,7 +109,9 @@ class FieldLineSetFitsIO(FitsIO):
 
         with pf.open(first_file) as hdul:
             if "FIELD_LINES" not in [h.name for h in hdul]:
-                raise ValueError(f"No FIELD_LINES HDU found in {first_file}")
+                error_msg = f"No FIELD_LINES HDU found in {first_file}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
             hdu = hdul["FIELD_LINES"]
 
@@ -194,7 +172,8 @@ class FieldLineSetFitsIO(FitsIO):
                     except KeyError:
                         logger.warning(f"Unknown property name: {col.name}")
                     except Exception as e:
-                        logger.error(f"Error loading property {col.name}: {str(e)}")
+                        error_msg = f"Error loading property {col.name}: {str(e)}"
+                        logger.error(error_msg)
                         raise
 
                 # Update field line count

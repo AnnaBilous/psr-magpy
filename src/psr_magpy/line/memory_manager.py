@@ -20,39 +20,23 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 class MemoryManager:
-    """Consolidated memory management for field line calculations.
-    
-    Combines memory estimation and results management with file size thresholding.
-    Provides a single interface for all memory-related operations.
+    """Manages memory usage and result storage for field line calculations."""
 
-    Attributes:
-        config: Performance parameters for memory management
-        tracer: FieldLineTracer instance for calculations
-        max_file_size_mb: Maximum allowed file size in MB for each results file
-        _results_in_memory: FieldLineSet currently in memory
-        _results_in_memory_size: Size of results in memory in bytes
-    """
-
-    def __init__(self, config: PerformanceParameters, tracer: FieldLineTracer, max_file_size_mb: float = 100.0) -> None:
-        """Initialize memory manager.
-
-        Parameters
-        ----------
-        config : PerformanceParameters
-            Memory management configuration
-        tracer : FieldLineTracer
-            Tracer for field line calculations
-        max_file_size_mb : float, optional
-            Maximum allowed file size in MB for each results file (default: 100.0)
-        """
+    def __init__(self, config: PerformanceParameters, tracer: FieldLineTracer, max_file_size_mb: float = 100.0, save_results: bool = True) -> None:
+        """Initialize memory manager."""
         self.config = config
         self.tracer = tracer
         self.max_file_size_mb = max_file_size_mb
+        self.save_results = save_results
         self._results_in_memory: Optional[FieldLineSet] = None
         self._results_in_memory_size: float = 0.0
         
-        logger.info(f"MemoryManager initialized with max file size {self.max_file_size_mb} MB")
-        logger.debug(f"System memory: {psutil.virtual_memory().total / (1024**3):.2f} GB")
+        logger.debug(f"Initialized MemoryManager with max_file_size_mb={max_file_size_mb}, save_results={save_results}")
+        
+        if not save_results:
+            logger.info("Disk writing disabled - all results will be kept in memory")
+        elif max_file_size_mb <= 0:
+            logger.warning("max_file_size_mb <= 0 - results will accumulate in memory indefinitely")
 
     def __repr__(self) -> str:
         """String representation of MemoryManager."""
@@ -70,23 +54,7 @@ class MemoryManager:
         grid: FootpointGrid, 
         n_trial: int = 10
     ) -> Tuple[float, float]:
-        """Estimate memory requirements using simplified heuristics.
-        
-        Parameters
-        ----------
-        template : FieldLine
-            Template field line
-        grid : FootpointGrid
-            Grid of footpoints
-        n_trial : int, optional
-            Number of trial lines to process, by default 10
-            
-        Returns
-        -------
-        Tuple[float, float]
-            - estimated_size_per_line: Size per field line in bytes
-            - estimated_completion_time: Estimated completion time in seconds
-        """
+        """Estimate memory requirements using simplified heuristics."""
         logger.info(f"Estimating memory requirements with {n_trial} trial lines")
         time_start = time.time()
         
@@ -114,18 +82,7 @@ class MemoryManager:
         return trial_size, completion_time
 
     def calculate_batch_size(self, estimated_line_size: float) -> int:
-        """Calculate optimal batch size using simplified heuristics.
-        
-        Parameters
-        ----------
-        estimated_line_size : float
-            Estimated size per field line in bytes
-            
-        Returns
-        -------
-        int
-            Optimal batch size
-        """
+        """Calculate optimal batch size using simplified heuristics."""
         # Simple heuristic: use 50% of available memory or max_batch_size, whichever is smaller
         available_mb = psutil.virtual_memory().available / (1024 * 1024)
         safe_memory_mb = min(available_mb * 0.5, self.config.max_memory_mb)
@@ -138,22 +95,7 @@ class MemoryManager:
         return batch_size
 
     def add_results(self, batch_results: FieldLineSet, filename: str, batch_idx: int) -> FieldLineSet:
-        """Add batch results and manage memory.
-
-        Parameters
-        ----------
-        batch_results : FieldLineSet
-            New batch results
-        filename : str
-            Base filename for output
-        batch_idx : int
-            Current batch index
-
-        Returns
-        -------
-        FieldLineSet
-            Current results in memory
-        """
+        """Add batch results and manage memory."""
         logger.debug(f"Adding {batch_results.n_field_lines} field lines to memory")
         
         if self._results_in_memory is None:
@@ -164,10 +106,12 @@ class MemoryManager:
         self._results_in_memory_size = self._results_in_memory.estimate_size()
         memory_mb = self._results_in_memory_size / (1024 * 1024)
         
-        # Write to disk if file size exceeds threshold
-        if memory_mb > self.max_file_size_mb:
+        # Only write to disk if save_results is True and file size exceeds threshold
+        if self.save_results and memory_mb > self.max_file_size_mb:
             logger.info(f"File size threshold reached ({memory_mb:.1f} MB > {self.max_file_size_mb} MB), writing to disk")
             self._write_results_to_disk(filename, batch_idx)
+        elif not self.save_results and memory_mb > self.max_file_size_mb:
+            logger.warning(f"Memory usage ({memory_mb:.1f} MB) exceeds threshold ({self.max_file_size_mb} MB) but save_results=False - keeping in memory")
 
         return self._results_in_memory
 
@@ -176,20 +120,7 @@ class MemoryManager:
         subset_grid: FootpointGrid, 
         template: FieldLine
     ) -> FieldLineSet:
-        """Process trial batch for memory estimation.
-        
-        Parameters
-        ----------
-        subset_grid : FootpointGrid
-            Subset of grid points
-        template : FieldLine
-            Template field line
-            
-        Returns
-        -------
-        FieldLineSet
-            Trial results
-        """
+        """Process trial batch for memory estimation."""
         if subset_grid.nline is None:
             error_msg = "Subset grid nline is None"
             logger.error(error_msg)
@@ -222,15 +153,7 @@ class MemoryManager:
                 return FieldLineSet(field_lines)
 
     def _write_results_to_disk(self, filename: str, batch_idx: int) -> None:
-        """Write results to disk and reset memory.
-        
-        Parameters
-        ----------
-        filename : str
-            Base filename
-        batch_idx : int
-            Batch index
-        """
+        """Write results to disk and reset memory."""
         if self._results_in_memory is None:
             return
         
@@ -248,13 +171,7 @@ class MemoryManager:
         self._results_in_memory_size = 0.0
 
     def rename_batch_files(self, filename: str) -> None:
-        """Rename batch files to final format.
-        
-        Parameters
-        ----------
-        filename : str
-            Base filename
-        """
+        """Rename batch files to final format."""
         pattern = f"{filename}_batch_*.fits"
         batch_files = glob.glob(pattern)
         

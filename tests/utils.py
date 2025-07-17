@@ -35,7 +35,7 @@ def setup_test_logger(test_name: str) -> logging.Logger:
         Configured logger
     """
     setup_logging(
-        log_level="DEBUG",
+        log_level="INFO",
         handler_levels={
             "console": LogLevels.CONSOLE,
             "file": None,  # No file logging for tests

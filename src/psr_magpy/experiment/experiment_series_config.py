@@ -50,7 +50,7 @@ class ExperimentSeriesConfig:
         if self.grid:
             logger.debug(f"Grid type: {self.grid.grid_type}")
         if self.tracing:
-            logger.debug(f"Tracing config: R_max={self.tracing.R_max}, min_R_max_line={self.tracing.min_R_max_line}, dt={self.tracing.dt}")
+            logger.debug(f"Tracing config: max_integration_radius={self.tracing.integration.max_integration_radius}, min_R_max_line={self.tracing.min_R_max_line}, dt={self.tracing.integration.dt}")
 
     def expand_to_experiments(self) -> List[ExperimentConfig]:
         """Expand field factories into a list of individual experiment configs.

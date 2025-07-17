@@ -19,7 +19,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from psr_magpy.line.tracer import FieldLineTracer
-from psr_magpy.line.tracing_parameters import TracingParameters, PhysicsParameters, OutputParameters
+from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters
 from psr_magpy.line.field_line import FieldLine, PropertyName
 from psr_magpy.line.property_calculator import PropertyCalculator
 from psr_magpy.line.property_system import PropertyValidationError
@@ -41,7 +41,7 @@ class TestFieldLineTracer:
         
         # Create default tracing parameters
         self.params = TracingParameters(
-            physics=PhysicsParameters(R_max=10.0, min_R_max_line=1.0),
+            integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0),
             output=OutputParameters(save_results=False)
         )
         
@@ -58,19 +58,19 @@ class TestFieldLineTracer:
     def test_initialization_with_custom_params(self):
         """Test tracer initialization with custom parameters."""
         custom_params = TracingParameters(
-            physics=PhysicsParameters(
-                R_max=15.0,
-                min_R_max_line=2.0,
+            integration=IntegrationParameters(
+                max_integration_radius=15.0,
+                threshold_line_distance=2.0,
                 t_span=(0.0, 2e6),
                 rtol=1e-9,
             ),
             output=OutputParameters(save_results=False)
         )
-        
+    
         tracer = FieldLineTracer(self.field, custom_params)
-        assert tracer.params.physics.R_max == 15.0
-        assert tracer.params.physics.min_R_max_line == 2.0
-        assert tracer.params.physics.rtol == 1e-9
+        assert tracer.params.integration.max_integration_radius == 15.0
+        assert tracer.params.integration.threshold_line_distance == 2.0
+        assert tracer.params.integration.rtol == 1e-9
     
     def test_initialization_validation(self):
         """Test that initialization validates inputs."""
@@ -136,7 +136,7 @@ class TestFieldLineTracer:
         template = FieldLine.template_OFL_calc()
         # Use a custom tracer with a safe t_span to avoid memory errors
         safe_params = TracingParameters(
-            physics=PhysicsParameters(R_max=10.0, min_R_max_line=1.0, t_span=(0.0, 100.0)),
+            integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
             output=OutputParameters(save_results=False)
         )
         tracer = FieldLineTracer(self.field, safe_params)
@@ -190,9 +190,9 @@ class TestFieldLineTracer:
         
         # Test very small dt
         small_dt_params = TracingParameters(
-            physics=PhysicsParameters(
-                R_max=10.0,
-                min_R_max_line=1.0,
+            integration=IntegrationParameters(
+                max_integration_radius=10.0,
+                threshold_line_distance=1.0,
                 dt=0.001,
             ),
             output=OutputParameters(save_results=False)
@@ -209,9 +209,9 @@ class TestFieldLineTracer:
         
         # Test very large dt
         large_dt_params = TracingParameters(
-            physics=PhysicsParameters(
-                R_max=10.0,
-                min_R_max_line=1.0,
+            integration=IntegrationParameters(
+                max_integration_radius=10.0,
+                threshold_line_distance=1.0,
                 dt=0.1,
                 t_span=(0.0, 1e4),
             ),
@@ -347,18 +347,18 @@ class TestFieldLineTracer:
         
         # Test with different tolerances
         high_tol_params = TracingParameters(
-            physics=PhysicsParameters(
-                R_max=10.0,
-                min_R_max_line=1.0,
+            integration=IntegrationParameters(
+                max_integration_radius=10.0,
+                threshold_line_distance=1.0,
                 rtol=1e-6,
                 atol=1e-6,
             ),
             output=OutputParameters(save_results=False)
         )
         low_tol_params = TracingParameters(
-            physics=PhysicsParameters(
-                R_max=10.0,
-                min_R_max_line=1.0,
+            integration=IntegrationParameters(
+                max_integration_radius=10.0,
+                threshold_line_distance=1.0,
                 rtol=1e-10,
                 atol=1e-10,
             ),
@@ -390,7 +390,7 @@ class TestFieldLineTracer:
         
         # Test with different surface radius
         custom_params = TracingParameters(
-            physics=PhysicsParameters(R_max=10.0, min_R_max_line=1.0, surface_radius=0.5),
+            integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, surface_radius=0.5),
             output=OutputParameters(save_results=False)
         )
         
@@ -411,7 +411,7 @@ class TestFieldLineTracer:
         
         # Test with shorter time span
         short_span_params = TracingParameters(
-            physics=PhysicsParameters(R_max=10.0, min_R_max_line=1.0, t_span=(0.0, 1e5)),
+            integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 1e5)),
             output=OutputParameters(save_results=False)
         )
         
@@ -508,7 +508,7 @@ class TestFieldLineTracerIntegration:
         self.dipole = DipoleFieldComponent()
         self.field = MultipoleField([self.dipole])
         self.params = TracingParameters(
-            physics=PhysicsParameters(R_max=10.0, min_R_max_line=1.0),
+            integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0),
             output=OutputParameters(save_results=False)
         )
     
@@ -522,7 +522,7 @@ class TestFieldLineTracerIntegration:
         """Test that property calculator is properly initialized."""
         tracer = FieldLineTracer(self.field, self.params)
         
-        assert tracer.property_calculator.min_R_max_line == self.params.min_R_max_line
+        assert tracer.property_calculator.threshold_line_distance == self.params.threshold_line_distance
     
     def test_end_to_end_tracing(self):
         """Test complete end-to-end field line tracing process."""
@@ -530,9 +530,9 @@ class TestFieldLineTracerIntegration:
 
 
         params = TracingParameters(
-            physics=PhysicsParameters(
-                R_max=10.0,
-                min_R_max_line=1.0,
+            integration=IntegrationParameters(
+                max_integration_radius=10.0,
+                threshold_line_distance=1.0,
                 dt=0.1,
                 t_span=(0.0, 1e4),
             ),
@@ -559,7 +559,11 @@ class TestFieldLineTracerIntegration:
             r_max = result.get_property('r_max')
             r_line = result.get_property('r_line')
             if r_line is not None and len(r_line) > 0:
-                assert r_max == np.max(r_line), f"r_max inconsistency for position {i}"
+                # Calculate max radius from line coordinates (r_line has shape (n_points, 3))
+                line_radii = np.sqrt(np.sum(r_line**2, axis=1))
+                max_radius_from_line = np.max(line_radii)
+                assert r_max is not None, f"r_max should not be None for position {i}"
+                assert np.isclose(float(r_max), float(max_radius_from_line)), f"r_max inconsistency for position {i}: r_max={r_max}, max_radius_from_line={max_radius_from_line}"
             
             r_cyl_max = result.get_property('r_cyl_max')
             assert r_cyl_max is not None
@@ -595,7 +599,7 @@ class TestFieldLineTracerPerformance:
         self.dipole = DipoleFieldComponent()
         self.field = MultipoleField([self.dipole])
         self.params = TracingParameters(
-            physics=PhysicsParameters(R_max=10.0, min_R_max_line=1.0),
+            integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0),
             output=OutputParameters(save_results=False)
         )
         self.tracer = FieldLineTracer(self.field, self.params)
@@ -630,7 +634,7 @@ class TestFieldLineTracerPerformance:
         
         # Use custom parameters with shorter time span to avoid memory issues
         params = TracingParameters(
-            physics=PhysicsParameters(R_max=10.0, min_R_max_line=1.0, t_span=(0.0, 100.0)),
+            integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
             output=OutputParameters(save_results=False)
         )
         tracer = FieldLineTracer(self.field, params)
@@ -646,7 +650,7 @@ class TestFieldLineTracerPerformance:
                 z=np.random.uniform(-0.5, 0.5)
             )
             result = tracer.trace_single_line(r_initial, i, template)
-            # Allow for field lines that don't reach min_R_max_line (valid physics)
+            # Allow for field lines that don't reach threshold_line_distance (valid physics)
             r_max = result.get_property('r_max')
             assert r_max is not None
             assert r_max > 0, f"r_max should be positive, got {r_max}"

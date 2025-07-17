@@ -14,7 +14,7 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 class FieldLineSet(FieldLine):
-    """Collection of field lines with array values"""
+    """Collection of field lines with array values."""
 
     # List of properties that are stored as lists of arrays
     ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.PA_LINE]
@@ -59,14 +59,6 @@ class FieldLineSet(FieldLine):
         self, field_lines: Union[List[FieldLine], FieldLine, "FieldLineSet"]
     ) -> None:
         """Append field lines to the set.
-
-        Parameters
-        ----------
-        field_lines : Union[List[FieldLine], FieldLine, FieldLineSet]
-            Field lines to append. Can be:
-            - A single FieldLine instance
-            - A list of FieldLine objects
-            - Another FieldLineSet instance
 
         Raises
         ------
@@ -191,11 +183,7 @@ class FieldLineSet(FieldLine):
         logger.debug(f"Appended {len(field_lines)} field lines, total now: {self.n_field_lines}")
 
     def estimate_size(self) -> float:
-        """Estimate the memory size of the FieldLineSet in bytes.
-
-        Returns:
-            float: Estimated size in bytes
-        """
+        """Estimate the memory size of the FieldLineSet in bytes."""
         logger.debug("Estimating memory size of FieldLineSet")
         total_bytes = 0
 
@@ -225,6 +213,50 @@ class FieldLineSet(FieldLine):
         logger.debug(f"Total estimated size: {total_bytes} bytes ({total_bytes/1024/1024:.2f} MB)")
         return float(total_bytes)
         
+    def get_property(self, property_name: Union[str, PropertyName]) -> Union[np.ndarray, List, None]:
+        """Get property value with enabled check."""
+        # Convert string to PropertyName if needed
+        if isinstance(property_name, str):
+            try:
+                # First try using the string as an enum name (e.g., 'R_MAX')
+                property_name = PropertyName[property_name.upper()]
+            except KeyError:
+                # If that fails, try to find by key_name (e.g., 'r_max')
+                for prop in PropertyName:
+                    if prop.key_name == property_name.lower():
+                        property_name = prop
+                        break
+                else:
+                    logger.warning(f"Unknown property name: {property_name}")
+                    return None
+        
+        # Check if property is enabled
+        if property_name not in self.property_system.get_enabled_properties():
+            logger.debug(f"Property {property_name.key_name} is not enabled")
+            return None
+            
+        return self.property_system.get_property(property_name)
+
+    def __getattr__(self, name: str):
+        """Dynamic property access for enabled properties."""
+        # Try to get property if it exists and is enabled
+        try:
+            # First try using the name as an enum name (e.g., 'R_MAX')
+            prop_name = PropertyName[name.upper()]
+        except KeyError:
+            # If that fails, try to find by key_name (e.g., 'r_max')
+            prop_name = None
+            for prop in PropertyName:
+                if prop.key_name == name.lower():
+                    prop_name = prop
+                    break
+        
+        if prop_name and prop_name in self.property_system.get_enabled_properties():
+            return self.property_system.get_property(prop_name)
+        
+        # Fallback to normal attribute error
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
     def __repr__(self) -> str:
         """Return string representation of the field line set."""
         enabled_props = self.property_system.get_enabled_property_names()
