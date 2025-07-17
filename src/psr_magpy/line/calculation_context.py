@@ -5,7 +5,6 @@ Provides a clean interface to all calculation components with explicit
 initialization and validation.
 """
 
-import logging
 from typing import Optional, Tuple
 
 from psr_magpy.field.multipole import MultipoleField

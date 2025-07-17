@@ -1,21 +1,13 @@
-import logging
-import os
 import time
 from multiprocessing import Pool
-from dataclasses import dataclass
-from tqdm import tqdm
-from typing import Tuple, Optional
-
+from typing import Optional
 import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
 
 from psr_magpy.grid.grid import FootpointGrid
-from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.field.multipole import MultipoleField
-from psr_magpy.line.memory_manager import MemoryManager
-from psr_magpy.line.progress_tracker import ProgressTracker
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.utils.logging_config import get_logger

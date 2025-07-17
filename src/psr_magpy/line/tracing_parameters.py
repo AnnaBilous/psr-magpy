@@ -6,7 +6,6 @@ hierarchy with validation and documentation.
 """
 
 import os
-from dataclasses import dataclass
 from typing import Optional, Tuple
 from pydantic import BaseModel, Field, model_validator
 

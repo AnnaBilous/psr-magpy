@@ -1,14 +1,13 @@
-import logging
+from typing import Optional, Any, Dict, List, Union
+from astropy.io import fits
+import numpy as np
 import psutil
 from pathlib import Path
 
-import numpy as np
-
-from astropy.io import fits as pf
-
 from psr_magpy.fitsio.base import FitsIO
-from psr_magpy.line.field_line import PropertyName
 from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.property_system import PropertyName
 from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -62,7 +61,7 @@ class FieldLineSetFitsIO(FitsIO):
 
         logger.debug(f"Creating column for {key} with format {format}")
 
-        return pf.Column(name=key, format=format, array=value)
+        return fits.Column(name=key, format=format, array=value)
 
     @classmethod
     def load_from_fits(cls, fitsname: str) -> FieldLineSet:
@@ -107,7 +106,7 @@ class FieldLineSetFitsIO(FitsIO):
         first_file = fits_files[0]
         logger.info(f"Loading first file {first_file} to create template")
 
-        with pf.open(first_file) as hdul:
+        with fits.open(first_file) as hdul:
             if "FIELD_LINES" not in [h.name for h in hdul]:
                 error_msg = f"No FIELD_LINES HDU found in {first_file}"
                 logger.error(error_msg)
@@ -131,7 +130,7 @@ class FieldLineSetFitsIO(FitsIO):
         # Load data from all files
         for fits_file in fits_files:
             logger.info(f"Loading data from {fits_file}")
-            with pf.open(fits_file) as hdul:
+            with fits.open(fits_file) as hdul:
                 hdu = hdul["FIELD_LINES"]
                 
                 # Load each column

@@ -1,23 +1,17 @@
-"""Field line tracing module for magnetic field analysis.
+"""
+Field line tracer for magnetic field integration.
 
-Provides classes for tracing magnetic field lines from neutron star surfaces
-using ODE integration. Supports different integration methods, event detection,
-and property calculation for field line analysis.
+Provides efficient field line tracing with configurable properties
+and integration parameters.
 """
 
-import logging
-import time
-from typing import Dict, List, Optional, Union, Any, Tuple
-
+from typing import Any
+from astropy.coordinates import CartesianRepresentation
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-from astropy.coordinates.representation import CartesianRepresentation, SphericalRepresentation
-
+from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.field_line import FieldLine
-from psr_magpy.line.property_system import PropertyName
-from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters
 from psr_magpy.line.property_calculator import PropertyCalculator
 from psr_magpy.utils.logging_config import get_logger
 

@@ -1,16 +1,16 @@
-"""Field line property calculation module.
+"""
+Property calculator for field line analysis.
 
-Provides classes for calculating various properties of field lines including
-position vectors, maximum radii, magnetic field properties, curvature,
-and position angle along the field line.
+Calculates various properties of field lines including maximum distances,
+magnetic field properties, and geometric characteristics.
 """
 
-import logging
-from typing import Dict, List, Optional, Union, Any
-
+from typing import Optional, Any, Union, List, Dict
+from astropy.coordinates import CartesianRepresentation
 import numpy as np
 
-from psr_magpy.line.field_line import FieldLine, PropertyName
+from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.property_system import PropertyName
 from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
