@@ -152,7 +152,7 @@ class PropertySystem:
             **kwargs: Boolean flags for which properties to save.
                      Examples:
                      - save_r_line=True, save_r_max=True
-                     - save_all=True (enables all properties)
+                     - save_footpoint_id=True (always enabled)
         """
         # Process save flags
         self.save_flags = self._process_flags(**kwargs)
@@ -206,21 +206,16 @@ class PropertySystem:
     
     def _process_flags(self, **kwargs) -> SaveFlags:
         """Process kwargs to create SaveFlags instance."""
-        # Handle save_all flag
-        if kwargs.get('save_all', False):
-            # Enable all properties
-            flags_dict = {prop.flag_name: True for prop in PropertyName}
-        else:
-            # Create flags dictionary with defaults
-            flags_dict = {}
-            for prop in PropertyName:
-                # footpoint_id is always True, others default to False
-                default_value = True if prop == PropertyName.FOOTPOINT_ID else False
-                # Allow override from kwargs, but force footpoint_id to True
-                value = kwargs.get(prop.flag_name, default_value)
-                if prop == PropertyName.FOOTPOINT_ID:
-                    value = True
-                flags_dict[prop.flag_name] = value
+        # Create flags dictionary with defaults
+        flags_dict = {}
+        for prop in PropertyName:
+            # footpoint_id is always True, others default to False
+            default_value = True if prop == PropertyName.FOOTPOINT_ID else False
+            # Allow override from kwargs, but force footpoint_id to True
+            value = kwargs.get(prop.flag_name, default_value)
+            if prop == PropertyName.FOOTPOINT_ID:
+                value = True
+            flags_dict[prop.flag_name] = value
         
         # Create SaveFlags instance
         save_flags = SaveFlags(**flags_dict)

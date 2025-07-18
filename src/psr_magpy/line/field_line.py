@@ -17,11 +17,9 @@ class FieldLine:
             **kwargs: Boolean flags for which properties to save.
                      save_footpoint_id will always be True regardless of input.
                      
-                     Property groups can be specified:
-                     - save_all: Enable all properties
-                     - save_line_data: Enable r_line, pa_line
-                     - save_line_max: Enable r_max, r_cyl_max, z_abs_max
-                     - save_b_ini: Enable b_ini, b_r_ini_angle
+                     Examples:
+                     - save_r_line=True, save_r_max=True
+                     - save_footpoint_id=True (always enabled)
         """
         # Initialize property system, ensuring footpoint_id is True
         kwargs["save_footpoint_id"] = True
@@ -89,7 +87,11 @@ class FieldLine:
     @classmethod
     def template_all(cls) -> "FieldLine":
         """Create template with all properties enabled."""
-        return cls(save_all=True)
+        return cls(
+            save_r_line=True, save_pa_line=True, save_r_max=True, 
+            save_r_cyl_max=True, save_z_abs_max=True, save_b_ini=True, 
+            save_b_r_ini_angle=True
+        )
     
     @classmethod
     def template_all_except_line_and_PA(cls) -> "FieldLine":

@@ -210,6 +210,52 @@ class FieldLineSet(FieldLine):
 
         logger.debug(f"Total estimated size: {total_bytes} bytes ({total_bytes/1024/1024:.2f} MB)")
         return float(total_bytes)
+
+    def print_summary(self) -> None:
+        """Print summary statistics for all enabled properties."""
+        print(f"FieldLineSet Summary:")
+        print(f"  Number of field lines: {self.n_field_lines}")
+        print(f"  Memory usage: {self.estimate_size()/1024/1024:.2f} MB")
+        print(f"  Enabled properties: {len(self.property_system.get_enabled_properties())}")
+        print()
+        
+        for prop in self.property_system.get_enabled_properties():
+            values = self.property_system.get_property(prop)
+            if values is None:
+                print(f"  {prop.key_name}: None")
+                continue
+                
+            # Handle properties that are lists of arrays
+            if prop in self.ARRAY_LIST_PROPERTIES:
+                if not values:
+                    print(f"  {prop.key_name}: Empty list")
+                    continue
+                    
+                # Calculate statistics across all arrays
+                all_values = []
+                for arr in values:
+                    if arr is not None and len(arr) > 0:
+                        all_values.extend(arr.flatten())
+                
+                if all_values:
+                    all_values = np.array(all_values)
+                    print(f"  {prop.key_name}:\tArrays: {len(values)} Total points: {len(all_values)}\t Min: {all_values.min():.3e}\t Max: {all_values.max():.3e}")
+                else:
+                    print(f"  {prop.key_name}: No valid data")
+                continue
+            
+            # Handle numpy arrays
+            if isinstance(values, np.ndarray):
+                if values.size == 0:
+                    print(f"  {prop.key_name}: Empty array")
+                    continue
+                    
+                print(f"  {prop.key_name}:\t Min: {values.min():.2e}\t Max: {values.max():.2e}")
+            else:
+                # Handle scalar values
+                print(f"  {prop.key_name}: {values}")
+        
+        print()
         
     def get_property(self, property_name: Union[str, PropertyName]) -> Union[np.ndarray, List, None]:
         """Get property value with enabled check."""

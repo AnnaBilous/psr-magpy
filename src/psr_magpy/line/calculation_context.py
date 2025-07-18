@@ -35,8 +35,8 @@ class CalculationContext:
         self.grid = grid
         self.params = params or TracingParameters()
         
-        # Validate n_trial against grid size (cross-validation)
-        if self.grid.nline is not None:
+        # Validate n_trial against grid size only if memory estimation is enabled
+        if not self.params.performance.skip_memory_estimation and self.grid.nline is not None:
             self.params.performance.validate_against_grid(self.grid.nline)
         
         # Initialize tracer
