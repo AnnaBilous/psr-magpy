@@ -1,416 +1,624 @@
-import json
+import yaml
 from dataclasses import dataclass, asdict
-from typing import List, Optional, Union, Dict, Any
-import numpy as np
-from pathlib import Path
+from typing import List, Optional, Union, Dict, Any, Literal, TypedDict, Tuple, TYPE_CHECKING
 
-from psr_magpy.grid.grid import GridType, HealpixGrid, SphericalGrid, RandomGrid
-from psr_magpy.field.components import (
-    DipoleFieldComponent,
-    QuadrupoleFieldComponent,
-)
-from psr_magpy.line.calculator import TracingConfig
-from psr_magpy.line.field_line import PropertyName, PropertyGroup
+
+from pathlib import Path
+import numpy as np
+
+from psr_magpy.field.components import DipoleFieldComponent, QuadrupoleFieldComponent, MultipoleType
+from psr_magpy.field.multipole import MultipoleField
+from psr_magpy.grid.grid import SphericalGrid, RandomGrid, HealpixGrid, CustomGrid, GridType
+from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters, PerformanceParameters
+from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
-from psr_magpy.utils.json_utils import NumpyEncoder
 
 logger = get_logger(__name__, console_format_brief=True)
 
-@dataclass
-class GridConfig:
-    """Configuration for the field line grid."""
 
-    grid_type: Union[GridType, str]
+# Type definitions for better type safety
 
-    # HEALPix parameters
-    nside: Optional[int] = None
 
-    # Spherical grid parameters
-    nlon: Optional[int] = None
-    nlat: Optional[int] = None
+
+
+
+from pydantic import BaseModel, Field
+
+
+class FieldComponentConfig(BaseModel):
+    """Configuration for a single field component."""
+    
+    moment_type: str
+    B_magnitude: float = 1.0
+    moment_orientation_latitude_degree: float = 0.0
+    moment_orientation_longitude_degree: float = 0.0
+    offset_r_ns: List[float] = [0.0, 0.0, 0.0]
+
+
+class FieldConfig(BaseModel):
+    """Configuration for magnetic field components."""
+    
+    components: List[FieldComponentConfig] = Field(description="List of field components")
+    
+    def create_field(self) -> MultipoleField:
+        """Create MultipoleField from configuration."""
+        logger.debug(f"Creating field with {len(self.components)} components")
+        
+        field_components = []
+        for i, comp in enumerate(self.components):
+            comp_type = comp.moment_type
+            logger.debug(f"Creating {comp_type} component {i+1}")
+            
+            if comp_type == MultipoleType.DIPOLE.value:
+                component = DipoleFieldComponent(
+                    B_magnitude=comp.B_magnitude,
+                    moment_orientation_latitude_degree=comp.moment_orientation_latitude_degree,
+                    moment_orientation_longitude_degree=comp.moment_orientation_longitude_degree,
+                    offset_r_ns=comp.offset_r_ns
+                )
+            elif comp_type == MultipoleType.QUADRUPOLE.value:
+                component = QuadrupoleFieldComponent(
+                    B_magnitude=comp.B_magnitude,
+                    moment_orientation_latitude_degree=comp.moment_orientation_latitude_degree,
+                    moment_orientation_longitude_degree=comp.moment_orientation_longitude_degree,
+                    offset_r_ns=comp.offset_r_ns
+                )
+            else:
+                error_msg = f"Unknown field component type: {comp_type}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            field_components.append(component)
+        
+        return MultipoleField(field_components)
+    
+    def get_complete_components(self) -> List[Dict[str, Any]]:
+        """Get complete component configurations including all default parameters."""
+        logger.debug("Getting complete component configurations")
+        
+        complete_components = []
+        for comp in self.components:
+            comp_type = comp.moment_type
+            
+            # Create component to get all parameters (including defaults)
+            if comp_type == MultipoleType.DIPOLE.value:
+                component = DipoleFieldComponent(
+                    B_magnitude=comp.B_magnitude,
+                    moment_orientation_latitude_degree=comp.moment_orientation_latitude_degree,
+                    moment_orientation_longitude_degree=comp.moment_orientation_longitude_degree,
+                    offset_r_ns=comp.offset_r_ns
+                )
+            elif comp_type == MultipoleType.QUADRUPOLE.value:
+                component = QuadrupoleFieldComponent(
+                    B_magnitude=comp.B_magnitude,
+                    moment_orientation_latitude_degree=comp.moment_orientation_latitude_degree,
+                    moment_orientation_longitude_degree=comp.moment_orientation_longitude_degree,
+                    offset_r_ns=comp.offset_r_ns
+                )
+            else:
+                error_msg = f"Unknown field component type: {comp_type}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            # Get complete parameters including defaults
+            complete_params = component.params.model_dump()
+            # Convert enum to string for JSON serialization
+            complete_params["moment_type"] = complete_params["moment_type"].value
+            
+            complete_components.append(complete_params)
+            logger.debug(f"Complete params for {comp_type}: {complete_params}")
+        
+        return complete_components
+
+
+class SphericalGridConfig(BaseModel):
+    """Configuration for spherical grid."""
+    
+    nlon: int
+    nlat: int
     pole_lat: float = 0.0
 
-    # Random grid parameters
-    n_random: Optional[int] = None
 
-    def __post_init__(self):
-        """Convert grid_type from string to GridType if necessary."""
-        logger.debug(f"Initializing GridConfig with grid_type={self.grid_type}")
-        if isinstance(self.grid_type, str):
-            try:
-                self.grid_type = GridType(self.grid_type.lower())
-                logger.debug(f"Converted string grid_type to enum: {self.grid_type}")
-            except ValueError:
-                error_msg = f"Invalid grid type: {self.grid_type}. Must be one of {[e.value for e in GridType]}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-
-    def create_grid(self) -> Union["HealpixGrid", "SphericalGrid", "RandomGrid"]:
-        """Create a grid based on the configuration."""
-        logger.debug(f"Creating grid of type {self.grid_type}")
-        if self.grid_type == GridType.HEALPIX:
-            if self.nside is None:
-                error_msg = "nside must be specified for healpix grid"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-            logger.debug(f"Creating HEALPix grid with nside={self.nside}")
-            return HealpixGrid(nside=self.nside)
-        elif self.grid_type == GridType.SPHERICAL:
-            if self.nlon is None or self.nlat is None:
-                error_msg = "nlon and nlat must be specified for spherical grid"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-            logger.debug(f"Creating Spherical grid with nlon={self.nlon}, nlat={self.nlat}, pole_lat={self.pole_lat}")
-            return SphericalGrid(nlon=self.nlon, nlat=self.nlat, pole_lat=self.pole_lat)
-        elif self.grid_type == GridType.RANDOM:
-            if self.n_random is None:
-                error_msg = "n_random must be specified for random grid"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-            logger.debug(f"Creating Random grid with n_random={self.n_random}")
-            return RandomGrid(nline_ori=self.n_random)
-        else:
-            error_msg = f"Unknown grid type: {self.grid_type}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-
-@dataclass
-class FieldComponentConfig:
-    """Configuration for a magnetic field component."""
-
-    type: str  # 'dipole' or 'quadrupole'
-    B_magnitude: float
-    moment_orientation_latitude_degree: float
-    moment_orientation_longitude_degree: float
-    offset_r_ns: Optional[np.ndarray] = None
+class RandomGridConfig(BaseModel):
+    """Configuration for random grid."""
     
+    nline_ori: int
 
-    def create_component(self) -> Union[DipoleFieldComponent, QuadrupoleFieldComponent]:
-        """Create a field component based on the configuration."""
-        logger.debug(f"Creating field component of type {self.type}")
+
+class HealpixGridConfig(BaseModel):
+    """Configuration for HEALPix grid."""
+    
+    nside: int
+
+
+class CustomGridConfig(BaseModel):
+    """Configuration for custom grid."""
+    
+    nline_ori: int
+    coordinates: Optional[List[List[float]]] = None
+
+
+class GridConfig(BaseModel):
+    """Configuration for field line grid."""
+    
+    spherical: Optional[SphericalGridConfig] = Field(default=None, description="Spherical grid parameters")
+    random: Optional[RandomGridConfig] = Field(default=None, description="Random grid parameters")
+    healpix: Optional[HealpixGridConfig] = Field(default=None, description="HEALPix grid parameters")
+    custom: Optional[CustomGridConfig] = Field(default=None, description="Custom grid parameters")
+    
+    def model_post_init(self, __context) -> None:
+        """Validate that exactly one grid type is specified."""
+        configs = [self.spherical, self.random, self.healpix, self.custom]
+        non_none_configs = [c for c in configs if c is not None]
         
-        # Common parameters
-        params = {
-            "B_magnitude": self.B_magnitude,
-            "moment_orientation_latitude_degree": self.moment_orientation_latitude_degree,
-            "moment_orientation_longitude_degree": self.moment_orientation_longitude_degree,
-        }
-        
-        # Add offset if provided
-        if self.offset_r_ns is not None:
-            params["offset_r_ns"] = self.offset_r_ns
-            
-        if self.type == "dipole":
-            logger.debug(f"Creating Dipole field component with B={self.B_magnitude}, "
-                       f"lat={self.moment_orientation_latitude_degree}°, "
-                       f"lon={self.moment_orientation_longitude_degree}°"
-                       f"{', offset=' + str(self.offset_r_ns) if self.offset_r_ns is not None else ''}")
-            return DipoleFieldComponent(**params)
-        elif self.type == "quadrupole":
-            logger.debug(f"Creating Quadrupole field component with B={self.B_magnitude}, "
-                       f"lat={self.moment_orientation_latitude_degree}°, "
-                       f"lon={self.moment_orientation_longitude_degree}°"
-                       f"{', offset=' + str(self.offset_r_ns) if self.offset_r_ns is not None else ''}")
-            return QuadrupoleFieldComponent(**params)
+        if len(non_none_configs) != 1:
+            error_msg = f"Exactly one grid type must be specified, got {len(non_none_configs)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+    
+    def get_grid_type(self) -> str:
+        """Get the grid type from the configuration."""
+        if self.spherical is not None:
+            return GridType.SPHERICAL.value
+        elif self.random is not None:
+            return GridType.RANDOM.value
+        elif self.healpix is not None:
+            return GridType.HEALPIX.value
+        elif self.custom is not None:
+            return GridType.CUSTOM.value
         else:
-            error_msg = f"Unknown field component type: {self.type}"
+            error_msg = "No grid type specified"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+    
+    def create_grid(self):
+        """Create grid from configuration."""
+        grid_type = self.get_grid_type()
+        logger.debug(f"Creating {grid_type} grid")
+        
+        if self.spherical is not None:
+            return SphericalGrid(**self.spherical.model_dump())
+        elif self.random is not None:
+            return RandomGrid(**self.random.model_dump())
+        elif self.healpix is not None:
+            return HealpixGrid(**self.healpix.model_dump())
+        elif self.custom is not None:
+            return CustomGrid(**self.custom.model_dump())
+        else:
+            error_msg = "No grid type specified"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
 
-class OutputConfig:
-    """Configuration for output settings."""
-
-    def __init__(self, output_dir="output", file_prefix="", **kwargs):
-        """Initialize with output directory and optional save flags.
-
-        Args:
-            output_dir: Directory to save output files
-            file_prefix: Prefix to add to output filenames
-            **kwargs: Save flags (e.g., save_r_max=True) or property groups (e.g., save_all=True)
-                      Available property groups:
-                      - save_all: Enable all properties
-                      - save_line_data: Enable r_line, pa_line, curvature_line
-                      - save_line_max: Enable r_max, r_cyl_max, z_abs_max
-                      - save_b_ini: Enable b_ini, b_r_ini_angle
-        """
-        logger.debug(f"Initializing OutputConfig with dir={output_dir}, prefix={file_prefix}")
-        self.output_dir = output_dir
-        self.file_prefix = file_prefix
-
-        # Process property groups first
-        property_flags: Dict[str, bool] = {}
+class TracingConfig(BaseModel):
+    """Configuration for field line tracing parameters."""
+    
+    # Integration parameters
+    max_integration_radius: float = 10.0
+    threshold_line_distance: float = 1.0
+    t_span: Tuple[float, float] = (0.0, 1e8)
+    rtol: float = 5.0e-9
+    atol: float = 5.0e-9
+    surface_radius: float = 1.0 - 1.e-8
+    dt: float = 0.01
+    max_step: float = 0.01
+    trace_open_lines_backwards: bool = False
+    
+    # Performance parameters
+    max_memory_mb: float = 100.0
+    safety_factor: float = 0.9
+    max_batch_size: int = 100
+    check_interval_sec: float = 1.0
+    n_cores: Optional[int] = None
+    n_trial: int = 10
+    progress_bar: bool = True
+    verbose: bool = False
+    skip_memory_estimation: bool = False
+    
+    # Output parameters
+    save_results: bool = False
+    filename: Optional[str] = None
+    output_format: str = "fits"
+    overwrite: bool = False
+    
+    def create_tracing_parameters(self) -> TracingParameters:
+        """Create TracingParameters from configuration."""
+        logger.debug("Creating tracing parameters from configuration")
         
-        # Check for property groups
-        for group in PropertyGroup:
-            group_name = group.name.lower()
-            if group_name in kwargs and kwargs[group_name]:
-                # Enable all properties in this group
-                for prop in group.properties:
-                    property_flags[prop.flag_name] = True
-                logger.debug(f"Enabled property group: {group_name}")
-
-        # Set default values for all save flags
-        for prop in PropertyName:
-            # FOOTPOINT_ID is always True, others default to False
-            default_value = True if prop == PropertyName.FOOTPOINT_ID else False
-            # Allow override from kwargs, but force footpoint_id to True
-            value = kwargs.get(prop.flag_name, property_flags.get(prop.flag_name, default_value))
-            if prop == PropertyName.FOOTPOINT_ID:
-                value = True
-            setattr(self, prop.flag_name, value)
-
-        # Update with provided kwargs for any other attributes
-        for key, value in kwargs.items():
-            if not hasattr(self, key):
-                logger.debug(f"Setting additional output attribute {key}={value}")
-                setattr(self, key, value)
-
-    def to_dict(self):
-        """Convert to dictionary for serialization."""
-        logger.debug("Converting OutputConfig to dictionary")
-        result = {"output_dir": self.output_dir, "file_prefix": self.file_prefix}
-
-        # Add all save flags
-        for prop in PropertyName:
-            result[prop.flag_name] = getattr(self, prop.flag_name)
-
-        # Add any additional attributes
-        for key, value in vars(self).items():
-            if key not in result and not key.startswith('_'):
-                result[key] = value
-
-        return result
-
-    def get_save_flags(self):
-        """Get a dictionary of all save flags.
-
-        Returns:
-            dict: Dictionary of save flags for use with FieldLine constructor
-        """
-        logger.debug("Getting save flags from OutputConfig")
-        save_flags = {}
-        for prop in PropertyName:
-            flag_name = prop.flag_name
-            save_flags[flag_name] = getattr(self, flag_name)
+        integration = IntegrationParameters(
+            max_integration_radius=self.max_integration_radius,
+            threshold_line_distance=self.threshold_line_distance,
+            t_span=self.t_span,
+            rtol=self.rtol,
+            atol=self.atol,
+            surface_radius=self.surface_radius,
+            dt=self.dt,
+            max_step=self.max_step,
+            trace_open_lines_backwards=self.trace_open_lines_backwards
+        )
         
-        # Add property groups
-        for group in PropertyGroup:
-            group_name = group.name.lower()
-            # Check if all properties in this group are enabled
-            all_enabled = all(getattr(self, prop.flag_name) for prop in group.properties)
-            save_flags[group_name] = all_enabled
+        performance = PerformanceParameters(
+            max_memory_mb=self.max_memory_mb,
+            safety_factor=self.safety_factor,
+            max_batch_size=self.max_batch_size,
+            check_interval_sec=self.check_interval_sec,
+            n_cores=self.n_cores,
+            n_trial=self.n_trial,
+            progress_bar=self.progress_bar,
+            verbose=self.verbose,
+            skip_memory_estimation=self.skip_memory_estimation
+        )
+        
+        output = OutputParameters(
+            save_results=self.save_results,
+            filename=self.filename,
+            output_format=self.output_format,
+            overwrite=self.overwrite
+        )
+        
+        return TracingParameters(
+            integration=integration,
+            performance=performance,
+            output=output
+        )
+    
+    def get_complete_config(self) -> Dict[str, Any]:
+        """Get complete tracing configuration including all default parameters."""
+        logger.debug("Getting complete tracing configuration")
+        
+        # Return flat configuration for backward compatibility
+        return self.model_dump()
+
+
+class FieldFactoryConfig(BaseModel):
+    """Factory configuration for field components with flexible parameter inputs."""
+    
+    components: List[Union[FieldComponentConfig, List[FieldComponentConfig]]]
+
+
+class GridFactoryConfig(BaseModel):
+    """Factory configuration for grids with flexible parameter inputs."""
+    
+    grids: List[Union[SphericalGridConfig, RandomGridConfig, HealpixGridConfig, CustomGridConfig]]
+
+
+class TemplateFactoryConfig(BaseModel):
+    """Factory configuration for templates with flexible parameter inputs."""
+    
+    templates: List[FieldLine]
+    
+    model_config = {"arbitrary_types_allowed": True}
+
+
+class ExperimentSeriesConfig(BaseModel):
+    """Configuration for experiment series with flexible parameter inputs."""
+    
+    name: str
+    field: Union[FieldConfig, FieldFactoryConfig]
+    grid: Union[GridConfig, GridFactoryConfig]
+    tracing: TracingConfig
+    template: Union[FieldLine, TemplateFactoryConfig]
+    description: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    
+    model_config = {"arbitrary_types_allowed": True}
+    
+    def create_experiment_series(self) -> List["ExperimentConfig"]:
+        """Create all possible experiment combinations from the configuration."""
+        logger.debug(f"Creating experiment series: {self.name}")
+        
+        # Generate all parameter combinations
+        field_configs = self._expand_field_configs()
+        grid_configs = self._expand_grid_configs()
+        tracing_configs = self._expand_tracing_configs()
+        template_configs = self._expand_template_configs()
+        
+        # Create all combinations
+        experiments = []
+        experiment_count = 0
+        
+        for field_config in field_configs:
+            for grid_config in grid_configs:
+                for tracing_config in tracing_configs:
+                    for template_config in template_configs:
+                        experiment_count += 1
+                        
+                        # Create unique name and metadata
+                        exp_name = f"{self.name}_{experiment_count:03d}"
+                        exp_metadata = self._create_experiment_metadata(
+                            experiment_count, field_config, grid_config, tracing_config, template_config
+                        )
+                        
+                        experiment = ExperimentConfig(
+                            name=exp_name,
+                            description=self.description,
+                            field=field_config,
+                            grid=grid_config,
+                            tracing=tracing_config,
+                            template=template_config,
+                            metadata=exp_metadata
+                        )
+                        experiments.append(experiment)
+        
+        logger.info(f"Created {len(experiments)} experiments in series")
+        return experiments
+    
+    def _expand_field_configs(self) -> List[FieldConfig]:
+        """Expand field configuration into all possible combinations."""
+        if isinstance(self.field, FieldConfig):
+            return [self.field]
+        
+        # Handle FieldFactoryConfig
+        field_configs = []
+        for component_group in self.field.components:
+            if isinstance(component_group, FieldComponentConfig):
+                # Single component
+                field_configs.append(FieldConfig(components=[component_group]))
+            else:
+                # List of components
+                field_configs.append(FieldConfig(components=component_group))
+        
+        return field_configs
+    
+    def _expand_grid_configs(self) -> List[GridConfig]:
+        """Expand grid configuration into all possible combinations."""
+        if isinstance(self.grid, GridConfig):
+            return [self.grid]
+        
+        # Handle GridFactoryConfig
+        grid_configs = []
+        for grid in self.grid.grids:
+            if isinstance(grid, SphericalGridConfig):
+                grid_configs.append(GridConfig(spherical=grid))
+            elif isinstance(grid, RandomGridConfig):
+                grid_configs.append(GridConfig(random=grid))
+            elif isinstance(grid, HealpixGridConfig):
+                grid_configs.append(GridConfig(healpix=grid))
+            elif isinstance(grid, CustomGridConfig):
+                grid_configs.append(GridConfig(custom=grid))
+        
+        return grid_configs
+    
+    def _expand_tracing_configs(self) -> List[TracingConfig]:
+        """Expand tracing configuration into all possible combinations."""
+        # Extract all parameter combinations from TracingConfig
+        param_combinations = self._get_parameter_combinations(self.tracing.model_dump())
+        
+        tracing_configs = []
+        for params in param_combinations:
+            tracing_configs.append(TracingConfig(**params))
+        
+        return tracing_configs
+    
+    def _expand_template_configs(self) -> List[FieldLine]:
+        """Expand template configuration into all possible combinations."""
+        if isinstance(self.template, FieldLine):
+            return [self.template]
+        
+        # Handle TemplateFactoryConfig
+        return self.template.templates
+    
+    def _get_parameter_combinations(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate all combinations of parameters that contain lists or dictionaries."""
+        # Find parameters that need expansion
+        expandable_params = {}
+        fixed_params = {}
+        
+        for key, value in params.items():
+            if isinstance(value, (list, dict)):
+                expandable_params[key] = value
+            else:
+                fixed_params[key] = value
+        
+        if not expandable_params:
+            return [params]
+        
+        # Generate combinations
+        combinations = [fixed_params]
+        
+        for key, value in expandable_params.items():
+            new_combinations = []
             
-        return save_flags
-
-    @classmethod
-    def from_dict(cls, data):
-        """Create instance from dictionary."""
-        logger.debug(f"Creating OutputConfig from dictionary: {data}")
-        return cls(**data)
-
-    def get_output_filename(self, extension=""):
-        """Get the full output filename with path."""
-        if self.file_prefix:
-            filename = f"{self.file_prefix}_{extension}"
-        else:
-            filename = f"{extension}"
-
-        full_path = Path(self.output_dir) / filename
-        logger.debug(f"Generated output filename: {full_path}")
-        return full_path
+            if isinstance(value, list):
+                # List: create combinations with each value
+                for item in value:
+                    for combo in combinations:
+                        new_combo = combo.copy()
+                        new_combo[key] = item
+                        new_combinations.append(new_combo)
+            
+            elif isinstance(value, dict):
+                # Dictionary: create separate branches for each key-value pair
+                for dict_key, dict_value in value.items():
+                    for combo in combinations:
+                        new_combo = combo.copy()
+                        new_combo[key] = dict_value
+                        # Add branch info to metadata
+                        if 'branch' not in new_combo:
+                            new_combo['branch'] = {}
+                        new_combo['branch'][key] = dict_key
+                        new_combinations.append(new_combo)
+            
+            combinations = new_combinations
+        
+        return combinations
+    
+    def _create_experiment_metadata(self, experiment_count: int, field_config: FieldConfig, 
+                                  grid_config: GridConfig, tracing_config: TracingConfig, 
+                                  template_config: FieldLine) -> Dict[str, Any]:
+        """Create unique metadata for each experiment."""
+        metadata = self.metadata.copy() if self.metadata else {}
+        
+        # Add experiment-specific metadata
+        metadata.update({
+            "experiment_number": experiment_count,
+            "series_name": self.name,
+            "field_components": len(field_config.components),
+            "grid_type": grid_config.get_grid_type(),
+            "template_properties": list(template_config.property_system.get_flags_dict().keys())
+        })
+        
+        # Add branch information if present
+        if hasattr(tracing_config, 'branch'):
+            metadata["branch"] = getattr(tracing_config, 'branch')
+        
+        return metadata
 
 
 @dataclass
 class ExperimentConfig:
-    """Main configuration class for magnetic field line experiments."""
-
-    # Experiment metadata
+    """Complete experiment configuration."""
+    
     name: str
+    field: FieldConfig
+    grid: GridConfig
+    tracing: TracingConfig
+    template: FieldLine
     description: Optional[str] = None
-
-    # Component configurations
-    grid: Union[GridConfig, str, Path] = None  # Can be GridConfig or path to grid file
-    tracing: TracingConfig = None
-    field_components: List[FieldComponentConfig] = None
-
-    # Output configuration
-    output: OutputConfig = OutputConfig()
-
+    metadata: Optional[Dict[str, Any]] = None
+    
     def __post_init__(self):
-        """Log the creation of the experiment configuration."""
-        logger.debug(f"Created experiment configuration: {self.name}")
+        """Validate configuration."""
+        logger.debug(f"Initializing experiment: {self.name}")
         if self.description:
             logger.debug(f"Description: {self.description}")
+    
+    def save(self, filepath: Union[str, Path]) -> None:
+        """Save configuration to YAML file."""
+        filepath = Path(filepath)
+        logger.info(f"Saving experiment config to {filepath}")
         
-        # Log component counts
-        if self.field_components:
-            logger.debug(f"Number of field components: {len(self.field_components)}")
-        if self.grid:
-            if isinstance(self.grid, GridConfig):
-                logger.debug(f"Grid type: {self.grid.grid_type}")
-            else:
-                logger.debug(f"Grid from file: {self.grid}")
-        if self.tracing:
-            logger.debug(f"Tracing config: max_integration_radius={self.tracing.integration.max_integration_radius}, min_R_max_line={self.tracing.min_R_max_line}, dt={self.tracing.integration.dt}")
-
+        # Convert to dict, handling nested objects
+        config_dict = {
+            "name": self.name,
+            "description": self.description,
+            "field": {
+                "components": self.field.get_complete_components()
+            },
+            "grid": self.grid.model_dump(),
+            "tracing": self.tracing.get_complete_config(),
+            "template": self.template.property_system.get_flags_dict(),
+            "metadata": self.metadata or {}
+        }
+        
+        # Convert tuples and numpy arrays to lists for YAML compatibility
+        config_dict = self._convert_for_yaml(config_dict)
+        
+        # Ensure directory exists
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save with YAML
+        with open(filepath, "w") as f:
+            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
+        
+        logger.info(f"Config saved to {filepath}")
+    
+    def print_yaml(self):
+        """Print configuration as pretty YAML to screen."""
+        config_dict = {
+            "name": self.name,
+            "description": self.description,
+            "field": {
+                "components": self.field.get_complete_components()
+            },
+            "grid": self.grid.model_dump(),
+            "tracing": self.tracing.get_complete_config(),
+            "template": self.template.property_system.get_flags_dict(),
+            "metadata": self.metadata or {}
+        }
+        
+        config_dict = self._convert_for_yaml(config_dict)
+        yaml_string = yaml.dump(config_dict, default_flow_style=False, indent=2, sort_keys=False)
+        print("=== Experiment Configuration ===")
+        print(yaml_string)
+        print("=================================")
+    
+    def _convert_for_yaml(self, obj):
+        """Recursively convert tuples and numpy arrays to lists for YAML compatibility."""
+        if isinstance(obj, tuple):
+            return list(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {k: self._convert_for_yaml(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_for_yaml(item) for item in obj]
+        else:
+            return obj
+    
     @classmethod
     def load(cls, filepath: Union[str, Path]) -> "ExperimentConfig":
-        """Load configuration from a JSON file."""
+        """Load configuration from YAML file."""
         filepath = Path(filepath)
-        logger.info(f"Loading experiment configuration from {filepath}")
+        logger.info(f"Loading experiment config from {filepath}")
         
-        try:
-            with open(filepath, "r") as f:
-                data = json.load(f)
-                logger.debug(f"Successfully read JSON data from {filepath}")
-        except FileNotFoundError:
-            error_msg = f"Configuration file not found: {filepath}"
-            logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
-        except json.JSONDecodeError as e:
-            error_msg = f"Invalid JSON in configuration file {filepath}: {str(e)}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        try:
-            # Convert field components data to proper config objects
-            if "field_components" in data:
-                logger.debug(f"Converting {len(data['field_components'])} field components")
-                data["field_components"] = [
-                    FieldComponentConfig(**comp) for comp in data["field_components"]
-                ]
-
-            # Convert nested configs
-            logger.debug("Converting grid configuration")
-            if isinstance(data["grid"], dict):
-                data["grid"] = GridConfig(**data["grid"])
-            # If grid is a string, keep it as a path
-            
-            logger.debug("Converting tracing configuration")
-            data["tracing"] = TracingConfig(**data["tracing"])
-            
-            logger.debug("Converting output configuration")
-            data["output"] = OutputConfig.from_dict(data["output"])
-
-            config = cls(**data)
-            logger.info(f"Successfully loaded configuration for experiment: {config.name}")
-            return config
-            
-        except KeyError as e:
-            error_msg = f"Missing required field in configuration: {str(e)}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-        except TypeError as e:
-            error_msg = f"Invalid configuration structure: {str(e)}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-    def save(self, filepath: Union[str, Path]) -> None:
-        """Save configuration to a JSON file."""
-        filepath = Path(filepath)
-        logger.info(f"Saving experiment configuration to {filepath}")
+        with open(filepath, "r") as f:
+            data = yaml.safe_load(f)
         
-        # Convert to dictionary
-        config_dict = asdict(self)
-
-        # Handle grid - could be GridConfig or string path
-        if isinstance(self.grid, GridConfig):
-            # Convert grid_type to string
-            if isinstance(config_dict["grid"]["grid_type"], GridType):
-                logger.debug("Converting grid_type enum to string")
-                config_dict["grid"]["grid_type"] = config_dict["grid"]["grid_type"].value
-        # If grid is a string or Path, keep it as is
-        elif isinstance(self.grid, (str, Path)):
-            logger.debug(f"Grid is a path: {self.grid}")
-            config_dict["grid"] = str(self.grid)
-
-        # Handle OutputConfig serialization
-        logger.debug("Converting output configuration to dictionary")
-        config_dict["output"] = self.output.to_dict()
-
-        # Convert output_dir Path to string if needed
-        if isinstance(config_dict["output"]["output_dir"], Path):
-            logger.debug("Converting output_dir Path to string")
-            config_dict["output"]["output_dir"] = str(
-                config_dict["output"]["output_dir"]
-            )
-
-        # Ensure directory exists
-        try:
-            logger.debug(f"Creating directory if needed: {filepath.parent}")
-            filepath.parent.mkdir(parents=True, exist_ok=True)
-
-            # Save to file with the NumpyEncoder
-            with open(filepath, "w") as f:
-                json.dump(config_dict, f, indent=4, cls=NumpyEncoder)
-                logger.info(f"Configuration successfully saved to {filepath}")
-        except PermissionError:
-            error_msg = f"Permission denied when writing to {filepath}"
-            logger.error(error_msg)
-            raise PermissionError(error_msg)
-        except OSError as e:
-            error_msg = f"Error saving configuration to {filepath}: {str(e)}"
-            logger.error(error_msg)
-            raise
-
-
-def main():
-    """Example usage of ExperimentConfig."""
-    import os
-    import logging
-    from pathlib import Path
-
-    # Setup basic logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-
-    # Create a temporary directory for outputs
-    output_dir = Path("temp_output")
-    output_dir.mkdir(exist_ok=True)
-    logger.debug(f"Created output directory: {output_dir}")
-
-    # Create a sample configuration
-    logger.debug("Creating sample experiment configuration")
-    config = ExperimentConfig(
-        name="example_experiment",
-        description="Example experiment configuration",
-        grid=GridConfig(grid_type="random", n_random=50),
-        tracing=TracingConfig(R_max=10.0, min_R_max_line=1.0, dt=0.01),
-        field_components=[
-            FieldComponentConfig(
-                type="dipole",
-                B_magnitude=1.0,
-                moment_orientation_latitude_degree=0.0,
-                moment_orientation_longitude_degree=0.0,
-            )
-        ],
-        output=OutputConfig(
-            output_dir=str(output_dir), save_r_max=True, save_r_line=True
-        ),
-    )
-
-    # Save the configuration to a file
-    config_path = output_dir / "example_config.json"
-    config.save(config_path)
-    logger.debug(f"Configuration saved to: {config_path}")
-
-    # Load the configuration from the file
-    loaded_config = ExperimentConfig.load(config_path)
-    logger.debug("Successfully loaded configuration")
-
-    # Print some details about the loaded configuration
-    logger.debug(f"Experiment name: {loaded_config.name}")
-    logger.debug(f"Grid type: {loaded_config.grid.grid_type}")
-    logger.debug(f"Number of field components: {len(loaded_config.field_components)}")
-
-    # Example of how to access save flags
-    logger.debug(f"Save r_max: {loaded_config.output.save_r_max}")
-    logger.debug(f"Save r_line: {loaded_config.output.save_r_line}")
-
-    return loaded_config
-
-
-if __name__ == "__main__":
-    main()
+        # Reconstruct template
+        template_data = data.get("template", {})
+        template = FieldLine(**template_data)
+        
+        # Create config objects
+        config = cls(
+            name=data["name"],
+            description=data.get("description"),
+            field=FieldConfig.model_validate(data["field"]),
+            grid=GridConfig(**data["grid"]),
+            tracing=TracingConfig(**data["tracing"]),
+            template=template,
+            metadata=data.get("metadata")
+        )
+        
+        logger.info(f"Loaded experiment: {config.name}")
+        return config
+    
+    @classmethod
+    def create_dipole_example(cls) -> "ExperimentConfig":
+        """Create a simple dipole field example."""
+        field = FieldConfig(components=[FieldComponentConfig(
+            moment_type="dipole",
+            B_magnitude=1.0,
+            moment_orientation_latitude_degree=0.0,
+            moment_orientation_longitude_degree=0.0
+        )])
+        
+        grid = GridConfig(
+            spherical=SphericalGridConfig(nlon=2, nlat=5, pole_lat=0.0)
+        )
+        
+        tracing = TracingConfig(
+            max_integration_radius=10.0,
+            threshold_line_distance=1.0,
+            t_span=(0.0, 1e8),
+            rtol=5.0e-9,
+            atol=5.0e-9,
+            surface_radius=1.0 - 1.e-8,
+            dt=5,
+            max_step=0.01,
+            trace_open_lines_backwards=True,
+            max_memory_mb=100.0,
+            safety_factor=0.9,
+            max_batch_size=100,
+            check_interval_sec=1.0,
+            n_cores=2,
+            n_trial=100,
+            progress_bar=True,
+            verbose=False,
+            skip_memory_estimation=True,
+            save_results=False,
+            filename=None,
+            output_format="fits",
+            overwrite=False
+        )
+        
+        template = FieldLine.template_all()
+        
+        return cls(
+            name="dipole_example",
+            description="Simple dipole field experiment",
+            field=field,
+            grid=grid,
+            tracing=tracing,
+            template=template
+        ) 

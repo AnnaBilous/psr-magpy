@@ -6,7 +6,7 @@ from psr_magpy.line.calculator import FieldLineCalculator
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
 
-from .simple_config import ExperimentConfig
+from .experiment_config import ExperimentConfig
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -36,7 +36,8 @@ class ExperimentRunner:
             
             # Create calculator
             logger.debug("Creating field line calculator")
-            calculator = FieldLineCalculator(field, grid, self.config.tracing)
+            tracing_params = self.config.tracing.create_tracing_parameters()
+            calculator = FieldLineCalculator(field, grid, tracing_params)
             
             # Use template from config
             logger.debug("Using template from config")
