@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
-from concurrent.futures import ProcessPoolExecutor, as_completed
+
 import yaml
 
 from .experiment_series import ExperimentSeriesConfig
@@ -48,7 +48,6 @@ class ExperimentSeriesRunner:
                  series_config: ExperimentSeriesConfig,
                  output_directory: Optional[Path] = None,
                  save_individual_configs: bool = True,
-                 max_workers: Optional[int] = None,
                  continue_on_failure: bool = True):
         """Initialize the series runner.
         
@@ -56,13 +55,11 @@ class ExperimentSeriesRunner:
             series_config: The experiment series configuration
             output_directory: Directory to save results and configs
             save_individual_configs: Whether to save individual experiment configs
-            max_workers: Maximum number of parallel workers (None for auto)
             continue_on_failure: Whether to continue if individual experiments fail
         """
         self.series_config = series_config
         self.output_directory = Path(output_directory) if output_directory else Path("experiment_series_output")
         self.save_individual_configs = save_individual_configs
-        self.max_workers = max_workers
         self.continue_on_failure = continue_on_failure
         
         # Create output directory
@@ -70,7 +67,6 @@ class ExperimentSeriesRunner:
         
         logger.info(f"Initialized series runner for: {series_config.name}")
         logger.info(f"Output directory: {self.output_directory}")
-        logger.info(f"Max workers: {max_workers}")
     
     def run(self) -> SeriesResult:
         """Run the complete experiment series."""
@@ -133,13 +129,8 @@ class ExperimentSeriesRunner:
         logger.info("Individual configs saved")
     
     def _run_experiments(self, experiments: List[ExperimentConfig]) -> List[ExperimentResult]:
-        """Run all experiments, optionally in parallel."""
-        if self.max_workers is None or self.max_workers == 1:
-            # Sequential execution
-            return self._run_experiments_sequential(experiments)
-        else:
-            # Parallel execution
-            return self._run_experiments_parallel(experiments)
+        """Run all experiments sequentially (field line integration uses parallel processing internally)."""
+        return self._run_experiments_sequential(experiments)
     
     def _run_experiments_sequential(self, experiments: List[ExperimentConfig]) -> List[ExperimentResult]:
         """Run experiments sequentially."""
@@ -178,64 +169,7 @@ class ExperimentSeriesRunner:
         
         return results
     
-    def _run_experiments_parallel(self, experiments: List[ExperimentConfig]) -> List[ExperimentResult]:
-        """Run experiments in parallel using ProcessPoolExecutor."""
-        results = []
-        
-        with ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-            # Submit all experiments
-            future_to_experiment = {
-                executor.submit(self._run_single_experiment, experiment): experiment
-                for experiment in experiments
-            }
-            
-            # Collect results as they complete
-            for i, future in enumerate(as_completed(future_to_experiment), 1):
-                experiment = future_to_experiment[future]
-                logger.info(f"Completed experiment {i}/{len(experiments)}: {experiment.name}")
-                
-                try:
-                    result = future.result()
-                except Exception as e:
-                    logger.error(f"✗ Experiment {experiment.name} failed: {e}")
-                    result = ExperimentResult(
-                        experiment_name=experiment.name,
-                        success=False,
-                        duration=0.0,
-                        error_message=str(e)
-                    )
-                
-                results.append(result)
-        
-        # Sort results by experiment order
-        experiment_names = [exp.name for exp in experiments]
-        results.sort(key=lambda r: experiment_names.index(r.experiment_name))
-        
-        return results
-    
-    def _run_single_experiment(self, experiment: ExperimentConfig) -> ExperimentResult:
-        """Run a single experiment (for parallel execution)."""
-        start_time = time.time()
-        
-        try:
-            experiment_result = run_experiment(experiment)
-            duration = time.time() - start_time
-            
-            return ExperimentResult(
-                experiment_name=experiment.name,
-                success=True,
-                duration=duration,
-                results=experiment_result
-            )
-            
-        except Exception as e:
-            duration = time.time() - start_time
-            return ExperimentResult(
-                experiment_name=experiment.name,
-                success=False,
-                duration=duration,
-                error_message=str(e)
-            )
+
     
     def _save_results_summary(self, series_result: SeriesResult) -> None:
         """Save a summary of the series results."""
@@ -268,14 +202,12 @@ class ExperimentSeriesRunner:
 def run_experiment_series(series_config: ExperimentSeriesConfig,
                          output_directory: Optional[Path] = None,
                          save_individual_configs: bool = True,
-                         max_workers: Optional[int] = None,
                          continue_on_failure: bool = True) -> SeriesResult:
     """Convenience function to run an experiment series."""
     runner = ExperimentSeriesRunner(
         series_config=series_config,
         output_directory=output_directory,
         save_individual_configs=save_individual_configs,
-        max_workers=max_workers,
         continue_on_failure=continue_on_failure
     )
     return runner.run()
@@ -284,7 +216,6 @@ def run_experiment_series(series_config: ExperimentSeriesConfig,
 def run_experiment_series_from_file(config_path: str,
                                    output_directory: Optional[Path] = None,
                                    save_individual_configs: bool = True,
-                                   max_workers: Optional[int] = None,
                                    continue_on_failure: bool = True) -> SeriesResult:
     """Load and run experiment series from config file."""
     series_config = ExperimentSeriesConfig.load(config_path)
@@ -292,6 +223,5 @@ def run_experiment_series_from_file(config_path: str,
         series_config=series_config,
         output_directory=output_directory,
         save_individual_configs=save_individual_configs,
-        max_workers=max_workers,
         continue_on_failure=continue_on_failure
     ) 

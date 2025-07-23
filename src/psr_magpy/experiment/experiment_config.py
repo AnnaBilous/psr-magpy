@@ -19,9 +19,6 @@ logger = get_logger(__name__, console_format_brief=True)
 # Type definitions for better type safety
 
 
-
-
-
 from pydantic import BaseModel, Field
 
 
@@ -381,14 +378,9 @@ class ExperimentSeriesConfig(BaseModel):
     
     def _expand_tracing_configs(self) -> List[TracingConfig]:
         """Expand tracing configuration into all possible combinations."""
-        # Extract all parameter combinations from TracingConfig
-        param_combinations = self._get_parameter_combinations(self.tracing.model_dump())
-        
-        tracing_configs = []
-        for params in param_combinations:
-            tracing_configs.append(TracingConfig(**params))
-        
-        return tracing_configs
+        # For now, just return the single tracing config
+        # Parameter expansion is handled in experiment_series.py
+        return [self.tracing]
     
     def _expand_template_configs(self) -> List[FieldLine]:
         """Expand template configuration into all possible combinations."""
@@ -398,50 +390,7 @@ class ExperimentSeriesConfig(BaseModel):
         # Handle TemplateFactoryConfig
         return self.template.templates
     
-    def _get_parameter_combinations(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Generate all combinations of parameters that contain lists or dictionaries."""
-        # Find parameters that need expansion
-        expandable_params = {}
-        fixed_params = {}
-        
-        for key, value in params.items():
-            if isinstance(value, (list, dict)):
-                expandable_params[key] = value
-            else:
-                fixed_params[key] = value
-        
-        if not expandable_params:
-            return [params]
-        
-        # Generate combinations
-        combinations = [fixed_params]
-        
-        for key, value in expandable_params.items():
-            new_combinations = []
-            
-            if isinstance(value, list):
-                # List: create combinations with each value
-                for item in value:
-                    for combo in combinations:
-                        new_combo = combo.copy()
-                        new_combo[key] = item
-                        new_combinations.append(new_combo)
-            
-            elif isinstance(value, dict):
-                # Dictionary: create separate branches for each key-value pair
-                for dict_key, dict_value in value.items():
-                    for combo in combinations:
-                        new_combo = combo.copy()
-                        new_combo[key] = dict_value
-                        # Add branch info to metadata
-                        if 'branch' not in new_combo:
-                            new_combo['branch'] = {}
-                        new_combo['branch'][key] = dict_key
-                        new_combinations.append(new_combo)
-            
-            combinations = new_combinations
-        
-        return combinations
+
     
     def _create_experiment_metadata(self, experiment_count: int, field_config: FieldConfig, 
                                   grid_config: GridConfig, tracing_config: TracingConfig, 
@@ -453,14 +402,7 @@ class ExperimentSeriesConfig(BaseModel):
         metadata.update({
             "experiment_number": experiment_count,
             "series_name": self.name,
-            "field_components": len(field_config.components),
-            "grid_type": grid_config.get_grid_type(),
-            "template_properties": list(template_config.property_system.get_flags_dict().keys())
         })
-        
-        # Add branch information if present
-        if hasattr(tracing_config, 'branch'):
-            metadata["branch"] = getattr(tracing_config, 'branch')
         
         return metadata
 
