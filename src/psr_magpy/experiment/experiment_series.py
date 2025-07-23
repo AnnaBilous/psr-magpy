@@ -15,7 +15,7 @@ from .factory_configs import (
     expand_field_configs, expand_grid_configs, expand_tracing_configs, expand_template_configs
 )
 from .experiment_metadata import create_experiment_metadata, generate_experiment_name
-from .yaml_handling import reconstruct_from_yaml
+from psr_magpy.io.config_io import reconstruct_from_yaml
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
 
@@ -78,43 +78,17 @@ class ExperimentSeriesConfig(BaseModel):
     
     def save(self, filepath: Union[str, Path]) -> None:
         """Save configuration to YAML file."""
-        filepath = Path(filepath)
-        logger.info(f"Saving experiment series config to {filepath}")
-        
-        # Convert to dict
-        config_dict = self.model_dump()
-        
-        # Ensure directory exists
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Save with YAML
-        with open(filepath, "w") as f:
-            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
-        
-        logger.info(f"Config saved to {filepath}")
+        from psr_magpy.io import IOFactory
+        IOFactory.save_config(self, filepath)
     
     @classmethod
     def load(cls, filepath: Union[str, Path]) -> "ExperimentSeriesConfig":
         """Load configuration from YAML file."""
-        filepath = Path(filepath)
-        logger.info(f"Loading experiment series config from {filepath}")
-        
-        with open(filepath, "r") as f:
-            data = yaml.safe_load(f)
-        
-        # Reconstruct nested objects
-        data = reconstruct_from_yaml(data)
-        
-        # Create config object
-        config = cls(**data)
-        
-        logger.info(f"Loaded experiment series: {config.name}")
-        return config
+        from psr_magpy.io import IOFactory
+        return IOFactory.load_config(cls, filepath)
     
     def print_yaml(self):
         """Print configuration as pretty YAML to screen."""
-        config_dict = self.model_dump()
-        yaml_string = yaml.dump(config_dict, default_flow_style=False, indent=2, sort_keys=False)
-        print("=== Experiment Series Configuration ===")
-        print(yaml_string)
-        print("=======================================")
+        from psr_magpy.io import IOFactory
+        io_instance = IOFactory.create_config_io(type(self))
+        io_instance.print_config(self)

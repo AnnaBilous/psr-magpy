@@ -158,9 +158,9 @@ class MemoryManager:
         # Create filename with batch info
         batch_filename = f"{filename}_batch_{batch_idx:03d}.fits"
         
-        # Write to FITS
-        io_handler = FieldLineSetFitsIO(self._results_in_memory)
-        io_handler.save_to_fits(batch_filename)
+        # Write to FITS using new I/O system
+        from psr_magpy.io import IOFactory
+        IOFactory.save_data(self._results_in_memory, batch_filename)
             
         logger.info(f"Wrote {self._results_in_memory.n_field_lines} field lines to {batch_filename}")
         

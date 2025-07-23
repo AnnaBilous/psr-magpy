@@ -13,7 +13,7 @@ from .factory_configs import (
 )
 from .parameter_expansion import get_parameter_combinations
 from .experiment_metadata import create_experiment_metadata, generate_experiment_name
-from .yaml_handling import reconstruct_from_yaml
+from psr_magpy.io.config_io import reconstruct_from_yaml
 
 __all__ = [
     # Core experiment config

@@ -62,6 +62,11 @@ class FieldLineSetFitsIO(FitsIO):
         logger.debug(f"Creating column for {key} with format {format}")
 
         return fits.Column(name=key, format=format, array=value)
+    
+    def save_to_fits(self, fitsname: str) -> None:
+        """Save field line data to FITS file."""
+        from psr_magpy.io import IOFactory
+        IOFactory.save_data(self.data, fitsname)
 
     @classmethod
     def load_from_fits(cls, fitsname: str) -> FieldLineSet:

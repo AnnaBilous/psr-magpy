@@ -8,7 +8,26 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 class FieldLine:
-    """Base class for field lines with configurable properties."""
+    """Base class for field lines with configurable properties.
+    
+    FieldLine objects serve two distinct roles in the system:
+    
+    1. **Configuration Templates** (Primary Role):
+       - Define which properties to save during field line tracing
+       - Used as templates to configure the tracing process
+       - Stored as YAML configuration files
+       - Examples: FieldLine.template_all(), FieldLine.template_OFL_calc()
+       
+    2. **Data Containers** (Secondary Role):
+       - Hold actual field line data (coordinates, properties, etc.)
+       - Used to store individual field line results
+       - Combined into FieldLineSet for bulk data storage
+       - Stored as FITS files via FieldLineSet
+    
+    The distinction is important for I/O operations:
+    - Configuration FieldLines → YAML (human-readable config)
+    - Data FieldLines → FITS (scientific data format)
+    """
 
     def __init__(self, **kwargs):
         """Initialize field line with optional save flags.
@@ -86,7 +105,11 @@ class FieldLine:
 
     @classmethod
     def template_all(cls) -> "FieldLine":
-        """Create template with all properties enabled."""
+        """Create configuration template with all properties enabled.
+        
+        This template defines which properties to save during field line tracing.
+        Used as configuration, not for storing actual field line data.
+        """
         return cls(
             save_r_line=True, save_pa_line=True, save_r_max=True, 
             save_r_cyl_max=True, save_z_abs_max=True, save_b_ini=True, 
@@ -95,25 +118,45 @@ class FieldLine:
     
     @classmethod
     def template_all_except_line_and_PA(cls) -> "FieldLine":
-        """Create template with all properties enabled except line coordinates and PA."""
+        """Create configuration template with all properties enabled except line coordinates and PA.
+        
+        This template defines which properties to save during field line tracing.
+        Used as configuration, not for storing actual field line data.
+        """
         return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True, save_b_ini=True, save_b_r_ini_angle=True)
     
     @classmethod
     def template_OFL_calc(cls) -> "FieldLine":
-        """Create template with properties for open field line calculation (r_max, r_cyl_max, z_abs_max)."""
+        """Create configuration template with properties for open field line calculation (r_max, r_cyl_max, z_abs_max).
+        
+        This template defines which properties to save during field line tracing.
+        Used as configuration, not for storing actual field line data.
+        """
         return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True)
     
     @classmethod
     def template_coordinates_only(cls) -> "FieldLine":
-        """Create template with line coordinates only (r_line)."""
+        """Create configuration template with line coordinates only (r_line).
+        
+        This template defines which properties to save during field line tracing.
+        Used as configuration, not for storing actual field line data.
+        """
         return cls(save_r_line=True)
     
     @classmethod
     def template_coordinates_and_PA(cls) -> "FieldLine":
-        """Create template with line coordinates and PA (r_line, pa_line)."""
+        """Create configuration template with line coordinates and PA (r_line, pa_line).
+        
+        This template defines which properties to save during field line tracing.
+        Used as configuration, not for storing actual field line data.
+        """
         return cls(save_r_line=True, save_pa_line=True)
     
     @classmethod
     def template_surface_properties(cls) -> "FieldLine":
-        """Create template with surface properties (b_ini, b_r_ini_angle)."""
+        """Create configuration template with surface properties (b_ini, b_r_ini_angle).
+        
+        This template defines which properties to save during field line tracing.
+        Used as configuration, not for storing actual field line data.
+        """
         return cls(save_b_ini=True, save_b_r_ini_angle=True)

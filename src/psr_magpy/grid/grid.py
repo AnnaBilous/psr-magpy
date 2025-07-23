@@ -51,37 +51,8 @@ class FootpointGrid(ABC):
     @classmethod
     def load_from_fits(cls: Type[T], fitsname: str) -> T:
         """Load grid from FITS file."""
-        logger.info(f"Loading grid from {fitsname}")
-        start_time = time.time()
-        
-        try:
-            with pf.open(fitsname) as hdulist:
-                header_main = hdulist[0].header
-                grid_type = GridType(header_main["GRIDTYPE"])
-                logger.debug(f"Grid type: {grid_type.value}")
-
-                # Delegate creation to specific grid class
-                grid = cls._create_grid_from_header(header_main, grid_type)
-
-                # Load coordinates
-                footpoint_coordinates = hdulist["FTP_CRD"].data
-                grid.footpoint_coordinates = CartesianRepresentation(
-                    footpoint_coordinates
-                )
-
-                # Load indices
-                grid.indices = np.array([row[0] for row in hdulist["FTP_ID"].data])
-                grid.partial = header_main["PARTIAL"]
-                grid.nline = len(grid.indices)
-                
-                duration = time.time() - start_time
-                logger.info(f"Grid loaded: {grid.nline} points in {duration:.3f}s")
-                return grid
-
-        except Exception as e:
-            error_msg = f"Failed to load grid from {fitsname}: {e}"
-            logger.error(error_msg)
-            raise
+        from psr_magpy.io import IOFactory
+        return IOFactory.load_data(cls, fitsname)
 
     @classmethod
     def _create_grid_from_header(cls: Type[T], header: pf.Header, grid_type: GridType) -> T:
@@ -171,39 +142,8 @@ class FootpointGrid(ABC):
 
     def save_to_fits(self, fitsname: str) -> None:
         """Save grid to FITS file."""
-        logger.info(f"Saving grid to {fitsname}")
-        try:
-            hdu_main = pf.PrimaryHDU()
-            header_main = hdu_main.header
-            header_main.set("GRIDTYPE", self.grid_type.value, "Grid type")
-            header_main.set(
-                "NLINE", self.nline_ori, "Number of field lines in a full grid"
-            )
-            header_main.set("PARTIAL", self.partial, "Partial grid")
-
-            # Add grid-specific parameters to header
-            self._add_params_to_header(header_main)
-
-            # Save coordinates
-            data = CCDData(
-                self.footpoint_coordinates.xyz, unit=self.footpoint_coordinates.xyz.unit
-            )
-            hdu_footpoints = data.to_hdu(as_image_hdu=True)[0]
-            hdu_footpoints.name = "FTP_CRD"
-
-            # Save indices
-            col = pf.Column(name="footpoint_id", format="K", array=self.indices)
-            hdu_indices = pf.BinTableHDU.from_columns([col], name="FTP_ID")
-
-            # Write file
-            hdul = pf.HDUList([hdu_main, hdu_indices, hdu_footpoints])
-            hdul.writeto(fitsname, overwrite=True)
-            logger.info(f"Grid successfully saved to {fitsname}")
-
-        except Exception as e:
-            error_msg = f"Failed to save grid to {fitsname}: {e}"
-            logger.error(error_msg)
-            raise
+        from psr_magpy.io import IOFactory
+        IOFactory.save_data(self, fitsname)
 
     def plot_footpoint_coordinates(self, ax: Optional[plt.Axes] = None, 
                                  marker: str = ".", color: str = "r", 

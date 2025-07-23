@@ -6,6 +6,10 @@ This guide will help you get started with psr-magpy quickly.
 Basic Usage
 ----------
 
+**Note: FieldLine objects serve dual roles:**
+- **Configuration templates** (YAML) - define what to save
+- **Data containers** (FITS) - store actual field line data
+
 Import the package:
 
 .. code-block:: python
@@ -43,10 +47,11 @@ Calculate field lines:
    # Create a calculator
    calculator = FieldLineCalculator(field, grid)
    
-   # Create a template for field lines
-   template = FieldLine(save_coordinates=True, save_field=True)
+   # Create a configuration template for field lines
+   # This defines which properties to save during tracing
+   template = FieldLine.template_all()  # Save all properties
    
-   # Calculate field lines
+   # Calculate field lines using the template
    field_lines = calculator.get_field_lines(template=template)
 
 Visualize the results:

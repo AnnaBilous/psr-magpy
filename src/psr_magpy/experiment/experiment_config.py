@@ -427,93 +427,43 @@ class ExperimentConfig:
     
     def save(self, filepath: Union[str, Path]) -> None:
         """Save configuration to YAML file."""
-        filepath = Path(filepath)
-        logger.info(f"Saving experiment config to {filepath}")
+        # Ensure I/O module is imported for registration
+        import psr_magpy.io
+        from psr_magpy.io import IOFactory, ExperimentConfigIO
         
-        # Convert to dict, handling nested objects
-        config_dict = {
-            "name": self.name,
-            "description": self.description,
-            "field": {
-                "components": self.field.get_complete_components()
-            },
-            "grid": self.grid.model_dump(),
-            "tracing": self.tracing.get_complete_config(),
-            "template": self.template.property_system.get_flags_dict(),
-            "metadata": self.metadata or {}
-        }
+        # Ensure registration
+        if type(self) not in IOFactory._config_registry:
+            IOFactory.register_config_io(type(self), ExperimentConfigIO)
         
-        # Convert tuples and numpy arrays to lists for YAML compatibility
-        config_dict = self._convert_for_yaml(config_dict)
-        
-        # Ensure directory exists
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Save with YAML
-        with open(filepath, "w") as f:
-            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
-        
-        logger.info(f"Config saved to {filepath}")
+        IOFactory.save_config(self, filepath)
     
     def print_yaml(self):
         """Print configuration as pretty YAML to screen."""
-        config_dict = {
-            "name": self.name,
-            "description": self.description,
-            "field": {
-                "components": self.field.get_complete_components()
-            },
-            "grid": self.grid.model_dump(),
-            "tracing": self.tracing.get_complete_config(),
-            "template": self.template.property_system.get_flags_dict(),
-            "metadata": self.metadata or {}
-        }
+        # Ensure I/O module is imported for registration
+        import psr_magpy.io
+        from psr_magpy.io import IOFactory, ExperimentConfigIO
         
-        config_dict = self._convert_for_yaml(config_dict)
-        yaml_string = yaml.dump(config_dict, default_flow_style=False, indent=2, sort_keys=False)
-        print("=== Experiment Configuration ===")
-        print(yaml_string)
-        print("=================================")
+        # Ensure registration
+        if type(self) not in IOFactory._config_registry:
+            IOFactory.register_config_io(type(self), ExperimentConfigIO)
+        
+        io_instance = IOFactory.create_config_io(type(self))
+        io_instance.print_config(self)
     
-    def _convert_for_yaml(self, obj):
-        """Recursively convert tuples and numpy arrays to lists for YAML compatibility."""
-        if isinstance(obj, tuple):
-            return list(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, dict):
-            return {k: self._convert_for_yaml(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._convert_for_yaml(item) for item in obj]
-        else:
-            return obj
+
     
     @classmethod
     def load(cls, filepath: Union[str, Path]) -> "ExperimentConfig":
         """Load configuration from YAML file."""
-        filepath = Path(filepath)
-        logger.info(f"Loading experiment config from {filepath}")
+        # Ensure I/O module is imported for registration
+        import psr_magpy.io
+        from psr_magpy.io import IOFactory, ExperimentConfigIO
         
-        with open(filepath, "r") as f:
-            data = yaml.safe_load(f)
+        # Ensure registration
+        if cls not in IOFactory._config_registry:
+            IOFactory.register_config_io(cls, ExperimentConfigIO)
         
-        # Reconstruct template
-        template_data = data.get("template", {})
-        template = FieldLine(**template_data)
-        
-        # Create config objects
-        config = cls(
-            name=data["name"],
-            description=data.get("description"),
-            field=FieldConfig.model_validate(data["field"]),
-            grid=GridConfig(**data["grid"]),
-            tracing=TracingConfig(**data["tracing"]),
-            template=template,
-            metadata=data.get("metadata")
-        )
-        
-        logger.info(f"Loaded experiment: {config.name}")
-        return config
+        return IOFactory.load_config(cls, filepath)
     
     @classmethod
     def create_dipole_example(cls) -> "ExperimentConfig":

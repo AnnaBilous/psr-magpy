@@ -193,6 +193,9 @@ class ExperimentSeriesRunner:
             ]
         }
         
+        # Use I/O factory for saving
+        from psr_magpy.io import IOUtils
+        IOUtils.ensure_directory(summary_path)
         with open(summary_path, 'w') as f:
             yaml.dump(summary, f, default_flow_style=False, indent=2)
         

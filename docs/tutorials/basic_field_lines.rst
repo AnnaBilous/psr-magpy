@@ -3,6 +3,23 @@ Basic Field Line Tracing
 
 This tutorial will guide you through the process of tracing field lines in a simple dipole field.
 
+**Important: FieldLine Dual Role**
+
+FieldLine objects serve two distinct purposes:
+
+1. **Configuration Templates**: Define which properties to save during tracing
+   - Used as templates: `FieldLine.template_all()`, `FieldLine.template_OFL_calc()`
+   - Stored as YAML configuration files
+   - Human-readable configuration format
+
+2. **Data Containers**: Hold actual field line data
+   - Combined into FieldLineSet for bulk storage  
+   - Stored as FITS files (scientific data format)
+
+**I/O Distinction:**
+- Configuration FieldLines → YAML files
+- Data FieldLines → FITS files via FieldLineSet
+
 Setup
 -----
 
@@ -56,10 +73,11 @@ Now we can calculate the field lines:
    # Create a calculator
    calculator = FieldLineCalculator(field, grid)
    
-   # Create a template for field lines
-   template = FieldLine(save_coordinates=True, save_field=True)
+   # Create a configuration template for field lines
+   # This defines which properties to save during tracing
+   template = FieldLine.template_all()  # Save all properties
    
-   # Calculate field lines
+   # Calculate field lines using the template
    field_lines = calculator.get_field_lines(template=template)
 
 Visualizing the Results

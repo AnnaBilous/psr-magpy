@@ -12,7 +12,25 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 class FieldLineSet(FieldLine):
-    """Collection of field lines with array values."""
+    """Collection of field lines with array values.
+    
+    FieldLineSet is the primary data container for field line tracing results.
+    It inherits from FieldLine but specializes in storing bulk field line data.
+    
+    **Role in I/O System:**
+    - **Data Container**: Holds actual field line data (coordinates, properties, etc.)
+    - **FITS Storage**: All field line data is stored in FITS format via FieldLineSet
+    - **Bulk Operations**: Efficiently handles large collections of field lines
+    
+    **Relationship to FieldLine:**
+    - FieldLineSet uses FieldLine objects as templates to define data structure
+    - Individual FieldLine objects can be data containers or configuration templates
+    - FieldLineSet is always a data container (never a configuration template)
+    
+    **I/O Distinction:**
+    - FieldLineSet → FITS files (scientific data)
+    - FieldLine templates → YAML files (configuration)
+    """
 
     # List of properties that are stored as lists of arrays
     ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.PA_LINE]
