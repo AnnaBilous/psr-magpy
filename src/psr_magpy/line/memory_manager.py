@@ -9,7 +9,7 @@ import numpy as np
 from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
-from psr_magpy.line.io import FieldLineSetFitsIO
+
 from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.tracing_parameters import PerformanceParameters
 from psr_magpy.utils.logging_config import get_logger
@@ -168,20 +168,28 @@ class MemoryManager:
         self._results_in_memory = None
         self._results_in_memory_size = 0.0
 
-    def rename_batch_files(self, filename: str) -> None:
-        """Rename batch files to final format."""
-        pattern = f"{filename}_batch_*.fits"
-        batch_files = glob.glob(pattern)
+    def rename_batch_files(self, filename: str, progress_tracker=None) -> None:
+        """Organize batch files using BatchFileManager."""
+        from psr_magpy.io.batch_file_manager import BatchFileManager
         
-        if not batch_files:
-            logger.warning(f"No batch files found matching {pattern}")
-            return
-
-        logger.info(f"Found {len(batch_files)} batch files to rename")
+        batch_manager = BatchFileManager(
+            base_filename=filename,
+            organize_files=True,
+            cleanup_batch_files=False,  # Keep batch files by default
+            progress_tracker=progress_tracker
+        )
         
-        # For now, just log the files - actual renaming logic can be added later
-        for batch_file in sorted(batch_files):
-            logger.debug(f"Batch file: {batch_file}")
+        # Organize batch files into subdirectory
+        batch_dir = batch_manager.organize_batch_files()
+        
+        if batch_dir:
+            logger.info(f"Batch files organized into: {batch_dir}")
+            
+            # Get summary
+            summary = batch_manager.get_batch_summary()
+            logger.info(f"Batch summary: {summary['batch_files']} files, {summary['total_size_mb']:.1f} MB total")
+        else:
+            logger.info("No batch files found to organize")
 
     @property
     def results_in_memory(self) -> Optional[FieldLineSet]:

@@ -6,7 +6,8 @@ field line calculations with support for progress bars and detailed logging.
 
 import time
 from contextlib import contextmanager
-from typing import Optional, Any
+from typing import Optional, Any, Union
+from pathlib import Path
 
 from tqdm import tqdm
 
@@ -16,7 +17,7 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 class ProgressTracker:
-    """Tracks progress, timing, and logging for field line calculations."""
+    """Tracks progress, timing, and logging for field line calculations and I/O operations."""
 
     def __init__(self, verbose: bool = False, show_progress: bool = True):
         """Initialize progress tracker."""
@@ -24,6 +25,7 @@ class ProgressTracker:
         self.show_progress = show_progress
         self.start_time: Optional[float] = None
         self._progress_bar: Optional[tqdm] = None
+        self._io_progress_bar: Optional[tqdm] = None
         
         logger.debug(f"Initialized ProgressTracker: verbose={verbose}, show_progress={show_progress}")
     
@@ -35,6 +37,15 @@ class ProgressTracker:
             yield self
         finally:
             self.end_calculation()
+    
+    @contextmanager
+    def track_io_operation(self, operation: str, filepath: Union[str, Path], data_size: Optional[int] = None):
+        """Context manager for tracking I/O operations."""
+        self.start_io_operation(operation, filepath, data_size)
+        try:
+            yield self
+        finally:
+            self.end_io_operation()
     
     def start_calculation(self, description: str) -> None:
         """Start tracking a new calculation."""
@@ -51,6 +62,76 @@ class ProgressTracker:
             if self.verbose:
                 logger.debug(f"Calculation ended at {time.strftime('%H:%M:%S')}")
             self.start_time = None
+    
+    def start_io_operation(self, operation: str, filepath: Union[str, Path], data_size: Optional[int] = None) -> None:
+        """Start tracking an I/O operation."""
+        self.start_time = time.time()
+        filepath = Path(filepath)
+        operation_desc = f"{operation.capitalize()}ing {filepath.name}"
+        
+        logger.info(f"Starting I/O: {operation_desc}")
+        if self.verbose:
+            logger.debug(f"I/O operation started at {time.strftime('%H:%M:%S')}")
+            if data_size:
+                logger.debug(f"Data size: {data_size} items")
+        
+        # Create progress bar for I/O operations
+        if self.show_progress and data_size:
+            self._io_progress_bar = tqdm(
+                total=data_size,
+                desc=operation_desc,
+                unit="items",
+                disable=not self.show_progress
+            )
+    
+    def end_io_operation(self) -> None:
+        """End the current I/O operation and log completion time."""
+        if self.start_time is not None:
+            elapsed = time.time() - self.start_time
+            logger.info(f"I/O operation completed in {elapsed:.1f} seconds")
+            if self.verbose:
+                logger.debug(f"I/O operation ended at {time.strftime('%H:%M:%S')}")
+            self.start_time = None
+        
+        # Close I/O progress bar
+        if self._io_progress_bar is not None:
+            self._io_progress_bar.close()
+            self._io_progress_bar = None
+    
+    def update_io_progress(self, current: int, total: Optional[int] = None, message: str = "") -> None:
+        """Update I/O operation progress."""
+        if self._io_progress_bar is not None:
+            self._io_progress_bar.n = current
+            if total:
+                self._io_progress_bar.total = total
+            self._io_progress_bar.refresh()
+        
+        if message and self.verbose:
+            logger.debug(f"I/O Progress: {current}/{total or 'unknown'} - {message}")
+    
+    def log_io_start(self, operation: str, filepath: Union[str, Path], data_size: Optional[int] = None) -> None:
+        """Log the start of an I/O operation."""
+        filepath = Path(filepath)
+        logger.info(f"Starting {operation}: {filepath.name}")
+        if self.verbose and data_size:
+            logger.debug(f"Data size: {data_size} items")
+    
+    def log_io_completion(self, operation: str, filepath: Union[str, Path], elapsed: float, 
+                         data_size: Optional[int] = None) -> None:
+        """Log the completion of an I/O operation."""
+        filepath = Path(filepath)
+        logger.info(f"Completed {operation}: {filepath.name} in {elapsed:.1f} seconds")
+        if self.verbose and data_size:
+            logger.debug(f"Processed {data_size} items")
+    
+    def log_file_size(self, filepath: Union[str, Path]) -> None:
+        """Log the size of a file."""
+        filepath = Path(filepath)
+        if filepath.exists():
+            size_mb = filepath.stat().st_size / (1024 * 1024)
+            logger.info(f"File size: {size_mb:.2f} MB")
+            if self.verbose:
+                logger.debug(f"File: {filepath}")
     
     def log_completion_time(self) -> None:
         """Log the completion time if calculation is in progress."""

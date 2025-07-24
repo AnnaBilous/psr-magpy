@@ -34,7 +34,7 @@ from .progress_tracker import ProgressTracker
 from .memory_manager import MemoryManager
 from .calculation_context import CalculationContext
 from .calculator import FieldLineCalculator
-from .io import FieldLineSetFitsIO
+
 
 __all__ = [
     'FieldLine',
@@ -51,5 +51,5 @@ __all__ = [
     'ProgressTracker',
     'CalculationContext',
     'FieldLineCalculator',
-    'FieldLineSetFitsIO',
+
 ]

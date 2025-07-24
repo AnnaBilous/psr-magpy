@@ -14,8 +14,10 @@ logger = setup_test_logger(__name__)
 @pytest.fixture  # type: ignore
 def temp_fits_file():
     """Provide temporary file path for FITS testing."""
-    with tempfile.NamedTemporaryFile(suffix=".fits") as f:
-        yield Path(f.name)
+    temp_path = tempfile.mktemp(suffix=".fits")
+    yield Path(temp_path)
+    # Clean up
+    Path(temp_path).unlink(missing_ok=True)
 
 
 class TestHealpixGrid:
