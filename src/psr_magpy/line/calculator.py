@@ -70,13 +70,34 @@ class FieldLineCalculator:
         return trial_size, completion_time
 
     def _configure_batch(self, trial_size):
-        optimal_batch_size = self.context.memory_manager.calculate_batch_size(trial_size)
+        # Get total number of field lines for batch size calculation
+        total_field_lines = self.context.grid.nline
+        optimal_batch_size = self.context.memory_manager.calculate_batch_size(trial_size, total_field_lines)
         self.context.progress_tracker.log_batch_size_setting(optimal_batch_size)
         self.context.progress_tracker.log_calculation_start()
         return optimal_batch_size
 
     def _finalize_results(self, results):
         elapsed = time.time() - self.context.progress_tracker.start_time if self.context.progress_tracker.start_time else 0
+        
+        # Save results to disk if requested
+        if self.context.params.output.save_results and results is not None:
+            filename = self.context.params.output.filename
+            if filename:
+                # Use the new I/O system to save results
+                from psr_magpy.io import IOFactory
+                IOFactory.save_data(results, filename, overwrite=True)
+                logger.info(f"Results saved to {filename}")
+            else:
+                logger.warning("save_results=True but no filename specified")
+        
+        # Rename and organize batch files if any were created
+        if self.context.params.output.save_results and self.context.params.output.filename:
+            self.context.memory_manager.rename_batch_files(
+                self.context.params.output.filename, 
+                self.context.progress_tracker
+            )
+        
         self.context.progress_tracker.log_calculation_completion(
             elapsed, self.context.params.output.save_results, self.context.params.output.filename or "",
             results.n_field_lines if results else 0
@@ -111,7 +132,10 @@ class FieldLineCalculator:
             total_processed += len(batch_indices)
             batch_idx += 1
             
-            self.context.progress_tracker.log_batch_completion(batch_idx, total_processed, nline)
+            self.context.progress_tracker.log_batch_completion(
+                batch_idx, total_processed, nline, 
+                self.context.memory_manager.results_in_memory
+            )
 
     def _process_batch(
         self,

@@ -13,6 +13,7 @@ from .experiment_config import (
 )
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.line.tracing_parameters import TracingDefaults
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -20,10 +21,22 @@ logger = get_logger(__name__, console_format_brief=True)
 from .parameter_expansion import get_parameter_combinations
 
 
+class FieldComponentFactoryConfig(BaseModel):
+    """Factory configuration for field components with flexible parameters."""
+    
+    moment_type: str
+    B_magnitude: Union[float, List[float]] = 1.0
+    moment_orientation_latitude_degree: Union[float, List[float]] = 0.0
+    moment_orientation_longitude_degree: Union[float, List[float]] = 0.0
+    offset_r_ns: Union[List[float], List[List[float]]] = [0.0, 0.0, 0.0]  # Can be expanded
+    
+    model_config = {"arbitrary_types_allowed": True}
+
+
 class FieldFactoryConfig(BaseModel):
     """Factory configuration for field components with flexible parameter inputs."""
     
-    components: List[Union[FieldComponentConfig, List[FieldComponentConfig], Dict[str, Any]]]
+    components: List[Union[FieldComponentConfig, List[FieldComponentConfig], List[FieldComponentFactoryConfig], Dict[str, Any], FieldComponentFactoryConfig]]
     
     model_config = {"arbitrary_types_allowed": True}
 
@@ -76,32 +89,33 @@ class TracingFactoryConfig(BaseModel):
     """Factory configuration for tracing parameters with flexible inputs."""
     
     # Integration parameters
-    max_integration_radius: Union[float, List[float]] = 10.0
-    threshold_line_distance: Union[float, List[float]] = 1.0
-    t_span: Union[Tuple[float, float], List[Tuple[float, float]]] = (0.0, 1e8)
-    rtol: Union[float, List[float]] = 5.0e-9
-    atol: Union[float, List[float]] = 5.0e-9
-    surface_radius: Union[float, List[float]] = 1.0 - 1.e-8
-    dt: Union[float, List[float]] = 0.01
-    max_step: Union[float, List[float]] = 0.01
-    trace_open_lines_backwards: Union[bool, List[bool]] = False
+    max_integration_radius: Union[float, List[float]] = TracingDefaults.MAX_INTEGRATION_RADIUS
+    threshold_line_distance: Union[float, List[float]] = TracingDefaults.THRESHOLD_LINE_DISTANCE
+    t_span: Union[Tuple[float, float], List[Tuple[float, float]]] = TracingDefaults.T_SPAN
+    rtol: Union[float, List[float]] = TracingDefaults.RTOL
+    atol: Union[float, List[float]] = TracingDefaults.ATOL
+    surface_radius: Union[float, List[float]] = TracingDefaults.SURFACE_RADIUS
+    dt: Union[float, List[float]] = TracingDefaults.DT
+    max_step: Union[float, List[float]] = TracingDefaults.MAX_STEP
+    trace_open_lines_backwards: Union[bool, List[bool]] = TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
+    verify_by_reversing: Union[bool, List[bool]] = TracingDefaults.VERIFY_BY_REVERSING
     
     # Performance parameters
-    max_memory_mb: Union[float, List[float]] = 100.0
-    safety_factor: Union[float, List[float]] = 0.9
-    max_batch_size: Union[int, List[int]] = 100
-    check_interval_sec: Union[float, List[float]] = 1.0
-    n_cores: Union[Optional[int], List[Optional[int]]] = None
-    n_trial: Union[int, List[int]] = 10
-    progress_bar: Union[bool, List[bool]] = True
-    verbose: Union[bool, List[bool]] = False
-    skip_memory_estimation: Union[bool, List[bool]] = False
+    max_memory_mb: Union[float, List[float]] = TracingDefaults.MAX_MEMORY_MB
+    safety_factor: Union[float, List[float]] = TracingDefaults.SAFETY_FACTOR
+    max_batch_size: Union[int, List[int]] = TracingDefaults.MAX_BATCH_SIZE
+    check_interval_sec: Union[float, List[float]] = TracingDefaults.CHECK_INTERVAL_SEC
+    n_cores: Union[Optional[int], List[Optional[int]]] = TracingDefaults.N_CORES
+    n_trial: Union[int, List[int]] = TracingDefaults.N_TRIAL
+    progress_bar: Union[bool, List[bool]] = TracingDefaults.PROGRESS_BAR
+    verbose: Union[bool, List[bool]] = TracingDefaults.VERBOSE
+    skip_memory_estimation: Union[bool, List[bool]] = TracingDefaults.SKIP_MEMORY_ESTIMATION
     
     # Output parameters
-    save_results: Union[bool, List[bool]] = False
-    filename: Union[Optional[str], List[Optional[str]]] = None
-    output_format: Union[str, List[str]] = "fits"
-    overwrite: Union[bool, List[bool]] = False
+    save_results: Union[bool, List[bool]] = TracingDefaults.SAVE_RESULTS
+    filename: Union[Optional[str], List[Optional[str]]] = TracingDefaults.FILENAME
+    output_format: Union[str, List[str]] = TracingDefaults.OUTPUT_FORMAT
+    overwrite: Union[bool, List[bool]] = TracingDefaults.OVERWRITE
     
     model_config = {"arbitrary_types_allowed": True}
 
@@ -143,21 +157,121 @@ def expand_field_configs(field_config: Union[FieldConfig, FieldFactoryConfig]) -
         return [field_config]
     
     # Handle FieldFactoryConfig
-    field_configs = []
+    # First, expand each component group separately
+    expanded_components = []
+    
     for component_group in field_config.components:
         if isinstance(component_group, FieldComponentConfig):
             # Single component
-            field_configs.append(FieldConfig(components=[component_group]))
+            expanded_components.append([component_group])
         elif isinstance(component_group, list):
-            # List of components
-            field_configs.append(FieldConfig(components=component_group))
+            # List of components - could be FieldComponentConfig or FieldComponentFactoryConfig
+            if all(isinstance(comp, FieldComponentConfig) for comp in component_group):
+                # List of FieldComponentConfig - no expansion needed
+                expanded_components.append(component_group)
+            elif all(isinstance(comp, FieldComponentFactoryConfig) for comp in component_group):
+                # List of FieldComponentFactoryConfig - expand each and combine within group
+                expanded_components_in_group = []
+                
+                for comp in component_group:
+                    factory_params = comp.model_dump()
+                    
+                    # Handle special case for offset_r_ns - only expand if it's a list of lists
+                    if "offset_r_ns" in factory_params:
+                        offset_value = factory_params["offset_r_ns"]
+                        if isinstance(offset_value, list) and len(offset_value) > 0:
+                            # Check if it's a list of lists (should be expanded) or a single list (should not be expanded)
+                            if isinstance(offset_value[0], list):
+                                # List of lists - keep for expansion
+                                pass
+                            else:
+                                # Single list - remove from expansion, treat as fixed
+                                factory_params.pop("offset_r_ns")
+                    
+                    param_combinations = get_parameter_combinations(factory_params)
+                    comp_expanded = []
+                    
+                    for params in param_combinations:
+                        # Restore offset_r_ns if it was removed
+                        if "offset_r_ns" not in params and "offset_r_ns" in comp.model_dump():
+                            offset_value = comp.model_dump()["offset_r_ns"]
+                            if isinstance(offset_value, list) and len(offset_value) > 0 and not isinstance(offset_value[0], list):
+                                params["offset_r_ns"] = offset_value
+                        
+                        config = FieldComponentConfig(**params)
+                        comp_expanded.append(config)
+                    
+                    expanded_components_in_group.append(comp_expanded)
+                
+                # Create all combinations within this group
+                from itertools import product
+                group_combinations = list(product(*expanded_components_in_group))
+                expanded_components.append(group_combinations)
+            else:
+                # Mixed types - treat as regular list
+                expanded_components.append(component_group)
         elif isinstance(component_group, dict):
             # Dictionary input with flexible parameters
             param_combinations = get_parameter_combinations(component_group)
-            
+            group_components = []
             for params in param_combinations:
                 config = FieldComponentConfig(**params)
-                field_configs.append(FieldConfig(components=[config]))
+                group_components.append(config)
+            expanded_components.append(group_components)
+        elif isinstance(component_group, FieldComponentFactoryConfig):
+            # FieldComponentFactoryConfig
+            factory_params = component_group.model_dump()
+            
+            # Handle special case for offset_r_ns - only expand if it's a list of lists
+            if "offset_r_ns" in factory_params:
+                offset_value = factory_params["offset_r_ns"]
+                if isinstance(offset_value, list) and len(offset_value) > 0:
+                    # Check if it's a list of lists (should be expanded) or a single list (should not be expanded)
+                    if isinstance(offset_value[0], list):
+                        # List of lists - keep for expansion
+                        pass
+                    else:
+                        # Single list - remove from expansion, treat as fixed
+                        factory_params.pop("offset_r_ns")
+            
+            param_combinations = get_parameter_combinations(factory_params)
+            group_components = []
+            
+            for params in param_combinations:
+                # Restore offset_r_ns if it was removed
+                if "offset_r_ns" not in params and "offset_r_ns" in component_group.model_dump():
+                    offset_value = component_group.model_dump()["offset_r_ns"]
+                    if isinstance(offset_value, list) and len(offset_value) > 0 and not isinstance(offset_value[0], list):
+                        params["offset_r_ns"] = offset_value
+                
+                config = FieldComponentConfig(**params)
+                group_components.append(config)
+            expanded_components.append(group_components)
+    
+    # Now create all combinations of the expanded components
+    field_configs = []
+    
+    # Each group should be a separate field configuration
+    for group in expanded_components:
+        if isinstance(group, list):
+            # Check if this is a list of FieldComponentConfig or a list of tuples
+            if len(group) > 0 and isinstance(group[0], tuple):
+                # List of tuples - each tuple is a combination
+                for combo in group:
+                    field_configs.append(FieldConfig(components=list(combo)))
+            else:
+                # Single group - create one field config
+                field_configs.append(FieldConfig(components=group))
+        else:
+            # Group contains combinations - create field config for each combination
+            for combo in group:
+                if isinstance(combo, list):
+                    field_configs.append(FieldConfig(components=combo))
+                elif isinstance(combo, tuple):
+                    # Convert tuple to list
+                    field_configs.append(FieldConfig(components=list(combo)))
+                else:
+                    field_configs.append(FieldConfig(components=[combo]))
     
     return field_configs
 

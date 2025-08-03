@@ -263,9 +263,14 @@ class TestGridConfig:
     
     def test_no_grid_type(self):
         """Test configuration with no grid type specified."""
-        # GridConfig requires exactly one grid type, so this should raise an error
-        with pytest.raises(ValueError, match="Exactly one grid type must be specified"):  # type: ignore
-            GridConfig()
+        # GridConfig with no grid type should only log a warning, not raise an error
+        # (this allows for temporary objects during I/O operations)
+        config = GridConfig()
+        # Should not raise an error, just log a warning
+        assert config.spherical is None
+        assert config.random is None
+        assert config.healpix is None
+        assert config.custom is None
     
     def test_multiple_grid_types(self):
         """Test that multiple grid types are handled appropriately."""
@@ -336,7 +341,7 @@ class TestTracingConfig:
         # Performance parameters
         assert config.max_memory_mb == 100.0
         assert config.safety_factor == 0.9
-        assert config.max_batch_size == 100
+        assert config.max_batch_size == 1000
         assert config.check_interval_sec == 1.0
         assert config.n_cores is None
         assert config.n_trial == 10

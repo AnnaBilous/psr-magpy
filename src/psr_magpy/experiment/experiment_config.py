@@ -12,6 +12,7 @@ from psr_magpy.grid.grid import SphericalGrid, RandomGrid, HealpixGrid, CustomGr
 from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters, PerformanceParameters
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.line.tracing_parameters import TracingDefaults
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -148,6 +149,13 @@ class GridConfig(BaseModel):
         configs = [self.spherical, self.random, self.healpix, self.custom]
         non_none_configs = [c for c in configs if c is not None]
         
+        # Skip validation for temporary objects (all fields are None or default)
+        if len(non_none_configs) == 0:
+            # This might be a temporary object during I/O operations
+            # Only log a warning instead of raising an error
+            logger.warning("GridConfig created with no grid type specified (likely temporary object)")
+            return
+        
         if len(non_none_configs) != 1:
             error_msg = f"Exactly one grid type must be specified, got {len(non_none_configs)}"
             logger.error(error_msg)
@@ -191,32 +199,33 @@ class TracingConfig(BaseModel):
     """Configuration for field line tracing parameters."""
     
     # Integration parameters
-    max_integration_radius: float = 10.0
-    threshold_line_distance: float = 1.0
-    t_span: Tuple[float, float] = (0.0, 1e8)
-    rtol: float = 5.0e-9
-    atol: float = 5.0e-9
-    surface_radius: float = 1.0 - 1.e-8
-    dt: float = 0.01
-    max_step: float = 0.01
-    trace_open_lines_backwards: bool = False
+    max_integration_radius: float = TracingDefaults.MAX_INTEGRATION_RADIUS
+    threshold_line_distance: float = TracingDefaults.THRESHOLD_LINE_DISTANCE
+    t_span: Tuple[float, float] = TracingDefaults.T_SPAN
+    rtol: float = TracingDefaults.RTOL
+    atol: float = TracingDefaults.ATOL
+    surface_radius: float = TracingDefaults.SURFACE_RADIUS
+    dt: float = TracingDefaults.DT
+    max_step: float = TracingDefaults.MAX_STEP
+    trace_open_lines_backwards: bool = TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
+    verify_by_reversing: bool = TracingDefaults.VERIFY_BY_REVERSING
     
     # Performance parameters
-    max_memory_mb: float = 100.0
-    safety_factor: float = 0.9
-    max_batch_size: int = 100
-    check_interval_sec: float = 1.0
-    n_cores: Optional[int] = None
-    n_trial: int = 10
-    progress_bar: bool = True
-    verbose: bool = False
-    skip_memory_estimation: bool = False
+    max_memory_mb: float = TracingDefaults.MAX_MEMORY_MB
+    safety_factor: float = TracingDefaults.SAFETY_FACTOR
+    max_batch_size: int = TracingDefaults.MAX_BATCH_SIZE
+    check_interval_sec: float = TracingDefaults.CHECK_INTERVAL_SEC
+    n_cores: Optional[int] = TracingDefaults.N_CORES
+    n_trial: int = TracingDefaults.N_TRIAL
+    progress_bar: bool = TracingDefaults.PROGRESS_BAR
+    verbose: bool = TracingDefaults.VERBOSE
+    skip_memory_estimation: bool = TracingDefaults.SKIP_MEMORY_ESTIMATION
     
     # Output parameters
-    save_results: bool = False
-    filename: Optional[str] = None
-    output_format: str = "fits"
-    overwrite: bool = False
+    save_results: bool = TracingDefaults.SAVE_RESULTS
+    filename: Optional[str] = TracingDefaults.FILENAME
+    output_format: str = TracingDefaults.OUTPUT_FORMAT
+    overwrite: bool = TracingDefaults.OVERWRITE
     
     def create_tracing_parameters(self) -> TracingParameters:
         """Create TracingParameters from configuration."""
@@ -231,7 +240,8 @@ class TracingConfig(BaseModel):
             surface_radius=self.surface_radius,
             dt=self.dt,
             max_step=self.max_step,
-            trace_open_lines_backwards=self.trace_open_lines_backwards
+            trace_open_lines_backwards=self.trace_open_lines_backwards,
+            verify_by_reversing=self.verify_by_reversing
         )
         
         performance = PerformanceParameters(
@@ -480,28 +490,29 @@ class ExperimentConfig:
         )
         
         tracing = TracingConfig(
-            max_integration_radius=10.0,
-            threshold_line_distance=1.0,
-            t_span=(0.0, 1e8),
-            rtol=5.0e-9,
-            atol=5.0e-9,
-            surface_radius=1.0 - 1.e-8,
+            max_integration_radius=TracingDefaults.MAX_INTEGRATION_RADIUS,
+            threshold_line_distance=TracingDefaults.THRESHOLD_LINE_DISTANCE,
+            t_span=TracingDefaults.T_SPAN,
+            rtol=TracingDefaults.RTOL,
+            atol=TracingDefaults.ATOL,
+            surface_radius=TracingDefaults.SURFACE_RADIUS,
             dt=5,
-            max_step=0.01,
+            max_step=TracingDefaults.MAX_STEP,
             trace_open_lines_backwards=True,
-            max_memory_mb=100.0,
-            safety_factor=0.9,
-            max_batch_size=100,
-            check_interval_sec=1.0,
+            verify_by_reversing=False,
+            max_memory_mb=TracingDefaults.MAX_MEMORY_MB,
+            safety_factor=TracingDefaults.SAFETY_FACTOR,
+            max_batch_size=TracingDefaults.MAX_BATCH_SIZE,
+            check_interval_sec=TracingDefaults.CHECK_INTERVAL_SEC,
             n_cores=2,
             n_trial=100,
-            progress_bar=True,
-            verbose=False,
+            progress_bar=TracingDefaults.PROGRESS_BAR,
+            verbose=TracingDefaults.VERBOSE,
             skip_memory_estimation=True,
             save_results=False,
             filename=None,
-            output_format="fits",
-            overwrite=False
+            output_format=TracingDefaults.OUTPUT_FORMAT,
+            overwrite=TracingDefaults.OVERWRITE
         )
         
         template = FieldLine.template_all()

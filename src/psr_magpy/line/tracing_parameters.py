@@ -1,12 +1,12 @@
-"""Unified parameter management for field line tracing.
+"""
+Field line tracing parameters and configuration.
 
-This module consolidates all configuration parameters used throughout
-the field line tracing system into a single, well-organized parameter
-hierarchy with validation and documentation.
+This module defines the parameters used for field line tracing,
+including integration parameters, performance settings, and output configuration.
 """
 
 import os
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from pydantic import BaseModel, Field, model_validator
 
 import psutil
@@ -16,51 +16,93 @@ from psr_magpy.utils.logging_config import get_logger
 logger = get_logger(__name__, console_format_brief=True)
 
 
+# =============================================================================
+# SINGLE SOURCE OF TRUTH FOR ALL DEFAULTS
+# =============================================================================
+# All default values are defined here to ensure consistency across the codebase
+
+class TracingDefaults:
+    """Default values for all tracing parameters."""
+    
+    # Integration parameters
+    MAX_INTEGRATION_RADIUS = 10.0
+    THRESHOLD_LINE_DISTANCE = 1.0
+    T_SPAN = (0.0, 1e8)
+    RTOL = 5.0e-9
+    ATOL = 5.0e-9
+    SURFACE_RADIUS = 1.0 - 1.e-8
+    DT = 0.01
+    MAX_STEP = 0.01
+    TRACE_OPEN_LINES_BACKWARDS = False
+    VERIFY_BY_REVERSING = False
+    
+    # Performance parameters
+    MAX_MEMORY_MB = 100.0
+    SAFETY_FACTOR = 0.9
+    MAX_BATCH_SIZE = 1000  # Single source of truth for batch size
+    CHECK_INTERVAL_SEC = 1.0
+    N_CORES = None  # Auto-detect
+    N_TRIAL = 10
+    PROGRESS_BAR = True
+    VERBOSE = False
+    SKIP_MEMORY_ESTIMATION = False
+    
+    # Output parameters
+    SAVE_RESULTS = False
+    FILENAME = None
+    OUTPUT_FORMAT = "fits"
+    OVERWRITE = False
+
+
 class IntegrationParameters(BaseModel):
     """Physics and integration parameters for field line tracing."""
 
     max_integration_radius: float = Field(
-        default=10.0,
+        default=TracingDefaults.MAX_INTEGRATION_RADIUS,
         gt=0,
         description="Maximum radius to trace field lines to (in NS radii)"
     )
     threshold_line_distance: float = Field(
-        default=1.0,
+        default=TracingDefaults.THRESHOLD_LINE_DISTANCE,
         gt=0,
         description="Threshold maximum line distance from star surface to save the line"
     )
     t_span: Tuple[float, float] = Field(
-        default=(0.0, 1e8),
+        default=TracingDefaults.T_SPAN,
         description="Integration time span (start, end)"
     )
     rtol: float = Field(
-        default=5.0e-9,
+        default=TracingDefaults.RTOL,
         gt=0,
         description="Relative tolerance for integration"
     )
     atol: float = Field(
-        default=5.0e-9,
+        default=TracingDefaults.ATOL,
         gt=0,
         description="Absolute tolerance for integration"
     )
     surface_radius: float = Field(
-        default=1.0 - 1.e-8,
+        default=TracingDefaults.SURFACE_RADIUS,
         gt=0,
         description="Radius of neutron star surface"
     )
     dt: float = Field(
-        default=0.01,
+        default=TracingDefaults.DT,
         gt=0,
         description="Integration time step for output sampling"
     )
     max_step: float = Field(
-        default=0.01,
+        default=TracingDefaults.MAX_STEP,
         gt=0,
         description="Maximum step size for integration"
     )
     trace_open_lines_backwards: bool = Field(
-        default=False,
-        description="Whether to trace open field lines backwards"
+        default=TracingDefaults.TRACE_OPEN_LINES_BACKWARDS,
+        description="Whether to trace open field lines backwards from surface"
+    )
+    verify_by_reversing: bool = Field(
+        default=TracingDefaults.VERIFY_BY_REVERSING,
+        description="Whether to verify field line tracing by reversing the integration"
     )
     
     @model_validator(mode='after')
@@ -97,46 +139,46 @@ class PerformanceParameters(BaseModel):
     """Memory and processing parameters."""
 
     max_memory_mb: float = Field(
-        default=100.0,
+        default=TracingDefaults.MAX_MEMORY_MB,
         gt=0,
         description="Maximum memory allowed for processing in megabytes"
     )
     safety_factor: float = Field(
-        default=0.9,
+        default=TracingDefaults.SAFETY_FACTOR,
         gt=0,
         le=1.0,
         description="Fraction of available memory to leave as buffer"
     )
     max_batch_size: int = Field(
-        default=100,
+        default=TracingDefaults.MAX_BATCH_SIZE,
         gt=0,
         description="Maximum batch size to process"
     )
     check_interval_sec: float = Field(
-        default=1.0,
+        default=TracingDefaults.CHECK_INTERVAL_SEC,
         gt=0,
         description="How often to check memory usage in seconds"
     )
     n_cores: Optional[int] = Field(
-        default=None,
+        default=TracingDefaults.N_CORES,
         ge=1,
         description="Number of CPU cores to use (None for auto-detection)"
     )
     n_trial: int = Field(
-        default=100,
+        default=TracingDefaults.N_TRIAL,
         gt=0,
         description="Number of trial field lines for memory estimation"
     )
     progress_bar: bool = Field(
-        default=True,
+        default=TracingDefaults.PROGRESS_BAR,
         description="Whether to show progress bars"
     )
     verbose: bool = Field(
-        default=False,
+        default=TracingDefaults.VERBOSE,
         description="Verbosity level for logging"
     )
     skip_memory_estimation: bool = Field(
-        default=False,
+        default=TracingDefaults.SKIP_MEMORY_ESTIMATION,
         description="Whether to skip memory estimation and process all field lines at once"
     )
     
@@ -178,19 +220,19 @@ class OutputParameters(BaseModel):
     """Output and file I/O parameters."""
 
     save_results: bool = Field(
-        default=True,
+        default=TracingDefaults.SAVE_RESULTS,
         description="Whether to save results to disk"
     )
     filename: Optional[str] = Field(
-        default=None,
+        default=TracingDefaults.FILENAME,
         description="Base filename for output (without extension)"
     )
     output_format: str = Field(
-        default="fits",
+        default=TracingDefaults.OUTPUT_FORMAT,
         description="Output file format"
     )
     overwrite: bool = Field(
-        default=False,
+        default=TracingDefaults.OVERWRITE,
         description="Whether to overwrite existing files"
     )
     
@@ -210,9 +252,9 @@ class OutputParameters(BaseModel):
         if self.filename:
             directory = os.path.dirname(self.filename)
             if directory and not os.path.exists(directory):
-                error_msg = f"Output directory does not exist: {directory}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                # For experiment series, directories may be created later
+                # Just log a warning instead of raising an error
+                logger.warning(f"Output directory does not exist yet (will be created): {directory}")
                 
         logger.debug(f"OutputParameters initialized: {self}")
         return self

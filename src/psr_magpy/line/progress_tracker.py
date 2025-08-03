@@ -5,6 +5,7 @@ field line calculations with support for progress bars and detailed logging.
 """
 
 import time
+import psutil
 from contextlib import contextmanager
 from typing import Optional, Any, Union
 from pathlib import Path
@@ -177,11 +178,29 @@ class ProgressTracker:
         if self.verbose:
             logger.debug(f"Batch {batch_idx + 1}: {batch_size}/{total} items ({batch_size/total*100:.1f}%)")
     
-    def log_batch_completion(self, batch_idx: int, processed: int, total: int) -> None:
-        """Log the completion of a batch."""
+    def log_batch_completion(self, batch_idx: int, processed: int, total: int, field_line_set=None) -> None:
+        """Log the completion of a batch with memory usage information."""
         logger.info(f"Completed batch {batch_idx + 1}: {processed}/{total} field lines")
+        
+        # Get process memory usage information
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        memory_mb = memory_info.rss / (1024 * 1024)  # Convert to MB
+        
+        logger.info(f"Memory usage after batch {batch_idx + 1}: {memory_mb:.1f} MB")
+        
+        # Get field line data size if available
+        if field_line_set is not None:
+            try:
+                data_size_bytes = field_line_set.estimate_size()
+                data_size_mb = data_size_bytes / (1024 * 1024)
+                logger.info(f"Field line data size in memory: {data_size_mb:.1f} MB ({data_size_bytes:,} bytes)")
+            except Exception as e:
+                logger.warning(f"Could not estimate field line data size: {e}")
+        
         if self.verbose:
             logger.debug(f"Progress: {processed/total*100:.1f}% complete")
+            logger.debug(f"Memory details: RSS={memory_mb:.1f} MB, VMS={memory_info.vms / (1024 * 1024):.1f} MB")
     
     def log_memory_estimation(self, n_trial: int, trial_size_mb: float, completion_time: float) -> None:
         """Log memory estimation results."""

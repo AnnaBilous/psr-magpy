@@ -143,7 +143,7 @@ class FootpointGrid(ABC):
     def save_to_fits(self, fitsname: str) -> None:
         """Save grid to FITS file."""
         from psr_magpy.io import IOFactory
-        IOFactory.save_data(self, fitsname)
+        IOFactory.save_data(self, fitsname, overwrite=True)
 
     def plot_footpoint_coordinates(self, ax: Optional[plt.Axes] = None, 
                                  marker: str = ".", color: str = "r", 

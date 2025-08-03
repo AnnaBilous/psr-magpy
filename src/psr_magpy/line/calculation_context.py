@@ -28,7 +28,6 @@ class CalculationContext:
         field: MultipoleField,
         grid: FootpointGrid,
         params: Optional[TracingParameters] = None,
-        max_file_size_mb: float = 100.0
     ):
         """Initialize calculation context."""
         self.field = field
@@ -46,10 +45,10 @@ class CalculationContext:
         self._memory_manager = MemoryManager(
             self.params.performance, 
             self._tracer, 
-            max_file_size_mb=max_file_size_mb,
+            max_file_size_mb=self.params.performance.max_memory_mb,  # Use the configured max_memory_mb
             save_results=self.params.output.save_results
         )
-        logger.debug(f"Created MemoryManager with max_file_size_mb={max_file_size_mb}, save_results={self.params.output.save_results}")
+        logger.debug(f"Created MemoryManager with max_memory_mb={self.params.performance.max_memory_mb}, save_results={self.params.output.save_results}")
         
         # Initialize progress tracker
         self._progress_tracker = ProgressTracker()

@@ -73,22 +73,25 @@ class FieldLineTracer:
         """Wrapper for field calculation that includes unused time parameter required by solve_ivp."""
         return self.field.get_total_field(r, K, normalize=True)
     
-    def integrate_field_line(self, r_initial: np.ndarray, K: float, max_integration_radius: float) -> Any:
+    def integrate_field_line(self, r_initial: np.ndarray, K: float, max_integration_radius: float, trace_open_lines_backwards: bool) -> Any:
         """Integrate field line from initial position."""
         # Determine if this is backward integration based on starting radius
         r_initial_radius = np.sqrt(np.sum(r_initial**2))
         is_open_line = r_initial_radius > 1.001
         if not(is_open_line):
             r_initial = r_initial/np.linalg.norm(r_initial)
+
         
         # Setup event detector parameters
         surface_radius = self.params.integration.surface_radius
-        if (self.params.integration.trace_open_lines_backwards) and (is_open_line):
+        if (trace_open_lines_backwards) and (is_open_line):
             t_span = (self.params.integration.t_span[0], -self.params.integration.t_span[1])
-            effective_max_integration_radius = max_integration_radius * 1.1         
+            effective_max_integration_radius = max_integration_radius * 1.1     
+            max_step = self.params.integration.max_step   
         else:
             t_span = self.params.integration.t_span
             effective_max_integration_radius = max_integration_radius
+            max_step = self.params.integration.max_step
             
         self._setup_event_detector(surface_radius, effective_max_integration_radius)
 
@@ -107,7 +110,7 @@ class FieldLineTracer:
             'events': (self.event_detector.hit_surface, self.event_detector.hit_Rmax),
             'rtol': rtol,
             'atol': atol,
-            'max_step': self.params.integration.max_step
+            'max_step': max_step
         }
         
         
@@ -123,10 +126,18 @@ class FieldLineTracer:
         """Trace a single field line from the given initial position."""
         r_initial_array = r_initial.xyz.value
         
-        output = template.copy_structure()
+        # Create output with automatic reversed_error flag if verification is enabled
+        if self.params.integration.verify_by_reversing:
+            # Get template flags and ensure reversed_error is enabled
+            template_flags = template.property_system.get_flags_dict()
+            template_flags['save_reversed_error'] = True
+            output = FieldLine(**template_flags)
+        else:
+            output = template.copy_structure()
+        
         output.set_property(footpoint_id=int(footpoint_id))
         
-        # Calculate field direction naturally (no radius-based override)
+       
         B_initial = self.field.get_total_field(r_initial_array, K=1, normalize=False)
         B_initial_norm = self.field.get_total_field(r_initial_array, K=1, normalize=True)
         dotprod = np.dot(B_initial_norm, r_initial_array)
@@ -134,11 +145,9 @@ class FieldLineTracer:
         if K == 0:
             K = 1.
         
-        # Use natural field direction - time span handles forward/backward
-        logger.debug(f"Using natural field direction: K={K}")
         
         # Use internal integration method
-        field_line = self.integrate_field_line(r_initial_array, K, self.params.integration.max_integration_radius)
+        field_line = self.integrate_field_line(r_initial_array, K, self.params.integration.max_integration_radius, self.params.integration.trace_open_lines_backwards)
         
         # Use dt from integration parameters
         dt = self.params.integration.dt
@@ -177,7 +186,34 @@ class FieldLineTracer:
             dR = np.median(np.sum(dr**2, axis=0) ** 0.5)
             # Note: dR is not a standard property, so we don't set it
             logger.debug(f"Calculated dR: {dR}")
+        
+        # Perform verification if enabled
+        if self.params.integration.verify_by_reversing:
+            
+            r_initial_array_reversed = r[:, -1]
+            B_initial_reversed = self.field.get_total_field(r_initial_array_reversed, K=1, normalize=False)
+            B_initial_reversed_norm = self.field.get_total_field(r_initial_array_reversed, K=1, normalize=True)
+            dotprod = np.dot(B_initial_reversed_norm, r_initial_array_reversed)
+            K_reversed = np.sign(dotprod)
+            if K_reversed == 0:
+                K_reversed = 1.
+            
+            field_line_reversed = self.integrate_field_line(r_initial_array_reversed, K_reversed, self.params.integration.max_integration_radius, True)
+            
+            if field_line_reversed.success:
+                r_reversed_final = field_line_reversed.sol(field_line_reversed.t[-1])
+                # Calculate distance from original starting point
+                distance_from_start = np.sqrt(np.sum((r_reversed_final - r_initial_array)**2))
+                if distance_from_start > 100:
+                    print(r_reversed_final, r_initial_array)
+                    print(r_initial_array_reversed)
+                    print(field_line_reversed.sol(field_line_reversed.t))
+                    print("===============")
+                output.set_property(reversed_error=distance_from_start)
+            else:
+                # If reversed integration failed, set a large error
+                output.set_property(reversed_error=float('inf'))
+        
         return output
 
     
-

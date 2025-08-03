@@ -10,7 +10,7 @@ from psr_magpy.field.components import DipoleFieldComponent
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.grid.grid import SphericalGrid
 from psr_magpy.line.calculation_context import CalculationContext
-from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters
+from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters, PerformanceParameters
 from psr_magpy.line.field_line import FieldLine
 
 
@@ -70,8 +70,15 @@ class TestCalculationContext:
     
     def test_memory_estimation(self):
         """Test memory estimation and file-size-based flushing."""
-        # Use a very small max_file_size_mb to force flushing
-        context = CalculationContext(self.field, self.grid, self.params, max_file_size_mb=0.001)
+        # Create context with small max_memory_mb to force flushing
+        params = TracingParameters(
+            integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
+            output=OutputParameters(save_results=False),
+            performance=PerformanceParameters(max_memory_mb=0.001)  # Very small memory limit
+        )
+        params.performance.n_trial = 10
+        
+        context = CalculationContext(self.field, self.grid, params)
         template = FieldLine.template_OFL_calc()
         
         trial_size, completion_time = context.estimate_memory_requirements(template)

@@ -30,6 +30,7 @@ class SaveFlags:
     save_z_abs_max: bool = False
     save_b_ini: bool = False
     save_b_r_ini_angle: bool = False
+    save_reversed_error: bool = False
     
     def __repr__(self) -> str:
         """Return string representation of save flags."""
@@ -47,6 +48,7 @@ class PropertyName(Enum):
     Z_ABS_MAX = "save_z_abs_max"
     B_INI = "save_b_ini"
     B_R_INI_ANGLE = "save_b_r_ini_angle"
+    REVERSED_ERROR = "save_reversed_error"
 
     @property
     def flag_name(self) -> str:
@@ -136,6 +138,14 @@ class PropertyValue(BaseModel):
             if not isinstance(v, (int, float)):
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be a number, got {type(v)}",
+                    property_name.key_name, v
+                )
+        
+        elif property_name == PropertyName.REVERSED_ERROR:
+            # This should be a non-negative float (error distance)
+            if not isinstance(v, (int, float)) or v < 0:
+                raise PropertyValidationError(
+                    f"{property_name.key_name} must be a non-negative number, got {v}",
                     property_name.key_name, v
                 )
         
@@ -350,7 +360,8 @@ class PropertySystem:
                 'r_cyl_max': 'positive number',
                 'z_abs_max': 'positive number',
                 'b_ini': 'number',
-                'b_r_ini_angle': 'number'
+                'b_r_ini_angle': 'number',
+                'reversed_error': 'non-negative number'
             }
         }
     
