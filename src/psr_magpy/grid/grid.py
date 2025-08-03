@@ -391,6 +391,13 @@ class RandomGrid(FootpointGrid):
         # Pydantic validation
         params = RandomGridParams(nline_ori=nline_ori)
         self.nline_ori = params.nline_ori
+        
+        # Issue warning about saving to file
+        logger.warning(
+            "RandomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
+            "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
+        )
+        
         self._set_up_grid()
 
     def __repr__(self) -> str:
@@ -456,6 +463,12 @@ class CustomGrid(FootpointGrid):
         self.set_coordinates(params.coordinates)
         self.indices = np.arange(self.nline_ori)
         self.nline = self.nline_ori
+        
+        # Issue warning about saving to file
+        logger.warning(
+            "CustomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
+            "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
+        )
 
     def __repr__(self) -> str:
         return f"CustomGrid(nline_ori={self.nline_ori})"

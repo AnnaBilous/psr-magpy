@@ -9,7 +9,9 @@ from .experiment_runner import ExperimentRunner, run_experiment, run_experiment_
 from .experiment_series import ExperimentSeriesConfig
 from .experiment_series_runner import ExperimentSeriesRunner, run_experiment_series, run_experiment_series_from_file
 from .factory_configs import (
-    FieldFactoryConfig, GridFactoryConfig, TemplateFactoryConfig, TracingFactoryConfig
+    FieldFactoryConfig, GridFactoryConfig, TemplateFactoryConfig, TracingFactoryConfig,
+    FieldComponentFactoryConfig, SphericalGridFactoryConfig, RandomGridFactoryConfig,
+    HealpixGridFactoryConfig, CustomGridFactoryConfig
 )
 from .parameter_expansion import get_parameter_combinations
 from .experiment_metadata import create_experiment_metadata, generate_experiment_name
@@ -41,6 +43,11 @@ __all__ = [
     "GridFactoryConfig", 
     "TemplateFactoryConfig",
     "TracingFactoryConfig",
+    "FieldComponentFactoryConfig",
+    "SphericalGridFactoryConfig",
+    "RandomGridFactoryConfig",
+    "HealpixGridFactoryConfig",
+    "CustomGridFactoryConfig",
     
     # Utilities
     "get_parameter_combinations",

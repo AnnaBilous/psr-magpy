@@ -86,10 +86,45 @@ class ExperimentSeriesConfig(BaseModel):
                             template=template_config,
                             metadata=exp_metadata
                         )
+                        
+                        # Save grid and update config with file path for custom/random grids
+                        self._save_grid_and_update_config(experiment)
+                        
                         experiments.append(experiment)
         
         logger.info(f"Created {len(experiments)} experiments in series")
         return experiments
+    
+    def _save_grid_and_update_config(self, experiment: ExperimentConfig) -> None:
+        """Save grid for custom/random grids and update config with file path."""
+        grid_type = experiment.grid.get_grid_type()
+        
+        # Only save grids for custom and random grid types
+        if grid_type not in ["custom", "random"]:
+            return
+        
+        # Create grid instance
+        grid = experiment.grid.create_grid()
+        
+        # Save grid to file
+        grids_dir = self.get_grids_dir()
+        grids_dir.mkdir(parents=True, exist_ok=True)
+        
+        grid_path = grids_dir / f"{experiment.name}.fits"
+        try:
+            grid.save_to_fits(str(grid_path))
+            logger.debug(f"Saved grid for {experiment.name} to {grid_path}")
+            
+            # Update the experiment config with the grid file path
+            if grid_type == "random" and experiment.grid.random:
+                experiment.grid.random.grid_file_path = str(grid_path)
+                logger.debug(f"Updated RandomGrid config with file path: {grid_path}")
+            elif grid_type == "custom" and experiment.grid.custom:
+                experiment.grid.custom.grid_file_path = str(grid_path)
+                logger.debug(f"Updated CustomGrid config with file path: {grid_path}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to save grid for {experiment.name}: {e}")
     
     def _create_output_directories(self, output_dir: str):
         """Create the standard output directory structure for experiment series."""

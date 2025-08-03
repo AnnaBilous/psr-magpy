@@ -55,6 +55,7 @@ class RandomGridFactoryConfig(BaseModel):
     """Factory configuration for random grids with flexible parameters."""
     
     nline_ori: Union[int, List[int]]
+    grid_file_path: Optional[Union[str, List[str]]] = None
     
     model_config = {"arbitrary_types_allowed": True}
 
@@ -72,6 +73,7 @@ class CustomGridFactoryConfig(BaseModel):
     
     nline_ori: Union[int, List[int]]
     coordinates: Optional[Union[List[List[float]], List[List[List[float]]]]] = None
+    grid_file_path: Optional[Union[str, List[str]]] = None
     
     model_config = {"arbitrary_types_allowed": True}
 
@@ -276,6 +278,88 @@ def expand_field_configs(field_config: Union[FieldConfig, FieldFactoryConfig]) -
     return field_configs
 
 
+def _expand_random_grid_factory_config(grid: RandomGridFactoryConfig) -> List[GridConfig]:
+    """Expand RandomGridFactoryConfig with paired nline_ori and grid_file_path parameters."""
+    grid_configs = []
+    
+    # Handle nline_ori parameter
+    if isinstance(grid.nline_ori, list):
+        nline_ori_values = grid.nline_ori
+    else:
+        nline_ori_values = [grid.nline_ori]
+    
+    # Handle grid_file_path parameter
+    if grid.grid_file_path is None:
+        # No file paths provided, create from scratch
+        for nline_ori in nline_ori_values:
+            config = RandomGridConfig(nline_ori=nline_ori)
+            grid_configs.append(GridConfig(random=config))
+    else:
+        if isinstance(grid.grid_file_path, list):
+            grid_file_paths = grid.grid_file_path
+        else:
+            grid_file_paths = [grid.grid_file_path]
+        
+        # Pair nline_ori with grid_file_path
+        if len(nline_ori_values) != len(grid_file_paths):
+            error_msg = f"Number of nline_ori values ({len(nline_ori_values)}) must match number of grid_file_paths ({len(grid_file_paths)})"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        for nline_ori, grid_file_path in zip(nline_ori_values, grid_file_paths):
+            config = RandomGridConfig(nline_ori=nline_ori, grid_file_path=grid_file_path)
+            grid_configs.append(GridConfig(random=config))
+    
+    return grid_configs
+
+
+def _expand_custom_grid_factory_config(grid: CustomGridFactoryConfig) -> List[GridConfig]:
+    """Expand CustomGridFactoryConfig with paired nline_ori and grid_file_path parameters."""
+    grid_configs = []
+    
+    # Handle nline_ori parameter
+    if isinstance(grid.nline_ori, list):
+        nline_ori_values = grid.nline_ori
+    else:
+        nline_ori_values = [grid.nline_ori]
+    
+    # Handle coordinates parameter
+    if grid.coordinates is None:
+        coordinates_values = [None] * len(nline_ori_values)
+    elif isinstance(grid.coordinates, list):
+        coordinates_values = grid.coordinates
+        if len(coordinates_values) != len(nline_ori_values):
+            error_msg = f"Number of coordinates ({len(coordinates_values)}) must match number of nline_ori values ({len(nline_ori_values)})"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+    else:
+        coordinates_values = [grid.coordinates] * len(nline_ori_values)
+    
+    # Handle grid_file_path parameter
+    if grid.grid_file_path is None:
+        # No file paths provided, create from scratch
+        for nline_ori, coordinates in zip(nline_ori_values, coordinates_values):
+            config = CustomGridConfig(nline_ori=nline_ori, coordinates=coordinates)
+            grid_configs.append(GridConfig(custom=config))
+    else:
+        if isinstance(grid.grid_file_path, list):
+            grid_file_paths = grid.grid_file_path
+        else:
+            grid_file_paths = [grid.grid_file_path]
+        
+        # Pair nline_ori with grid_file_path
+        if len(nline_ori_values) != len(grid_file_paths):
+            error_msg = f"Number of nline_ori values ({len(nline_ori_values)}) must match number of grid_file_paths ({len(grid_file_paths)})"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        for nline_ori, coordinates, grid_file_path in zip(nline_ori_values, coordinates_values, grid_file_paths):
+            config = CustomGridConfig(nline_ori=nline_ori, coordinates=coordinates, grid_file_path=grid_file_path)
+            grid_configs.append(GridConfig(custom=config))
+    
+    return grid_configs
+
+
 def expand_grid_configs(grid_config: Union[GridConfig, GridFactoryConfig]) -> List[GridConfig]:
     """Expand grid configuration into all possible combinations."""
     if isinstance(grid_config, GridConfig):
@@ -291,11 +375,8 @@ def expand_grid_configs(grid_config: Union[GridConfig, GridFactoryConfig]) -> Li
                 config = SphericalGridConfig(**params)
                 grid_configs.append(GridConfig(spherical=config))
         elif isinstance(grid, RandomGridFactoryConfig):
-            # Expand random grid factory config
-            param_combinations = get_parameter_combinations(grid.model_dump())
-            for params in param_combinations:
-                config = RandomGridConfig(**params)
-                grid_configs.append(GridConfig(random=config))
+            # Expand random grid factory config with paired parameters
+            grid_configs.extend(_expand_random_grid_factory_config(grid))
         elif isinstance(grid, HealpixGridFactoryConfig):
             # Expand HEALPix grid factory config
             param_combinations = get_parameter_combinations(grid.model_dump())
@@ -303,11 +384,8 @@ def expand_grid_configs(grid_config: Union[GridConfig, GridFactoryConfig]) -> Li
                 config = HealpixGridConfig(**params)
                 grid_configs.append(GridConfig(healpix=config))
         elif isinstance(grid, CustomGridFactoryConfig):
-            # Expand custom grid factory config
-            param_combinations = get_parameter_combinations(grid.model_dump())
-            for params in param_combinations:
-                config = CustomGridConfig(**params)
-                grid_configs.append(GridConfig(custom=config))
+            # Expand custom grid factory config with paired parameters
+            grid_configs.extend(_expand_custom_grid_factory_config(grid))
         elif isinstance(grid, dict):
             # Handle dictionary input with flexible parameters
             grid_type = grid.get("type", "spherical")

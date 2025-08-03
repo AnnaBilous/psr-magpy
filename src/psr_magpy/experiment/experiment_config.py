@@ -121,6 +121,7 @@ class RandomGridConfig(BaseModel):
     """Configuration for random grid."""
     
     nline_ori: int
+    grid_file_path: Optional[str] = Field(default=None, description="Path to saved grid file")
 
 
 class HealpixGridConfig(BaseModel):
@@ -134,6 +135,7 @@ class CustomGridConfig(BaseModel):
     
     nline_ori: int
     coordinates: Optional[List[List[float]]] = None
+    grid_file_path: Optional[str] = Field(default=None, description="Path to saved grid file")
 
 
 class GridConfig(BaseModel):
@@ -184,11 +186,29 @@ class GridConfig(BaseModel):
         if self.spherical is not None:
             return SphericalGrid(**self.spherical.model_dump())
         elif self.random is not None:
-            return RandomGrid(**self.random.model_dump())
+            # For random grids, load from file if path is provided, otherwise create from scratch
+            if self.random.grid_file_path:
+                logger.info(f"Loading RandomGrid from file: {self.random.grid_file_path}")
+                return RandomGrid.load_from_fits(self.random.grid_file_path)
+            else:
+                logger.info("Creating RandomGrid from scratch")
+                # Filter out grid_file_path when creating from scratch
+                params = self.random.model_dump()
+                params.pop('grid_file_path', None)
+                return RandomGrid(**params)
         elif self.healpix is not None:
             return HealpixGrid(**self.healpix.model_dump())
         elif self.custom is not None:
-            return CustomGrid(**self.custom.model_dump())
+            # For custom grids, load from file if path is provided, otherwise create from scratch
+            if self.custom.grid_file_path:
+                logger.info(f"Loading CustomGrid from file: {self.custom.grid_file_path}")
+                return CustomGrid.load_from_fits(self.custom.grid_file_path)
+            else:
+                logger.info("Creating CustomGrid from scratch")
+                # Filter out grid_file_path when creating from scratch
+                params = self.custom.model_dump()
+                params.pop('grid_file_path', None)
+                return CustomGrid(**params)
         else:
             error_msg = "No grid type specified"
             logger.error(error_msg)

@@ -203,21 +203,7 @@ class ExperimentSeriesRunner:
         
         logger.info("Individual configs saved")
     
-    def _save_grid(self, experiment: ExperimentConfig, grid) -> None:
-        """Save grid for a single experiment."""
-        if not self.save_grids:
-            return
-            
-        # Use the series-specific grids directory
-        grids_dir = self.output_directory / self.series_config.name / "grids"
-        grids_dir.mkdir(exist_ok=True)
-        
-        grid_path = grids_dir / f"{experiment.name}.fits"
-        try:
-            grid.save_to_fits(str(grid_path))
-            logger.debug(f"Saved grid for {experiment.name} to {grid_path}")
-        except Exception as e:
-            logger.warning(f"Failed to save grid for {experiment.name}: {e}")
+
     
     def _run_experiments(self, experiments: List[ExperimentConfig]) -> List[ExperimentResult]:
         """Run experiments sequentially."""
@@ -239,9 +225,6 @@ class ExperimentSeriesRunner:
                 # Create field and grid for this experiment
                 field = experiment.field.create_field()
                 grid = experiment.grid.create_grid()
-                
-                # Save grid if requested
-                self._save_grid(experiment, grid)
                 
                 start_time = time.time()
                 experiment_result = run_experiment(experiment)
