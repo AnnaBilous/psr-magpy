@@ -7,26 +7,25 @@ from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.property_system import PropertyName
 
 
-
 logger = get_logger(__name__, console_format_brief=True)
 
 
 class FieldLineSet(FieldLine):
     """Collection of field lines with array values.
-    
+
     FieldLineSet is the primary data container for field line tracing results.
     It inherits from FieldLine but specializes in storing bulk field line data.
-    
+
     **Role in I/O System:**
     - **Data Container**: Holds actual field line data (coordinates, properties, etc.)
     - **FITS Storage**: All field line data is stored in FITS format via FieldLineSet
     - **Bulk Operations**: Efficiently handles large collections of field lines
-    
+
     **Relationship to FieldLine:**
     - FieldLineSet uses FieldLine objects as templates to define data structure
     - Individual FieldLine objects can be data containers or configuration templates
     - FieldLineSet is always a data container (never a configuration template)
-    
+
     **I/O Distinction:**
     - FieldLineSet → FITS files (scientific data)
     - FieldLine templates → YAML files (configuration)
@@ -40,14 +39,14 @@ class FieldLineSet(FieldLine):
     ) -> None:
         """Initialize a FieldLineSet from a list of field lines or a single field line."""
         logger.debug(f"Initializing FieldLineSet with {type(field_lines).__name__}")
-        
+
         # Get template and validate input
         template = self._get_template(field_lines)
-        
+
         # Use PropertySystem from parent class
         super().__init__(**template.property_system.get_flags_dict())
 
-        self.n_field_lines = 0
+        self._n_field_lines = 0
 
         logger.debug(f"Initialized FieldLineSet with template: {self.save_flags}")
         if copy_data:
@@ -56,7 +55,24 @@ class FieldLineSet(FieldLine):
         else:
             logger.debug("Skipping data copy (copy_data=False)")
 
-    def _get_template(self, field_lines: Union[List[FieldLine], FieldLine]) -> FieldLine:
+    @property
+    def n_lines(self) -> int:
+        """Get the number of field lines in the set."""
+        return self._n_field_lines
+
+    @property
+    def n_field_lines(self) -> int:
+        """Get the number of field lines in the set."""
+        return self._n_field_lines
+
+    @n_field_lines.setter
+    def n_field_lines(self, value: int) -> None:
+        """Set the number of field lines in the set."""
+        self._n_field_lines = value
+
+    def _get_template(
+        self, field_lines: Union[List[FieldLine], FieldLine]
+    ) -> FieldLine:
         """Get template field line and validate input."""
         if isinstance(field_lines, list):
             if not field_lines:
@@ -82,7 +98,7 @@ class FieldLineSet(FieldLine):
             If field lines have incompatible save flags
         """
         logger.debug(f"Appending {type(field_lines).__name__} to FieldLineSet")
-        
+
         # Handle FieldLineSet
         if isinstance(field_lines, FieldLineSet):
             self._append_field_line_set(field_lines)
@@ -104,14 +120,18 @@ class FieldLineSet(FieldLine):
     def _append_field_line_set(self, field_line_set: "FieldLineSet") -> None:
         """Append another FieldLineSet."""
         # Validate save flags compatibility using PropertySystem
-        if (self.property_system.get_flags_dict() != 
-            field_line_set.property_system.get_flags_dict()):
+        if (
+            self.property_system.get_flags_dict()
+            != field_line_set.property_system.get_flags_dict()
+        ):
             error_msg = "FieldLineSet has incompatible save flags configuration"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
-        logger.debug(f"Appending FieldLineSet with {field_line_set.n_field_lines} lines")
-        
+        logger.debug(
+            f"Appending FieldLineSet with {field_line_set.n_field_lines} lines"
+        )
+
         # Append each property directly
         for prop in self.property_system.get_enabled_properties():
             source_data = field_line_set.property_system.get_property(prop)
@@ -127,7 +147,9 @@ class FieldLineSet(FieldLine):
                     # Set property directly to avoid validation issues
                     self.property_system._properties[prop] = source_data.copy()
                 else:
-                    logger.debug(f"Extending {prop.key_name} with {len(source_data)} arrays")
+                    logger.debug(
+                        f"Extending {prop.key_name} with {len(source_data)} arrays"
+                    )
                     current_data.extend(source_data)
                 continue
 
@@ -138,12 +160,16 @@ class FieldLineSet(FieldLine):
                 # Set property directly to avoid validation issues with arrays
                 self.property_system._properties[prop] = np.array(source_data)
             else:
-                logger.debug(f"Appending to {prop.key_name}, adding {len(source_data)} items")
+                logger.debug(
+                    f"Appending to {prop.key_name}, adding {len(source_data)} items"
+                )
                 # Filter out None values before appending
                 valid_source_data = [x for x in source_data if x is not None]
                 if valid_source_data:
                     # Set property directly to avoid validation issues with arrays
-                    self.property_system._properties[prop] = np.append(current_data, valid_source_data, axis=0)
+                    self.property_system._properties[prop] = np.append(
+                        current_data, valid_source_data, axis=0
+                    )
 
         self.n_field_lines += field_line_set.n_field_lines
         logger.debug(
@@ -154,14 +180,18 @@ class FieldLineSet(FieldLine):
         """Append a list of FieldLine objects."""
         # Validate save flags compatibility using PropertySystem
         for i, line in enumerate(field_lines):
-            if (self.property_system.get_flags_dict() != 
-                line.property_system.get_flags_dict()):
+            if (
+                self.property_system.get_flags_dict()
+                != line.property_system.get_flags_dict()
+            ):
                 error_msg = f"Field line {i} has incompatible save flags configuration"
                 logger.error(error_msg)
-                raise ValueError("All field lines must have the same save flags configuration")
+                raise ValueError(
+                    "All field lines must have the same save flags configuration"
+                )
 
         logger.debug(f"Appending {len(field_lines)} individual field lines")
-        
+
         for prop in self.property_system.get_enabled_properties():
             values = [line.property_system.get_property(prop) for line in field_lines]
             logger.debug(f"Collected {len(values)} values for {prop.key_name}")
@@ -193,10 +223,14 @@ class FieldLineSet(FieldLine):
                 valid_values = [v for v in values if v is not None]
                 if valid_values:
                     # Set property directly to avoid validation issues with arrays
-                    self.property_system._properties[prop] = np.append(current_data, valid_values, axis=0)
+                    self.property_system._properties[prop] = np.append(
+                        current_data, valid_values, axis=0
+                    )
 
         self.n_field_lines += len(field_lines)
-        logger.debug(f"Appended {len(field_lines)} field lines, total now: {self.n_field_lines}")
+        logger.debug(
+            f"Appended {len(field_lines)} field lines, total now: {self.n_field_lines}"
+        )
 
     def estimate_size(self) -> float:
         """Estimate the memory size of the FieldLineSet in bytes."""
@@ -212,21 +246,29 @@ class FieldLineSet(FieldLine):
 
             # Special case for properties that are lists of arrays
             if prop in self.ARRAY_LIST_PROPERTIES:
-                prop_size = sum(r.nbytes for r in values if r is not None and hasattr(r, 'nbytes'))
-                logger.debug(f"{prop.key_name} size: {prop_size} bytes from {len(values)} arrays")
+                prop_size = sum(
+                    r.nbytes for r in values if r is not None and hasattr(r, "nbytes")
+                )
+                logger.debug(
+                    f"{prop.key_name} size: {prop_size} bytes from {len(values)} arrays"
+                )
             else:
                 # For numpy arrays, use nbytes property
                 if isinstance(values, np.ndarray):
                     prop_size = values.nbytes
-                    logger.debug(f"{prop.key_name} size: {prop_size} bytes (numpy array)")
+                    logger.debug(
+                        f"{prop.key_name} size: {prop_size} bytes (numpy array)"
+                    )
                 # For scalar values, use getsizeof
                 else:
                     prop_size = getsizeof(values)
                     logger.debug(f"{prop.key_name} size: {prop_size} bytes (scalar)")
-            
+
             total_bytes += prop_size
 
-        logger.debug(f"Total estimated size: {total_bytes} bytes ({total_bytes/1024/1024:.2f} MB)")
+        logger.debug(
+            f"Total estimated size: {total_bytes} bytes ({total_bytes/1024/1024:.2f} MB)"
+        )
         return float(total_bytes)
 
     def print_summary(self) -> None:
@@ -234,48 +276,56 @@ class FieldLineSet(FieldLine):
         print(f"FieldLineSet Summary:")
         print(f"  Number of field lines: {self.n_field_lines}")
         print(f"  Memory usage: {self.estimate_size()/1024/1024:.2f} MB")
-        print(f"  Enabled properties: {len(self.property_system.get_enabled_properties())}")
+        print(
+            f"  Enabled properties: {len(self.property_system.get_enabled_properties())}"
+        )
         print()
-        
+
         for prop in self.property_system.get_enabled_properties():
             values = self.property_system.get_property(prop)
             if values is None:
                 print(f"  {prop.key_name}: None")
                 continue
-                
+
             # Handle properties that are lists of arrays
             if prop in self.ARRAY_LIST_PROPERTIES:
                 if not values:
                     print(f"  {prop.key_name}: Empty list")
                     continue
-                    
+
                 # Calculate statistics across all arrays
                 all_values = []
                 for arr in values:
                     if arr is not None and len(arr) > 0:
                         all_values.extend(arr.flatten())
-                
+
                 if all_values:
                     all_values = np.array(all_values)
-                    print(f"  {prop.key_name}:\tArrays: {len(values)} Total points: {len(all_values)}\t Min: {all_values.min():.3e}\t Max: {all_values.max():.3e}")
+                    print(
+                        f"  {prop.key_name}:\tArrays: {len(values)} Total points: {len(all_values)}\t Min: {all_values.min():.3e}\t Max: {all_values.max():.3e}"
+                    )
                 else:
                     print(f"  {prop.key_name}: No valid data")
                 continue
-            
+
             # Handle numpy arrays
             if isinstance(values, np.ndarray):
                 if values.size == 0:
                     print(f"  {prop.key_name}: Empty array")
                     continue
-                    
-                print(f"  {prop.key_name}:\t Min: {values.min():.2e}\t Max: {values.max():.2e}")
+
+                print(
+                    f"  {prop.key_name}:\t Min: {values.min():.2e}\t Max: {values.max():.2e}"
+                )
             else:
                 # Handle scalar values
                 print(f"  {prop.key_name}: {values}")
-        
+
         print()
-        
-    def get_property(self, property_name: Union[str, PropertyName]) -> Union[np.ndarray, List, None]:
+
+    def get_property(
+        self, property_name: Union[str, PropertyName]
+    ) -> Union[np.ndarray, List, None]:
         """Get property value with enabled check."""
         # Convert string to PropertyName if needed
         if isinstance(property_name, str):
@@ -291,12 +341,12 @@ class FieldLineSet(FieldLine):
                 else:
                     logger.warning(f"Unknown property name: {property_name}")
                     return None
-        
+
         # Check if property is enabled
         if property_name not in self.property_system.get_enabled_properties():
             logger.debug(f"Property {property_name.key_name} is not enabled")
             return None
-            
+
         return self.property_system.get_property(property_name)
 
     def __getattr__(self, name: str):
@@ -312,12 +362,14 @@ class FieldLineSet(FieldLine):
                 if prop.key_name == name.lower():
                     prop_name = prop
                     break
-        
+
         if prop_name and prop_name in self.property_system.get_enabled_properties():
             return self.property_system.get_property(prop_name)
-        
+
         # Fallback to normal attribute error
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{name}'"
+        )
 
     def __repr__(self) -> str:
         """Return string representation of the field line set."""

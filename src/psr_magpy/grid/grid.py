@@ -3,6 +3,7 @@ import time
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Optional, Any, TypeVar, Type, Union, cast, List, Dict
+from pathlib import Path
 
 import healpy as hp
 import matplotlib.pyplot as plt
@@ -26,6 +27,7 @@ T = TypeVar("T", bound="FootpointGrid")
 
 class GridType(Enum):
     """Grid type enumeration."""
+
     SPHERICAL = "spherical"
     HEALPIX = "healpix"
     RANDOM = "random"
@@ -34,7 +36,7 @@ class GridType(Enum):
 
 class FootpointGrid(ABC):
     """Abstract base class for footpoint grids.
-    
+
     Provides common functionality for all grid types including
     coordinate conversion, subsetting, and I/O operations.
     """
@@ -51,11 +53,19 @@ class FootpointGrid(ABC):
     @classmethod
     def load_from_fits(cls: Type[T], fitsname: str) -> T:
         """Load grid from FITS file."""
-        from psr_magpy.io import IOFactory
-        return IOFactory.load_data(cls, fitsname)
+        from psr_magpy.io import get_io_factory
+        from psr_magpy.io.data_io import GridIO
+
+        # Ensure registration
+        if cls not in get_io_factory()._data_registry:
+            get_io_factory().register_data_io(cls, GridIO)
+
+        return get_io_factory().load_data(cls, fitsname)
 
     @classmethod
-    def _create_grid_from_header(cls: Type[T], header: pf.Header, grid_type: GridType) -> T:
+    def _create_grid_from_header(
+        cls: Type[T], header: pf.Header, grid_type: GridType
+    ) -> T:
         """Create grid instance from header based on type."""
         grid_classes = {
             GridType.SPHERICAL: SphericalGrid,
@@ -68,7 +78,7 @@ class FootpointGrid(ABC):
             error_msg = f"Unknown grid type: {grid_type}"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         return cast(T, grid_class.from_header(header))
 
     @property
@@ -95,18 +105,20 @@ class FootpointGrid(ABC):
     def _set_up_grid(self) -> None:
         """Set up grid coordinates and indices."""
         try:
-            logger.debug(f"Preparing footpoint coordinates for {self.grid_type.value} grid")
+            logger.debug(
+                f"Preparing footpoint coordinates for {self.grid_type.value} grid"
+            )
             start_time = time.time()
-            
+
             self.footpoint_coordinates = self._prepare_footpoints()
             self.nline_ori = len(self.footpoint_coordinates.x)
             self.indices = np.arange(self.nline_ori)
             self.nline = self.nline_ori
-            
+
             duration = time.time() - start_time
             logger.info(f"Grid setup: {self.nline} points in {duration:.3f}s")
             logger.debug(f"Grid type: {self.grid_type.value}, partial: {self.partial}")
-            
+
         except Exception as e:
             error_msg = f"Failed to set up grid: {str(e)}"
             logger.error(error_msg)
@@ -115,39 +127,49 @@ class FootpointGrid(ABC):
     def subset_grid(self, grid_indices: np.ndarray) -> "FootpointGrid":
         """Create subset of grid points."""
         logger.debug(f"Creating subset: {len(grid_indices)}/{len(self.indices)} points")
-        
+
         # Check for empty indices
         if len(grid_indices) == 0:
             error_msg = "Cannot create subset with empty indices"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         # Validate indices
         if not all(0 <= i < len(self.indices) for i in grid_indices):
             error_msg = f"Invalid indices. Must be between 0 and {len(self.indices)-1}"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         # Create new grid using copy
         new_grid = self.copy()
-        
+
         # Set subset properties
         new_grid.partial = True
         new_grid.footpoint_coordinates = self.footpoint_coordinates[grid_indices]
         new_grid.indices = grid_indices
         new_grid.nline = len(grid_indices)
-        
+
         logger.info(f"Subset created: {new_grid.nline} points")
         return new_grid
 
-    def save_to_fits(self, fitsname: str) -> None:
+    def save_to_fits(self, filepath: Union[str, Path]) -> None:
         """Save grid to FITS file."""
-        from psr_magpy.io import IOFactory
-        IOFactory.save_data(self, fitsname, overwrite=True)
+        from psr_magpy.io import get_io_factory
+        from psr_magpy.io.data_io import GridIO
 
-    def plot_footpoint_coordinates(self, ax: Optional[plt.Axes] = None, 
-                                 marker: str = ".", color: str = "r", 
-                                 **kwargs: Any) -> plt.Axes:
+        # Ensure registration
+        if type(self) not in get_io_factory()._data_registry:
+            get_io_factory().register_data_io(type(self), GridIO)
+
+        get_io_factory().save_data(self, filepath)
+
+    def plot_footpoint_coordinates(
+        self,
+        ax: Optional[plt.Axes] = None,
+        marker: str = ".",
+        color: str = "r",
+        **kwargs: Any,
+    ) -> plt.Axes:
         """Plot footpoint coordinates."""
         try:
             if ax is None:
@@ -179,7 +201,9 @@ class FootpointGrid(ABC):
         copied.nline = self.nline
 
     @classmethod
-    def _extract_params(cls, header: pf.Header, required_params: List[str]) -> Dict[str, Any]:
+    def _extract_params(
+        cls, header: pf.Header, required_params: List[str]
+    ) -> Dict[str, Any]:
         """Extract parameters from header with consistent error handling."""
         logger.debug(f"Extracting parameters: {required_params}")
         params = {}
@@ -205,7 +229,7 @@ class FootpointGrid(ABC):
         """Add grid parameters to FITS header."""
         params = self._get_header_params()
         comments = self._get_header_comments()
-        
+
         for key, value in params.items():
             comment = comments.get(key, "")
             header.set(key, value, comment)
@@ -213,6 +237,7 @@ class FootpointGrid(ABC):
 
 class SphericalGridParams(BaseModel):
     """Parameters for spherical grid."""
+
     nlon: int = Field(gt=0, description="Number of longitude divisions")
     nlat: int = Field(gt=0, description="Number of latitude divisions")
     pole_lat: float = Field(default=0.0, description="Latitude of grid pole")
@@ -223,7 +248,7 @@ class SphericalGrid(FootpointGrid):
 
     def __init__(self, nlon: int, nlat: int, pole_lat: float = 0):
         """Initialize spherical grid.
-        
+
         Args:
             nlon: Number of longitude divisions
             nlat: Number of latitude divisions
@@ -231,14 +256,14 @@ class SphericalGrid(FootpointGrid):
         """
         super().__init__()
         self.grid_type = GridType.SPHERICAL
-        
+
         # Pydantic validation
         params = SphericalGridParams(nlon=nlon, nlat=nlat, pole_lat=pole_lat)
-        
+
         self.nlon = params.nlon
         self.nlat = params.nlat
         self.pole_lat = Angle(params.pole_lat * u.deg)
-        
+
         logger.debug(f"Initializing SphericalGrid: {nlon}x{nlat}, pole_lat={pole_lat}°")
         self._set_up_grid()
 
@@ -251,39 +276,39 @@ class SphericalGrid(FootpointGrid):
     @classmethod
     def from_header(cls, header: pf.Header) -> "SphericalGrid":
         """Create SphericalGrid from FITS header."""
-        params = cls._extract_params(header, ['NLON', 'NLAT'])
+        params = cls._extract_params(header, ["NLON", "NLAT"])
         # Map header names to constructor names
-        return cls(nlon=params['NLON'], nlat=params['NLAT'])
+        return cls(nlon=params["NLON"], nlat=params["NLAT"])
 
     def _prepare_footpoints(self) -> CartesianRepresentation:
         """Create spherical grid coordinates."""
         # Create grid
         phi = np.linspace(0, 2 * np.pi, self.nlon, endpoint=False)
         theta = np.linspace(0, np.pi, self.nlat)
-        
+
         # Create mesh and remove duplicate poles
         phi_mesh, theta_mesh = np.meshgrid(phi, theta)
         phi_flat, theta_flat = phi_mesh.ravel(), theta_mesh.ravel()
-        
+
         # Remove duplicate pole points
         pole_mask = (phi_flat > 0) & ((theta_flat == 0) | (theta_flat == np.pi))
         phi_clean = phi_flat[~pole_mask]
         theta_clean = theta_flat[~pole_mask]
-        
+
         # Convert to Cartesian
         coords = PhysicsSphericalRepresentation(
-            phi=Angle(phi_clean * u.rad),
-            theta=Angle(theta_clean * u.rad),
-            r=1
+            phi=Angle(phi_clean * u.rad), theta=Angle(theta_clean * u.rad), r=1
         )
         cart_coords = coords.represent_as(CartesianRepresentation)
-        
+
         # Apply rotation if needed
         if self.pole_lat != 0:
             rotation = rot.from_euler("yzx", [self.pole_lat.rad, 0, 0])
             rotated_xyz = rotation.apply(cart_coords.xyz.value.T).T
-            cart_coords = CartesianRepresentation(rotated_xyz, unit=cart_coords.xyz.unit)
-        
+            cart_coords = CartesianRepresentation(
+                rotated_xyz, unit=cart_coords.xyz.unit
+            )
+
         return cart_coords
 
     def _add_params_to_header(self, header: pf.Header) -> None:
@@ -300,9 +325,10 @@ class SphericalGrid(FootpointGrid):
 
 class HealpixGridParams(BaseModel):
     """Parameters for HEALPix grid."""
+
     nside: int = Field(gt=0, description="HEALPix resolution parameter")
-    
-    @model_validator(mode='after')
+
+    @model_validator(mode="after")
     def validate_power_of_two(self):
         if not (self.nside & (self.nside - 1) == 0):
             error_msg = f"nside must be a power of 2, got {self.nside}"
@@ -316,13 +342,13 @@ class HealpixGrid(FootpointGrid):
 
     def __init__(self, nside: int):
         """Initialize HEALPix grid.
-        
+
         Args:
             nside: HEALPix resolution parameter (must be power of 2)
         """
         super().__init__()
         self.grid_type = GridType.HEALPIX
-        
+
         # Pydantic validation
         params = HealpixGridParams(nside=nside)
         self.nside = params.nside
@@ -341,7 +367,7 @@ class HealpixGrid(FootpointGrid):
         """Add grid parameters to FITS header."""
         params = self._get_header_params()
         comments = self._get_header_comments()
-        
+
         for key, value in params.items():
             comment = comments.get(key, "")
             header.set(key, value, comment)
@@ -350,19 +376,17 @@ class HealpixGrid(FootpointGrid):
         """Create HEALPix grid coordinates."""
         npix = hp.nside2npix(self.nside)
         theta_val, phi_val = hp.pix2ang(nside=self.nside, ipix=np.arange(npix))
-        
+
         coords = PhysicsSphericalRepresentation(
-            phi=Angle(phi_val * u.rad),
-            theta=Angle(theta_val * u.rad),
-            r=1
+            phi=Angle(phi_val * u.rad), theta=Angle(theta_val * u.rad), r=1
         )
         return coords.represent_as(CartesianRepresentation)
 
     @classmethod
     def from_header(cls, header: pf.Header) -> "HealpixGrid":
         """Create HealpixGrid from FITS header."""
-        params = cls._extract_params(header, ['NSIDE'])
-        return cls(nside=params['NSIDE'])
+        params = cls._extract_params(header, ["NSIDE"])
+        return cls(nside=params["NSIDE"])
 
     def copy(self) -> "HealpixGrid":
         """Create a copy of the grid."""
@@ -373,6 +397,7 @@ class HealpixGrid(FootpointGrid):
 
 class RandomGridParams(BaseModel):
     """Parameters for random grid."""
+
     nline_ori: int = Field(gt=0, description="Number of random points")
 
 
@@ -381,23 +406,23 @@ class RandomGrid(FootpointGrid):
 
     def __init__(self, nline_ori: int):
         """Initialize random grid.
-        
+
         Args:
             nline_ori: Number of random points to generate
         """
         super().__init__()
         self.grid_type = GridType.RANDOM
-        
+
         # Pydantic validation
         params = RandomGridParams(nline_ori=nline_ori)
         self.nline_ori = params.nline_ori
-        
+
         # Issue warning about saving to file
         logger.warning(
             "RandomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
             "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
         )
-        
+
         self._set_up_grid()
 
     def __repr__(self) -> str:
@@ -416,8 +441,8 @@ class RandomGrid(FootpointGrid):
     @classmethod
     def from_header(cls, header: pf.Header) -> "RandomGrid":
         """Create RandomGrid from FITS header."""
-        params = cls._extract_params(header, ['NLINE'])
-        return cls(nline_ori=params['NLINE'])
+        params = cls._extract_params(header, ["NLINE"])
+        return cls(nline_ori=params["NLINE"])
 
     def copy(self) -> "RandomGrid":
         """Create a copy of the grid."""
@@ -428,12 +453,15 @@ class RandomGrid(FootpointGrid):
 
 class CustomGridParams(BaseModel):
     """Parameters for custom grid."""
+
     nline_ori: int = Field(gt=0, description="Number of points")
-    coordinates: Optional[CartesianRepresentation] = Field(default=None, description="Initial coordinates")
-    
+    coordinates: Optional[CartesianRepresentation] = Field(
+        default=None, description="Initial coordinates"
+    )
+
     model_config = {"arbitrary_types_allowed": True}
-    
-    @model_validator(mode='after')
+
+    @model_validator(mode="after")
     def validate_coordinates_length(self):
         if self.coordinates is not None:
             if len(self.coordinates.x) != self.nline_ori:
@@ -446,24 +474,26 @@ class CustomGridParams(BaseModel):
 class CustomGrid(FootpointGrid):
     """Custom grid with user-provided coordinates."""
 
-    def __init__(self, nline_ori: int, coordinates: Optional[CartesianRepresentation] = None):
+    def __init__(
+        self, nline_ori: int, coordinates: Optional[CartesianRepresentation] = None
+    ):
         """Initialize custom grid.
-        
+
         Args:
             nline_ori: Number of points in the grid
             coordinates: Initial coordinates (optional, defaults to NaN)
         """
         super().__init__()
         self.grid_type = GridType.CUSTOM
-        
+
         # Pydantic validation
         params = CustomGridParams(nline_ori=nline_ori, coordinates=coordinates)
-        
+
         self.nline_ori = params.nline_ori
         self.set_coordinates(params.coordinates)
         self.indices = np.arange(self.nline_ori)
         self.nline = self.nline_ori
-        
+
         # Issue warning about saving to file
         logger.warning(
             "CustomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
@@ -482,17 +512,19 @@ class CustomGrid(FootpointGrid):
 
     def set_coordinates(self, coordinates: Optional[CartesianRepresentation]) -> None:
         """Set new coordinates for grid points.
-        
+
         Args:
             coordinates: New coordinates for grid points (can be None)
-            
+
         Raises:
             ValueError: If coordinates length doesn't match nline_ori
         """
         if coordinates is None:
             # Create NaN coordinates
             nan_coords = np.full(self.nline_ori, np.nan)
-            self.footpoint_coordinates = CartesianRepresentation(nan_coords, nan_coords, nan_coords)
+            self.footpoint_coordinates = CartesianRepresentation(
+                nan_coords, nan_coords, nan_coords
+            )
         else:
             if len(coordinates.x) != self.nline_ori:
                 error_msg = f"Coordinates length {len(coordinates.x)} != nline_ori {self.nline_ori}"
@@ -503,8 +535,8 @@ class CustomGrid(FootpointGrid):
     @classmethod
     def from_header(cls, header: pf.Header) -> "CustomGrid":
         """Create CustomGrid from FITS header."""
-        params = cls._extract_params(header, ['NLINE'])
-        return cls(nline_ori=params['NLINE'])
+        params = cls._extract_params(header, ["NLINE"])
+        return cls(nline_ori=params["NLINE"])
 
     def copy(self) -> "CustomGrid":
         """Create a copy of the grid."""

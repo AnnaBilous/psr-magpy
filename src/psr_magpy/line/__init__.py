@@ -28,7 +28,12 @@ from .tracer import FieldLineTracer
 from .field_line import FieldLine
 from .field_line_set import FieldLineSet
 from .property_system import PropertySystem, PropertyName, SaveFlags
-from .tracing_parameters import TracingParameters, IntegrationParameters, PerformanceParameters, OutputParameters
+from .tracing_parameters import (
+    TracingParameters,
+    IntegrationParameters,
+    PerformanceParameters,
+    OutputParameters,
+)
 from .property_calculator import PropertyCalculator
 from .progress_tracker import ProgressTracker
 from .memory_manager import MemoryManager
@@ -37,19 +42,18 @@ from .calculator import FieldLineCalculator
 
 
 __all__ = [
-    'FieldLine',
-    'FieldLineSet',
-    'FieldLineTracer',
-    'TracingParameters',
-    'IntegrationParameters',
-    'PerformanceParameters',
-    'OutputParameters',
-    'PropertySystem',
-    'PropertyName',
-    'SaveFlags',
-    'MemoryManager',
-    'ProgressTracker',
-    'CalculationContext',
-    'FieldLineCalculator',
-
+    "FieldLine",
+    "FieldLineSet",
+    "FieldLineTracer",
+    "TracingParameters",
+    "IntegrationParameters",
+    "PerformanceParameters",
+    "OutputParameters",
+    "PropertySystem",
+    "PropertyName",
+    "SaveFlags",
+    "MemoryManager",
+    "ProgressTracker",
+    "CalculationContext",
+    "FieldLineCalculator",
 ]

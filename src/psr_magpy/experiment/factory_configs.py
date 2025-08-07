@@ -8,8 +8,14 @@ from typing import List, Union, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
 
 from .experiment_config import (
-    FieldComponentConfig, FieldConfig, SphericalGridConfig, RandomGridConfig,
-    HealpixGridConfig, CustomGridConfig, GridConfig, TracingConfig
+    FieldComponentConfig,
+    FieldConfig,
+    SphericalGridConfig,
+    RandomGridConfig,
+    HealpixGridConfig,
+    CustomGridConfig,
+    GridConfig,
+    TracingConfig,
 )
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
@@ -23,85 +29,115 @@ from .parameter_expansion import get_parameter_combinations
 
 class FieldComponentFactoryConfig(BaseModel):
     """Factory configuration for field components with flexible parameters."""
-    
+
     moment_type: str
     B_magnitude: Union[float, List[float]] = 1.0
     moment_orientation_latitude_degree: Union[float, List[float]] = 0.0
     moment_orientation_longitude_degree: Union[float, List[float]] = 0.0
-    offset_r_ns: Union[List[float], List[List[float]]] = [0.0, 0.0, 0.0]  # Can be expanded
-    
+    offset_r_ns: Union[List[float], List[List[float]]] = [
+        0.0,
+        0.0,
+        0.0,
+    ]  # Can be expanded
+
     model_config = {"arbitrary_types_allowed": True}
 
 
 class FieldFactoryConfig(BaseModel):
     """Factory configuration for field components with flexible parameter inputs."""
-    
-    components: List[Union[FieldComponentConfig, List[FieldComponentConfig], List[FieldComponentFactoryConfig], Dict[str, Any], FieldComponentFactoryConfig]]
-    
+
+    components: List[
+        Union[
+            FieldComponentConfig,
+            List[FieldComponentConfig],
+            List[FieldComponentFactoryConfig],
+            Dict[str, Any],
+            FieldComponentFactoryConfig,
+        ]
+    ]
+
     model_config = {"arbitrary_types_allowed": True}
 
 
 class SphericalGridFactoryConfig(BaseModel):
     """Factory configuration for spherical grids with flexible parameters."""
-    
+
     nlon: Union[int, List[int]]
     nlat: Union[int, List[int]]
     pole_lat: Union[float, List[float]] = 0.0
-    
+
     model_config = {"arbitrary_types_allowed": True}
 
 
 class RandomGridFactoryConfig(BaseModel):
     """Factory configuration for random grids with flexible parameters."""
-    
+
     nline_ori: Union[int, List[int]]
     grid_file_path: Optional[Union[str, List[str]]] = None
-    
+
     model_config = {"arbitrary_types_allowed": True}
 
 
 class HealpixGridFactoryConfig(BaseModel):
     """Factory configuration for HEALPix grids with flexible parameters."""
-    
+
     nside: Union[int, List[int]]
-    
+
     model_config = {"arbitrary_types_allowed": True}
 
 
 class CustomGridFactoryConfig(BaseModel):
     """Factory configuration for custom grids with flexible parameters."""
-    
+
     nline_ori: Union[int, List[int]]
     coordinates: Optional[Union[List[List[float]], List[List[List[float]]]]] = None
     grid_file_path: Optional[Union[str, List[str]]] = None
-    
+
     model_config = {"arbitrary_types_allowed": True}
 
 
 class GridFactoryConfig(BaseModel):
     """Factory configuration for grids with flexible parameter inputs."""
-    
-    grids: List[Union[SphericalGridConfig, RandomGridConfig, HealpixGridConfig, CustomGridConfig, 
-                      SphericalGridFactoryConfig, RandomGridFactoryConfig, HealpixGridFactoryConfig, CustomGridFactoryConfig]]
-    
+
+    grids: List[
+        Union[
+            SphericalGridConfig,
+            RandomGridConfig,
+            HealpixGridConfig,
+            CustomGridConfig,
+            SphericalGridFactoryConfig,
+            RandomGridFactoryConfig,
+            HealpixGridFactoryConfig,
+            CustomGridFactoryConfig,
+        ]
+    ]
+
     model_config = {"arbitrary_types_allowed": True}
 
 
 class TracingFactoryConfig(BaseModel):
     """Factory configuration for tracing parameters with flexible inputs."""
-    
+
     # Integration parameters
-    max_integration_radius: Union[float, List[float]] = TracingDefaults.MAX_INTEGRATION_RADIUS
-    threshold_line_distance: Union[float, List[float]] = TracingDefaults.THRESHOLD_LINE_DISTANCE
-    t_span: Union[Tuple[float, float], List[Tuple[float, float]]] = TracingDefaults.T_SPAN
+    max_integration_radius: Union[float, List[float]] = (
+        TracingDefaults.MAX_INTEGRATION_RADIUS
+    )
+    threshold_line_distance: Union[float, List[float]] = (
+        TracingDefaults.THRESHOLD_LINE_DISTANCE
+    )
+    t_span: Union[Tuple[float, float], List[Tuple[float, float]]] = (
+        TracingDefaults.T_SPAN
+    )
     rtol: Union[float, List[float]] = TracingDefaults.RTOL
     atol: Union[float, List[float]] = TracingDefaults.ATOL
     surface_radius: Union[float, List[float]] = TracingDefaults.SURFACE_RADIUS
     dt: Union[float, List[float]] = TracingDefaults.DT
     max_step: Union[float, List[float]] = TracingDefaults.MAX_STEP
-    trace_open_lines_backwards: Union[bool, List[bool]] = TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
+    trace_open_lines_backwards: Union[bool, List[bool]] = (
+        TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
+    )
     verify_by_reversing: Union[bool, List[bool]] = TracingDefaults.VERIFY_BY_REVERSING
-    
+
     # Performance parameters
     max_memory_mb: Union[float, List[float]] = TracingDefaults.MAX_MEMORY_MB
     safety_factor: Union[float, List[float]] = TracingDefaults.SAFETY_FACTOR
@@ -111,57 +147,68 @@ class TracingFactoryConfig(BaseModel):
     n_trial: Union[int, List[int]] = TracingDefaults.N_TRIAL
     progress_bar: Union[bool, List[bool]] = TracingDefaults.PROGRESS_BAR
     verbose: Union[bool, List[bool]] = TracingDefaults.VERBOSE
-    skip_memory_estimation: Union[bool, List[bool]] = TracingDefaults.SKIP_MEMORY_ESTIMATION
-    
+    skip_memory_estimation: Union[bool, List[bool]] = (
+        TracingDefaults.SKIP_MEMORY_ESTIMATION
+    )
+
     # Output parameters
     save_results: Union[bool, List[bool]] = TracingDefaults.SAVE_RESULTS
     filename: Union[Optional[str], List[Optional[str]]] = TracingDefaults.FILENAME
     output_format: Union[str, List[str]] = TracingDefaults.OUTPUT_FORMAT
     overwrite: Union[bool, List[bool]] = TracingDefaults.OVERWRITE
-    
+
     model_config = {"arbitrary_types_allowed": True}
 
 
 class TemplateFactoryConfig(BaseModel):
     """Factory configuration for templates with flexible parameter inputs."""
-    
+
     templates: List[FieldLine]
-    
+
     model_config = {"arbitrary_types_allowed": True}
-    
+
     @classmethod
     def from_yaml_dict(cls, data: Dict[str, Any]) -> "TemplateFactoryConfig":
         """Create TemplateFactoryConfig from YAML dictionary with FieldLine reconstruction."""
         if "templates" in data:
             templates = []
             for template_data in data["templates"]:
-                if isinstance(template_data, dict) and "property_system" in template_data:
+                if (
+                    isinstance(template_data, dict)
+                    and "property_system" in template_data
+                ):
                     # Reconstruct FieldLine from property system flags
                     flags = template_data["property_system"]
                     template = FieldLine()
                     for prop_name, enabled in flags.items():
                         if hasattr(template.property_system.save_flags, prop_name):
-                            setattr(template.property_system.save_flags, prop_name, enabled)
+                            setattr(
+                                template.property_system.save_flags, prop_name, enabled
+                            )
                         else:
-                            logger.warning(f"Property {prop_name} not found in FieldLine property_system.save_flags")
+                            logger.warning(
+                                f"Property {prop_name} not found in FieldLine property_system.save_flags"
+                            )
                     templates.append(template)
                 else:
                     # Assume it's already a FieldLine object
                     templates.append(template_data)
             data["templates"] = templates
-        
+
         return cls(**data)
 
 
-def expand_field_configs(field_config: Union[FieldConfig, FieldFactoryConfig]) -> List[FieldConfig]:
+def expand_field_configs(
+    field_config: Union[FieldConfig, FieldFactoryConfig]
+) -> List[FieldConfig]:
     """Expand field configuration into all possible combinations."""
     if isinstance(field_config, FieldConfig):
         return [field_config]
-    
+
     # Handle FieldFactoryConfig
     # First, expand each component group separately
     expanded_components = []
-    
+
     for component_group in field_config.components:
         if isinstance(component_group, FieldComponentConfig):
             # Single component
@@ -171,13 +218,16 @@ def expand_field_configs(field_config: Union[FieldConfig, FieldFactoryConfig]) -
             if all(isinstance(comp, FieldComponentConfig) for comp in component_group):
                 # List of FieldComponentConfig - no expansion needed
                 expanded_components.append(component_group)
-            elif all(isinstance(comp, FieldComponentFactoryConfig) for comp in component_group):
+            elif all(
+                isinstance(comp, FieldComponentFactoryConfig)
+                for comp in component_group
+            ):
                 # List of FieldComponentFactoryConfig - expand each and combine within group
                 expanded_components_in_group = []
-                
+
                 for comp in component_group:
                     factory_params = comp.model_dump()
-                    
+
                     # Handle special case for offset_r_ns - only expand if it's a list of lists
                     if "offset_r_ns" in factory_params:
                         offset_value = factory_params["offset_r_ns"]
@@ -189,24 +239,32 @@ def expand_field_configs(field_config: Union[FieldConfig, FieldFactoryConfig]) -
                             else:
                                 # Single list - remove from expansion, treat as fixed
                                 factory_params.pop("offset_r_ns")
-                    
+
                     param_combinations = get_parameter_combinations(factory_params)
                     comp_expanded = []
-                    
+
                     for params in param_combinations:
                         # Restore offset_r_ns if it was removed
-                        if "offset_r_ns" not in params and "offset_r_ns" in comp.model_dump():
+                        if (
+                            "offset_r_ns" not in params
+                            and "offset_r_ns" in comp.model_dump()
+                        ):
                             offset_value = comp.model_dump()["offset_r_ns"]
-                            if isinstance(offset_value, list) and len(offset_value) > 0 and not isinstance(offset_value[0], list):
+                            if (
+                                isinstance(offset_value, list)
+                                and len(offset_value) > 0
+                                and not isinstance(offset_value[0], list)
+                            ):
                                 params["offset_r_ns"] = offset_value
-                        
+
                         config = FieldComponentConfig(**params)
                         comp_expanded.append(config)
-                    
+
                     expanded_components_in_group.append(comp_expanded)
-                
+
                 # Create all combinations within this group
                 from itertools import product
+
                 group_combinations = list(product(*expanded_components_in_group))
                 expanded_components.append(group_combinations)
             else:
@@ -223,7 +281,7 @@ def expand_field_configs(field_config: Union[FieldConfig, FieldFactoryConfig]) -
         elif isinstance(component_group, FieldComponentFactoryConfig):
             # FieldComponentFactoryConfig
             factory_params = component_group.model_dump()
-            
+
             # Handle special case for offset_r_ns - only expand if it's a list of lists
             if "offset_r_ns" in factory_params:
                 offset_value = factory_params["offset_r_ns"]
@@ -235,24 +293,31 @@ def expand_field_configs(field_config: Union[FieldConfig, FieldFactoryConfig]) -
                     else:
                         # Single list - remove from expansion, treat as fixed
                         factory_params.pop("offset_r_ns")
-            
+
             param_combinations = get_parameter_combinations(factory_params)
             group_components = []
-            
+
             for params in param_combinations:
                 # Restore offset_r_ns if it was removed
-                if "offset_r_ns" not in params and "offset_r_ns" in component_group.model_dump():
+                if (
+                    "offset_r_ns" not in params
+                    and "offset_r_ns" in component_group.model_dump()
+                ):
                     offset_value = component_group.model_dump()["offset_r_ns"]
-                    if isinstance(offset_value, list) and len(offset_value) > 0 and not isinstance(offset_value[0], list):
+                    if (
+                        isinstance(offset_value, list)
+                        and len(offset_value) > 0
+                        and not isinstance(offset_value[0], list)
+                    ):
                         params["offset_r_ns"] = offset_value
-                
+
                 config = FieldComponentConfig(**params)
                 group_components.append(config)
             expanded_components.append(group_components)
-    
+
     # Now create all combinations of the expanded components
     field_configs = []
-    
+
     # Each group should be a separate field configuration
     for group in expanded_components:
         if isinstance(group, list):
@@ -274,20 +339,25 @@ def expand_field_configs(field_config: Union[FieldConfig, FieldFactoryConfig]) -
                     field_configs.append(FieldConfig(components=list(combo)))
                 else:
                     field_configs.append(FieldConfig(components=[combo]))
-    
+
+    # Sort field configs by B_magnitude in descending order
+    field_configs.sort(key=lambda x: x.components[0].B_magnitude, reverse=True)
+
     return field_configs
 
 
-def _expand_random_grid_factory_config(grid: RandomGridFactoryConfig) -> List[GridConfig]:
+def _expand_random_grid_factory_config(
+    grid: RandomGridFactoryConfig,
+) -> List[GridConfig]:
     """Expand RandomGridFactoryConfig with paired nline_ori and grid_file_path parameters."""
     grid_configs = []
-    
+
     # Handle nline_ori parameter
     if isinstance(grid.nline_ori, list):
         nline_ori_values = grid.nline_ori
     else:
         nline_ori_values = [grid.nline_ori]
-    
+
     # Handle grid_file_path parameter
     if grid.grid_file_path is None:
         # No file paths provided, create from scratch
@@ -299,30 +369,34 @@ def _expand_random_grid_factory_config(grid: RandomGridFactoryConfig) -> List[Gr
             grid_file_paths = grid.grid_file_path
         else:
             grid_file_paths = [grid.grid_file_path]
-        
+
         # Pair nline_ori with grid_file_path
         if len(nline_ori_values) != len(grid_file_paths):
             error_msg = f"Number of nline_ori values ({len(nline_ori_values)}) must match number of grid_file_paths ({len(grid_file_paths)})"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         for nline_ori, grid_file_path in zip(nline_ori_values, grid_file_paths):
-            config = RandomGridConfig(nline_ori=nline_ori, grid_file_path=grid_file_path)
+            config = RandomGridConfig(
+                nline_ori=nline_ori, grid_file_path=grid_file_path
+            )
             grid_configs.append(GridConfig(random=config))
-    
+
     return grid_configs
 
 
-def _expand_custom_grid_factory_config(grid: CustomGridFactoryConfig) -> List[GridConfig]:
+def _expand_custom_grid_factory_config(
+    grid: CustomGridFactoryConfig,
+) -> List[GridConfig]:
     """Expand CustomGridFactoryConfig with paired nline_ori and grid_file_path parameters."""
     grid_configs = []
-    
+
     # Handle nline_ori parameter
     if isinstance(grid.nline_ori, list):
         nline_ori_values = grid.nline_ori
     else:
         nline_ori_values = [grid.nline_ori]
-    
+
     # Handle coordinates parameter
     if grid.coordinates is None:
         coordinates_values = [None] * len(nline_ori_values)
@@ -332,9 +406,13 @@ def _expand_custom_grid_factory_config(grid: CustomGridFactoryConfig) -> List[Gr
             error_msg = f"Number of coordinates ({len(coordinates_values)}) must match number of nline_ori values ({len(nline_ori_values)})"
             logger.error(error_msg)
             raise ValueError(error_msg)
+        # Ensure each coordinates value is a list of lists
+        for i, coords in enumerate(coordinates_values):
+            if coords is not None and not isinstance(coords[0], list):
+                coordinates_values[i] = [list(coords)]
     else:
         coordinates_values = [grid.coordinates] * len(nline_ori_values)
-    
+
     # Handle grid_file_path parameter
     if grid.grid_file_path is None:
         # No file paths provided, create from scratch
@@ -346,25 +424,33 @@ def _expand_custom_grid_factory_config(grid: CustomGridFactoryConfig) -> List[Gr
             grid_file_paths = grid.grid_file_path
         else:
             grid_file_paths = [grid.grid_file_path]
-        
+
         # Pair nline_ori with grid_file_path
         if len(nline_ori_values) != len(grid_file_paths):
             error_msg = f"Number of nline_ori values ({len(nline_ori_values)}) must match number of grid_file_paths ({len(grid_file_paths)})"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
-        for nline_ori, coordinates, grid_file_path in zip(nline_ori_values, coordinates_values, grid_file_paths):
-            config = CustomGridConfig(nline_ori=nline_ori, coordinates=coordinates, grid_file_path=grid_file_path)
+
+        for nline_ori, coordinates, grid_file_path in zip(
+            nline_ori_values, coordinates_values, grid_file_paths
+        ):
+            config = CustomGridConfig(
+                nline_ori=nline_ori,
+                coordinates=coordinates,
+                grid_file_path=grid_file_path,
+            )
             grid_configs.append(GridConfig(custom=config))
-    
+
     return grid_configs
 
 
-def expand_grid_configs(grid_config: Union[GridConfig, GridFactoryConfig]) -> List[GridConfig]:
+def expand_grid_configs(
+    grid_config: Union[GridConfig, GridFactoryConfig]
+) -> List[GridConfig]:
     """Expand grid configuration into all possible combinations."""
     if isinstance(grid_config, GridConfig):
         return [grid_config]
-    
+
     # Handle GridFactoryConfig
     grid_configs = []
     for grid in grid_config.grids:
@@ -391,11 +477,11 @@ def expand_grid_configs(grid_config: Union[GridConfig, GridFactoryConfig]) -> Li
             grid_type = grid.get("type", "spherical")
             # Expand parameter combinations
             param_combinations = get_parameter_combinations(grid)
-            
+
             for params in param_combinations:
                 # Remove type from params before creating config
                 params.pop("type", None)
-                
+
                 if grid_type == "spherical":
                     config = SphericalGridConfig(**params)
                     grid_configs.append(GridConfig(spherical=config))
@@ -422,33 +508,34 @@ def expand_grid_configs(grid_config: Union[GridConfig, GridFactoryConfig]) -> Li
                 grid_configs.append(GridConfig(healpix=grid))
             elif isinstance(grid, CustomGridConfig):
                 grid_configs.append(GridConfig(custom=grid))
-    
+
     return grid_configs
 
 
-def expand_tracing_configs(tracing_config: Union[TracingConfig, TracingFactoryConfig]) -> List[TracingConfig]:
+def expand_tracing_configs(
+    tracing_config: Union[TracingConfig, TracingFactoryConfig]
+) -> List[TracingConfig]:
     """Expand tracing configuration into all possible combinations."""
     if isinstance(tracing_config, TracingConfig):
         return [tracing_config]
-    
+
     # Handle TracingFactoryConfig
     param_combinations = get_parameter_combinations(tracing_config.model_dump())
-    
+
     tracing_configs = []
     for params in param_combinations:
         tracing_config = TracingConfig(**params)
         tracing_configs.append(tracing_config)
-    
+
     return tracing_configs
 
 
-def expand_template_configs(template_config: Union[FieldLine, TemplateFactoryConfig]) -> List[FieldLine]:
+def expand_template_configs(
+    template_config: Union[FieldLine, TemplateFactoryConfig]
+) -> List[FieldLine]:
     """Expand template configuration into all possible combinations."""
     if isinstance(template_config, FieldLine):
         return [template_config]
-    
+
     # Handle TemplateFactoryConfig
     return template_config.templates
-
-
- 

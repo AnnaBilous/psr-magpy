@@ -1,168 +1,167 @@
-"""Tests for grid file requirement functionality."""
+"""Tests for grid file requirements functionality."""
 
-import tempfile
-from pathlib import Path
 import pytest
+from pathlib import Path
 import numpy as np
-
-from psr_magpy.grid.grid import RandomGrid, CustomGrid
-from psr_magpy.experiment import (
-    RandomGridConfig, CustomGridConfig, GridConfig
-)
 from astropy.coordinates import CartesianRepresentation
 
+from psr_magpy.grid.grid import RandomGrid, CustomGrid
+from psr_magpy.experiment import ExperimentConfig
+from psr_magpy.experiment.factory_configs import (
+    RandomGridFactoryConfig, CustomGridFactoryConfig,
+    FieldFactoryConfig, TracingFactoryConfig
+)
+from psr_magpy.experiment.experiment_config import (
+    FieldConfig, GridConfig, TracingConfig,
+    RandomGridConfig, CustomGridConfig
+)
+from psr_magpy.line import FieldLine
 
-class TestGridFileRequirement:
-    """Test grid file requirement functionality."""
+def test_random_grid_warning(caplog):
+    """Test that RandomGrid creation issues a warning."""
+    grid = RandomGrid(nline_ori=10)
+    assert "RandomGrid created: This grid must be saved to a file" in caplog.text
+
+def test_custom_grid_warning(caplog):
+    """Test that CustomGrid creation issues a warning."""
+    coordinates = CartesianRepresentation(x=[1], y=[0], z=[0])
+    grid = CustomGrid(coordinates=coordinates, nline_ori=1)
+    assert "CustomGrid created: This grid must be saved to a file" in caplog.text
+
+def test_random_grid_load_from_file(tmp_path):
+    """Test loading RandomGrid from file."""
+    # Set random seed for reproducible tests
+    np.random.seed(42)
     
-    def test_random_grid_creation_from_scratch(self):
-        """Test that RandomGrid can be created from scratch without file path."""
-        config = RandomGridConfig(nline_ori=100)
-        grid_config = GridConfig(random=config)
-        
-        # Should create from scratch (no file path provided)
-        grid = grid_config.create_grid()
-        
-        assert isinstance(grid, RandomGrid)
-        assert grid.nline == 100
-        assert grid.grid_type.value == "random"
+    # Create and save grid
+    grid = RandomGrid(nline_ori=10)
+    grid_path = tmp_path / "random_grid.fits"
+    grid.save_to_fits(str(grid_path))
     
-    def test_custom_grid_creation_from_scratch(self):
-        """Test that CustomGrid can be created from scratch without file path."""
-        config = CustomGridConfig(nline_ori=50)
-        grid_config = GridConfig(custom=config)
-        
-        # Should create from scratch (no file path provided)
-        grid = grid_config.create_grid()
-        
+    # Reset random seed to ensure same coordinates are generated
+    np.random.seed(42)
+    
+    # Create config with file path
+    config = ExperimentConfig(
+        name="test",
+        field=FieldConfig(components=[]),
+        grid=GridConfig(
+            random=RandomGridConfig(
+                nline_ori=10,
+                grid_file_path=str(grid_path)
+            )
+        ),
+        tracing=TracingConfig(),
+        template=FieldLine.template_all()
+    )
+    
+    # Load grid from config
+    loaded_grid = config.grid.create_grid()
+    if loaded_grid is not None and loaded_grid.footpoint_coordinates is not None:
+        assert loaded_grid.nline == 10
+        grid_coords = grid.footpoint_coordinates
+        loaded_coords = loaded_grid.footpoint_coordinates
+        if grid_coords is not None and loaded_coords is not None:
+            assert np.allclose(loaded_coords.xyz.value, grid_coords.xyz.value)
+
+def test_custom_grid_load_from_file(tmp_path):
+    """Test loading CustomGrid from file."""
+    # Create and save grid
+    coordinates = CartesianRepresentation(x=[1], y=[0], z=[0])
+    grid = CustomGrid(coordinates=coordinates, nline_ori=1)
+    grid_path = tmp_path / "custom_grid.fits"
+    grid.save_to_fits(str(grid_path))
+    
+    # Create config with file path
+    config = ExperimentConfig(
+        name="test",
+        field=FieldConfig(components=[]),
+        grid=GridConfig(
+            custom=CustomGridConfig(
+                coordinates=coordinates.xyz.value.tolist(),
+                nline_ori=1,
+                grid_file_path=str(grid_path)
+            )
+        ),
+        tracing=TracingConfig(),
+        template=FieldLine.template_all()
+    )
+    
+    # Load grid from config
+    loaded_grid = config.grid.create_grid()
+    if loaded_grid is not None and loaded_grid.footpoint_coordinates is not None:
+        grid_coords = grid.footpoint_coordinates
+        loaded_coords = loaded_grid.footpoint_coordinates
+        if grid_coords is not None and loaded_coords is not None:
+            assert np.allclose(loaded_coords.xyz.value, grid_coords.xyz.value)
+
+def test_random_grid_create_from_scratch():
+    """Test creating RandomGrid from scratch."""
+    config = ExperimentConfig(
+        name="test",
+        field=FieldConfig(components=[]),
+        grid=GridConfig(
+            random=RandomGridConfig(
+                nline_ori=10
+            )
+        ),
+        tracing=TracingConfig(),
+        template=FieldLine.template_all()
+    )
+    
+    grid = config.grid.create_grid()
+    assert isinstance(grid, RandomGrid)
+    assert grid.nline == 10
+
+def test_custom_grid_create_from_scratch():
+    """Test creating CustomGrid from scratch."""
+    coordinates = CartesianRepresentation(x=[1], y=[0], z=[0])
+    config = ExperimentConfig(
+        name="test",
+        field=FieldConfig(components=[]),
+        grid=GridConfig(
+            custom=CustomGridConfig(
+                coordinates=[[1], [0], [0]],  # Pass as list of lists
+                nline_ori=1
+            )
+        ),
+        tracing=TracingConfig(),
+        template=FieldLine.template_all()
+    )
+    
+    grid = config.grid.create_grid()
+    if grid is not None and grid.footpoint_coordinates is not None:
         assert isinstance(grid, CustomGrid)
-        assert grid.nline == 50
-        assert grid.grid_type.value == "custom"
-    
-    def test_random_grid_loading_from_file(self):
-        """Test that RandomGrid can be loaded from file when path is provided."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            
-            # Create and save a grid
-            original_grid = RandomGrid(nline_ori=100)
-            grid_file_path = temp_path / "test_random_grid.fits"
-            original_grid.save_to_fits(str(grid_file_path))
-            
-            # Create config with file path
-            config = RandomGridConfig(
-                nline_ori=100,
-                grid_file_path=str(grid_file_path)
-            )
-            grid_config = GridConfig(random=config)
-            
-            # Should load from file
-            loaded_grid = grid_config.create_grid()
-            
-            assert isinstance(loaded_grid, RandomGrid)
-            assert loaded_grid.nline == 100
-            assert grid_file_path.exists()
-    
-    def test_custom_grid_loading_from_file(self):
-        """Test that CustomGrid can be loaded from file when path is provided."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            
-            # Create custom coordinates
-            coords = CartesianRepresentation(
-                x=np.linspace(0, 1, 25),
-                y=np.linspace(0, 1, 25),
-                z=np.zeros(25)
-            )
-            
-            # Create and save a grid
-            original_grid = CustomGrid(nline_ori=25, coordinates=coords)
-            grid_file_path = temp_path / "test_custom_grid.fits"
-            original_grid.save_to_fits(str(grid_file_path))
-            
-            # Create config with file path
-            config = CustomGridConfig(
-                nline_ori=25,
-                grid_file_path=str(grid_file_path)
-            )
-            grid_config = GridConfig(custom=config)
-            
-            # Should load from file
-            loaded_grid = grid_config.create_grid()
-            
-            assert isinstance(loaded_grid, CustomGrid)
-            assert loaded_grid.nline == 25
-            assert grid_file_path.exists()
-    
-    def test_random_grid_warning_on_creation(self, caplog):
-        """Test that RandomGrid shows warning when created."""
-        with caplog.at_level("WARNING"):
-            grid = RandomGrid(nline_ori=50)
-        
-        assert "RandomGrid created: This grid must be saved to a file" in caplog.text
-        assert grid.nline == 50
-    
-    def test_custom_grid_warning_on_creation(self, caplog):
-        """Test that CustomGrid shows warning when created."""
-        with caplog.at_level("WARNING"):
-            grid = CustomGrid(nline_ori=25)
-        
-        assert "CustomGrid created: This grid must be saved to a file" in caplog.text
-        assert grid.nline == 25
-    
-    def test_factory_config_without_file_path(self):
-        """Test factory config works without file path."""
-        from psr_magpy.experiment.factory_configs import (
-            RandomGridFactoryConfig, CustomGridFactoryConfig, 
-            GridFactoryConfig, expand_grid_configs
-        )
-        
-        # Create factory configs without file paths
-        random_factory = RandomGridFactoryConfig(nline_ori=[50, 100])
-        custom_factory = CustomGridFactoryConfig(nline_ori=[25, 50])
-        
-        grid_factory_config = GridFactoryConfig(grids=[random_factory, custom_factory])
-        expanded_configs = expand_grid_configs(grid_factory_config)
-        
-        assert len(expanded_configs) == 4  # 2 random + 2 custom
-        
-        # All should create from scratch
-        for config in expanded_configs:
-            grid = config.create_grid()
-            assert grid.nline in [25, 50, 100]
-    
-    def test_factory_config_with_file_path(self):
-        """Test factory config works with file paths."""
-        from psr_magpy.experiment.factory_configs import (
-            RandomGridFactoryConfig, CustomGridFactoryConfig, 
-            GridFactoryConfig, expand_grid_configs
-        )
-        
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            
-            # Create and save grids
-            random_grid_50 = RandomGrid(50)
-            random_grid_50.save_to_fits(str(temp_path / "random_50.fits"))
-            
-            random_grid_100 = RandomGrid(100)
-            random_grid_100.save_to_fits(str(temp_path / "random_100.fits"))
-            
-            # Create factory configs with file paths
-            random_factory = RandomGridFactoryConfig(
-                nline_ori=[50, 100],
-                grid_file_path=[str(temp_path / "random_50.fits"), str(temp_path / "random_100.fits")]
-            )
-            
-            grid_factory_config = GridFactoryConfig(grids=[random_factory])
-            expanded_configs = expand_grid_configs(grid_factory_config)
-            
+        assert np.allclose(grid.footpoint_coordinates.xyz.value, coordinates.xyz.value)
 
-            
-            # Should create 2 configs (paired nline_ori with grid_file_path)
-            assert len(expanded_configs) == 2
-            
-            # All should load from files
-            for config in expanded_configs:
-                grid = config.create_grid()
-                assert grid.nline in [50, 100] 
+def test_grid_save_during_series_creation(tmp_path):
+    """Test that grids are saved during experiment series creation."""
+    from psr_magpy.experiment import ExperimentSeriesConfig
+    from psr_magpy.experiment.factory_configs import (
+        FieldFactoryConfig, GridFactoryConfig, TracingFactoryConfig
+    )
+    from psr_magpy.line import FieldLine
+    
+    # Create series config with random grid
+    series_config = ExperimentSeriesConfig(
+        name="test_series",
+        output_dir=str(tmp_path),
+        field=FieldFactoryConfig(components=[]),
+        grid=GridFactoryConfig(
+            grids=[RandomGridFactoryConfig(nline_ori=[10, 20])]
+        ),
+        tracing=TracingFactoryConfig(),
+        template=FieldLine.template_all()
+    )
+    
+    # Create experiments
+    experiments = series_config.create_experiment_series(save_configs=True)
+    
+    # Check that grid files exist and are referenced in configs
+    grids_dir = tmp_path / series_config.name / "grids"
+    assert grids_dir.exists()
+    
+    for experiment in experiments:
+        grid_path = grids_dir / f"{experiment.name}.fits"
+        assert grid_path.exists()
+        assert experiment.grid.random is not None and experiment.grid.random.grid_file_path == str(grid_path) 

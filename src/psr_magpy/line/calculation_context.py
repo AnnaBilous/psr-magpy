@@ -33,26 +33,36 @@ class CalculationContext:
         self.field = field
         self.grid = grid
         self.params = params or TracingParameters()
-        
+
         # Validate n_trial against grid size only if memory estimation is enabled
-        if not self.params.performance.skip_memory_estimation and self.grid.nline is not None:
+        if (
+            not self.params.performance.skip_memory_estimation
+            and self.grid.nline is not None
+        ):
             self.params.performance.validate_against_grid(self.grid.nline)
-        
+
         # Initialize tracer
         self._tracer = FieldLineTracer(self.field, self.params)
- 
+
         # Initialize memory manager (consolidated)
         self._memory_manager = MemoryManager(
-            self.params.performance, 
-            self._tracer, 
+            self.params.performance,
+            self._tracer,
             max_file_size_mb=self.params.performance.max_memory_mb,  # Use the configured max_memory_mb
-            save_results=self.params.output.save_results
+            save_results=self.params.output.save_results,
         )
-        logger.debug(f"Created MemoryManager with max_memory_mb={self.params.performance.max_memory_mb}, save_results={self.params.output.save_results}")
-        
-        # Initialize progress tracker
-        self._progress_tracker = ProgressTracker()
-        logger.debug("Created ProgressTracker")
+        logger.debug(
+            f"Created MemoryManager with max_memory_mb={self.params.performance.max_memory_mb}, save_results={self.params.output.save_results}"
+        )
+
+        # Initialize progress tracker with parameters from config
+        self._progress_tracker = ProgressTracker(
+            verbose=self.params.performance.verbose,
+            show_progress=self.params.performance.progress_bar,
+        )
+        logger.debug(
+            f"Created ProgressTracker with verbose={self.params.performance.verbose}, show_progress={self.params.performance.progress_bar}"
+        )
 
     @property
     def tracer(self) -> FieldLineTracer:
@@ -69,9 +79,13 @@ class CalculationContext:
         """Get the progress tracker."""
         return self._progress_tracker
 
-    def estimate_memory_requirements(self, template: FieldLine, n_trial: int = 10) -> Tuple[float, float]:
+    def estimate_memory_requirements(
+        self, template: FieldLine, n_trial: int = 10
+    ) -> Tuple[float, float]:
         """Estimate memory requirements using simplified heuristics."""
-        return self.memory_manager.estimate_memory_requirements(template, self.grid, n_trial)
+        return self.memory_manager.estimate_memory_requirements(
+            template, self.grid, n_trial
+        )
 
     def add_results(self, batch_results, filename: str, batch_idx: int):
         """Add batch results to memory manager."""

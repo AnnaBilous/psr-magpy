@@ -215,5 +215,3 @@ class FieldLineTracer:
                 output.set_property(reversed_error=float('inf'))
         
         return output
-
-    

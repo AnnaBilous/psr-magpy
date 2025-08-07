@@ -1,329 +1,434 @@
-"""Experiment series runner for executing multiple experiments.
+"""Experiment series runner module."""
 
-This module provides functionality to run multiple experiments from an experiment series
-configuration, with progress tracking and result management.
-"""
-
+import logging
 import time
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-from dataclasses import dataclass
-import logging
-
+from typing import List, Optional, Dict, Any, Union, cast
+from collections import OrderedDict
+import shutil
 import yaml
 
-from .experiment_series import ExperimentSeriesConfig
 from .experiment_config import ExperimentConfig
-from .experiment_runner import ExperimentRunner, run_experiment
-from psr_magpy.utils.logging_config import get_logger
+from .experiment_series import ExperimentSeriesConfig
+from .experiment_runner import run_experiment
+from .experiment_result import ExperimentResult, SeriesResult
+
+from psr_magpy.utils.logging_config import get_logger, setup_logging
+from psr_magpy.io import get_io_factory
 
 logger = get_logger(__name__, console_format_brief=True)
 
 
-@dataclass
-class ExperimentResult:
-    """Result from a single experiment."""
-    experiment_name: str
-    success: bool
-    duration: float
-    error_message: Optional[str] = None
-    results: Optional[Any] = None
-
-
-@dataclass
-class SeriesResult:
-    """Result from running an experiment series."""
-    series_name: str
-    total_experiments: int
-    successful_experiments: int
-    failed_experiments: int
-    total_duration: float
-    experiment_results: List[ExperimentResult]
-    output_directory: Optional[Path] = None
-
-
 class ExperimentSeriesRunner:
-    """Runner for executing experiment series."""
-    
-    def __init__(self, 
-                 series_config: ExperimentSeriesConfig,
-                 output_directory: Optional[Path] = None,
-                 save_individual_configs: bool = True,
-                 save_grids: bool = True,
-                 continue_on_failure: bool = True,
-                 max_log_size: int = 10 * 1024 * 1024,  # 10 MB
-                 log_backup_count: int = 5):
-        """Initialize the series runner.
-        
-        Args:
-            series_config: The experiment series configuration
-            output_directory: Directory to save results and configs
-            save_individual_configs: Whether to save individual experiment configs
-            save_grids: Whether to save grids for each experiment
-            continue_on_failure: Whether to continue if individual experiments fail
-            max_log_size: Maximum size of log file before rotation (in bytes)
-            log_backup_count: Number of backup log files to keep
-        """
-        self.series_config = series_config
-        self.output_directory = Path(output_directory) if output_directory else Path("experiment_series_output")
-        self.save_individual_configs = save_individual_configs
-        self.save_grids = save_grids
-        self.continue_on_failure = continue_on_failure
-        self.max_log_size = max_log_size
-        self.log_backup_count = log_backup_count
-        
-        # Create output directory
-        self.output_directory.mkdir(parents=True, exist_ok=True)
-        
-        # Set up file logging for the series
-        self._setup_series_logging()
-        
-        logger.info(f"Initialized series runner for: {series_config.name}")
-        logger.info(f"Output directory: {self.output_directory}")
-        logger.info(f"Save grids: {self.save_grids}")
-        logger.info(f"Log rotation: {self.max_log_size / (1024*1024):.1f} MB max, {self.log_backup_count} backups")
-    
-    def _setup_series_logging(self) -> None:
-        """Set up file logging for the experiment series."""
-        # Use the series-specific logs directory
-        logs_dir = self.output_directory / self.series_config.name / "logs"
-        logs_dir.mkdir(exist_ok=True)
-        
-        # Clean up old log files (keep only the 5 most recent)
-        self._cleanup_old_logs(logs_dir)
-        
-        # Create log filename with timestamp
-        from datetime import datetime
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = logs_dir / f"{self.series_config.name}_{timestamp}.log"
-        
-        # Set up file logging with custom rotation settings
-        from psr_magpy.utils.logging_config import setup_logging
-        setup_logging(
-            log_file=log_file,
-            log_level=logging.INFO,
-            handler_levels={"console": logging.INFO, "file": logging.DEBUG},
-            max_file_size=self.max_log_size,
-            backup_count=self.log_backup_count
-        )
-        
-        logger.info(f"Series logging set up: {log_file}")
-        logger.info(f"Log rotation: {self.max_log_size / (1024*1024):.1f} MB max, {self.log_backup_count} backups")
-    
-    def _cleanup_old_logs(self, logs_dir: Path) -> None:
-        """Clean up old log files, keeping only the most recent ones."""
-        import glob
-        
-        # Find all log files for this series
-        pattern = str(logs_dir / f"{self.series_config.name}_*.log")
-        log_files = glob.glob(pattern)
-        
-        if len(log_files) <= 5:  # Keep up to 5 log files
-            return
-        
-        # Sort by modification time (newest first)
-        log_files.sort(key=lambda x: Path(x).stat().st_mtime, reverse=True)
-        
-        # Remove old files (keep only the 5 most recent)
-        files_to_remove = log_files[5:]
-        for file_path in files_to_remove:
-            try:
-                Path(file_path).unlink()
-                logger.debug(f"Removed old log file: {file_path}")
-            except Exception as e:
-                logger.warning(f"Failed to remove old log file {file_path}: {e}")
-        
-        if files_to_remove:
-            logger.info(f"Cleaned up {len(files_to_remove)} old log files, keeping 5 most recent")
-    
-    def run(self) -> SeriesResult:
-        """Run the complete experiment series."""
-        start_time = time.time()
-        logger.info(f"Starting experiment series: {self.series_config.name}")
-        
-        # Expand all experiments
-        experiments = self.series_config.create_experiment_series()
-        logger.info(f"Expanded to {len(experiments)} experiments")
-        
-        # Save series configuration to configs directory
-        configs_dir = self.output_directory / self.series_config.name / "configs"
-        configs_dir.mkdir(exist_ok=True)
-        series_config_path = configs_dir / f"{self.series_config.name}_config.yaml"
-        from psr_magpy.io import IOFactory
-        io_instance = IOFactory.create_config_io(type(self.series_config))
-        io_instance.save(self.series_config, series_config_path, overwrite=True)
-        logger.info(f"Saved series config to: {series_config_path}")
-        
-        # Save individual configs if requested
-        if self.save_individual_configs:
-            self._save_individual_configs(experiments)
-        
-        # Run experiments
-        experiment_results = self._run_experiments(experiments)
-        
-        # Calculate summary
-        total_duration = time.time() - start_time
-        successful = sum(1 for r in experiment_results if r.success)
-        failed = len(experiment_results) - successful
-        
-        # Create series result
-        series_result = SeriesResult(
-            series_name=self.series_config.name or "unnamed_series",
-            total_experiments=len(experiments),
-            successful_experiments=successful,
-            failed_experiments=failed,
-            total_duration=total_duration,
-            experiment_results=experiment_results,
-            output_directory=self.output_directory
-        )
-        
-        # Log summary
-        logger.info(f"Series completed in {total_duration:.2f}s")
-        logger.info(f"Successful: {successful}/{len(experiments)}")
-        logger.info(f"Failed: {failed}/{len(experiments)}")
-        
-        # Save results summary
-        self._save_results_summary(series_result)
-        
-        return series_result
-    
-    def _save_individual_configs(self, experiments: List[ExperimentConfig]) -> None:
-        """Save individual experiment configurations."""
-        # Use the series-specific configs directory
-        configs_dir = self.output_directory / self.series_config.name / "configs"
-        configs_dir.mkdir(exist_ok=True)
-        
-        logger.info(f"Saving {len(experiments)} individual configs to {configs_dir}")
-        
-        from psr_magpy.io import IOFactory
-        for experiment in experiments:
-            config_path = configs_dir / f"{experiment.name}.yaml"
-            io_instance = IOFactory.create_config_io(type(experiment))
-            io_instance.save(experiment, config_path, overwrite=True)
-        
-        logger.info("Individual configs saved")
-    
+    """Runs a series of experiments with progress tracking."""
 
-    
-    def _run_experiments(self, experiments: List[ExperimentConfig]) -> List[ExperimentResult]:
-        """Run experiments sequentially."""
-        results = []
-        
-        # Use the series-specific lines directory
+    def __init__(
+        self,
+        series_config: ExperimentSeriesConfig,
+        save_grids: bool = True,
+        save_individual_configs: bool = False,
+        continue_on_failure: bool = True,
+        experiment_numbers: Optional[List[int]] = None,
+        overwrite_everything: bool = False,
+        overwrite_results: bool = False,
+        run_remaining: bool = False,
+        log_rotation_max_bytes: float = 10 * 1024 * 1024,  # 10 MB
+        log_rotation_backup_count: int = 5,
+    ) -> None:
+        """Initialize runner with configuration."""
+        self.series_config = series_config
+        self.output_directory = (
+            Path(series_config.output_dir) if series_config.output_dir else Path(".")
+        )
+        self.save_grids = save_grids
+        self.save_individual_configs = save_individual_configs
+        self.continue_on_failure = continue_on_failure
+        self.experiment_numbers = experiment_numbers
+        self.overwrite_everything = overwrite_everything
+        self.overwrite_results = overwrite_results
+        self.run_remaining = run_remaining
+        self.log_rotation_max_bytes = log_rotation_max_bytes
+        self.log_rotation_backup_count = log_rotation_backup_count
+
+        logger.info("Initialized series runner for: %s", series_config.name)
+        logger.info("Output directory: %s", self.output_directory)
+        logger.info("Save grids: %s", save_grids)
+        logger.info(
+            "Log rotation: %.1f MB max, %d backups",
+            log_rotation_max_bytes / 1024 / 1024,
+            log_rotation_backup_count,
+        )
+
+    def _run_experiments(
+        self, experiments: List[ExperimentConfig]
+    ) -> List[ExperimentResult]:
+        """Run a list of experiments."""
+        results: List[ExperimentResult] = []
         lines_dir = self.output_directory / self.series_config.name / "lines"
         lines_dir.mkdir(exist_ok=True)
-        
+
         for i, experiment in enumerate(experiments, 1):
-            logger.info(f"Running experiment {i}/{len(experiments)}: {experiment.name}")
-            
-            try:
-                # Configure experiment to save results to lines directory BEFORE creating runner
-                experiment.tracing.save_results = True
-                experiment.tracing.filename = str(lines_dir / f"{experiment.name}.fits")
-                experiment.tracing.overwrite = True
-                
-                # Create field and grid for this experiment
-                field = experiment.field.create_field()
-                grid = experiment.grid.create_grid()
-                
-                start_time = time.time()
-                experiment_result = run_experiment(experiment)
-                duration = time.time() - start_time
-                
-                result = ExperimentResult(
-                    experiment_name=experiment.name,
-                    success=True,
-                    duration=duration,
-                    results=experiment_result
+            logger.info(
+                "Running experiment %d/%d: %s", i, len(experiments), experiment.name
+            )
+
+            # Check if already completed
+            result_file = lines_dir / f"{experiment.name}.fits"
+            if result_file.exists() and not self.overwrite_results:
+                logger.info(
+                    "Experiment %s already completed. Skipping (use overwrite_results=True to rerun).",
+                    experiment.name,
                 )
-                logger.info(f"✓ Experiment {experiment.name} completed in {duration:.2f}s")
-                
+                results.append(
+                    ExperimentResult(
+                        experiment_name=experiment.name,
+                        success=True,
+                        duration=0.0,
+                        results=None,
+                    )
+                )
+                continue
+
+            # Configure experiment to save results
+            experiment.tracing.save_results = True
+            experiment.tracing.filename = str(lines_dir / f"{experiment.name}.fits")
+            experiment.tracing.overwrite = True
+
+            # Save grid if requested
+            if self.save_grids:
+                grids_dir = self.output_directory / self.series_config.name / "grids"
+                grids_dir.mkdir(exist_ok=True)
+                grid = experiment.grid.create_grid()
+                if grid is not None:
+                    grid_path = grids_dir / f"{experiment.name}.fits"
+                    grid.save_to_fits(str(grid_path))
+                    logger.info("Saved grid to: %s", grid_path)
+
+            # Run the experiment
+            exp_start_time = time.time()
+            try:
+                result = cast(ExperimentResult, run_experiment(experiment))
+                duration = time.time() - exp_start_time
+                if result.success:
+                    logger.info(
+                        "✓ Experiment %s completed in %.2fs", experiment.name, duration
+                    )
+                else:
+                    error_msg = result.error_message or "Unknown error"
+                    logger.error(
+                        "✗ Experiment %s failed after %.2fs: %s",
+                        experiment.name,
+                        duration,
+                        error_msg,
+                    )
+                    if not self.continue_on_failure:
+                        raise RuntimeError(error_msg)
+                results.append(result)
             except Exception as e:
-                duration = time.time() - start_time
+                duration = time.time() - exp_start_time
                 result = ExperimentResult(
                     experiment_name=experiment.name,
                     success=False,
                     duration=duration,
-                    error_message=str(e)
+                    error_message=str(e),
                 )
-                logger.error(f"✗ Experiment {experiment.name} failed after {duration:.2f}s: {e}")
-                
+                logger.error(
+                    "✗ Experiment %s failed after %.2fs: %s",
+                    experiment.name,
+                    duration,
+                    str(e),
+                )
+                results.append(result)
                 if not self.continue_on_failure:
                     raise
-            
-            results.append(result)
-        
-        return results
-    
 
-    
-    def _save_results_summary(self, series_result: SeriesResult) -> None:
-        """Save a summary of the series results."""
-        summary_path = self.output_directory / self.series_config.name / f"{self.series_config.name}_results_summary.yaml"
-        
+        return results
+
+    def run(self) -> SeriesResult:
+        """Run the experiment series."""
+        # Create output directories
+        series_dir = self.output_directory / self.series_config.name
+
+        # Clean up if overwrite_everything is True
+        if self.overwrite_everything and series_dir.exists():
+            # Delete all files and subdirectories except configs
+            for item in series_dir.iterdir():
+                if item.name != "configs":
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+
+        # Create subdirectories
+        for subdir in ["lines", "grids", "configs", "logs"]:
+            subdir_path = series_dir / subdir
+            subdir_path.mkdir(parents=True, exist_ok=True)
+
+        # Set up logging
+        log_file = series_dir / "logs" / f"{self.series_config.name}.log"
+        setup_logging(
+            log_file=log_file,
+            log_level=logging.INFO,
+            handler_levels={"console": logging.INFO, "file": logging.DEBUG},
+            max_file_size=int(self.log_rotation_max_bytes),
+            backup_count=self.log_rotation_backup_count,
+        )
+
+        logger.info("Series logging set up: %s", log_file)
+        logger.info(
+            "Log rotation: %.1f MB max, %d backups",
+            self.log_rotation_max_bytes / 1024 / 1024,
+            self.log_rotation_backup_count,
+        )
+
+        # Load or create experiments
+        if self.run_remaining:
+            experiments = self._get_remaining_experiments()
+            if not experiments:
+                logger.info("No remaining experiments to run")
+                return SeriesResult(
+                    series_name=self.series_config.name,
+                    total_experiments=0,
+                    successful_experiments=0,
+                    failed_experiments=0,
+                    total_duration=0.0,
+                    experiment_results=[],
+                    output_directory=series_dir,
+                )
+        else:
+            experiments = self.series_config.load_experiments()
+
+        # Filter experiments by number if specified
+        if self.experiment_numbers is not None:
+            filtered_experiments = []
+            for i in self.experiment_numbers:
+                if i < 0 or i >= len(experiments):
+                    logger.warning(f"Experiment number {i} out of range, skipping")
+                    continue
+                filtered_experiments.append(experiments[i])
+            experiments = filtered_experiments
+            logger.info(f"Running {len(experiments)} selected experiments")
+
+        # Save individual configs if requested
+        if self.save_individual_configs:
+            self._save_individual_configs(experiments)
+
+        # Run experiments
+        start_time = time.time()
+        results = self._run_experiments(experiments)
+        total_duration = time.time() - start_time
+
+        # Save results summary
+        self._save_results_summary(results)
+
+        return SeriesResult(
+            series_name=self.series_config.name,
+            total_experiments=len(results),
+            successful_experiments=sum(1 for r in results if r.success),
+            failed_experiments=sum(1 for r in results if not r.success),
+            total_duration=total_duration,
+            experiment_results=results,
+            output_directory=self.output_directory,
+        )
+
+    def _save_results(self, results: List[ExperimentResult]) -> None:
+        """Save experiment results."""
+        logger.info("Saving results for %d experiments", len(results))
+        # Save results logic here
+
+    def _get_remaining_experiments(self) -> List[ExperimentConfig]:
+        """Load existing summary to find completed experiments."""
+        summary_path = (
+            self.output_directory
+            / self.series_config.name
+            / f"{self.series_config.name}_results_summary.yaml"
+        )
+        completed_experiments = set()
+        if summary_path.exists():
+            with open(summary_path) as f:
+                summary = yaml.safe_load(f)
+                if summary and "experiment_results" in summary:
+                    completed_experiments = {
+                        r["name"] for r in summary["experiment_results"]
+                    }
+
+        remaining_experiments = []
+        for i, exp in enumerate(self.series_config.create_experiment_series()):
+            if exp.name not in completed_experiments or self.overwrite_results:
+                remaining_experiments.append(exp)
+
+        return remaining_experiments
+
+    def _format_duration(self, seconds: float) -> str:
+        """Format duration in appropriate units.
+
+        Args:
+            seconds: Duration in seconds
+
+        Returns:
+            Formatted string like "10.5s", "2.5min", "1.2h", or "3.5d"
+        """
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        minutes = seconds / 60
+        if minutes < 60:
+            return f"{minutes:.1f}min"
+        hours = minutes / 60
+        if hours < 24:
+            return f"{hours:.1f}h"
+        days = hours / 24
+        return f"{days:.1f}d"
+
+    def _save_results_summary(self, experiment_results: List[ExperimentResult]) -> None:
+        """Save results summary to YAML file."""
+        summary_path = (
+            self.output_directory
+            / self.series_config.name
+            / f"{self.series_config.name}_results_summary.yaml"
+        )
+
+        # Load existing summary if it exists
+        existing_summary = {}
+        if summary_path.exists():
+            with open(summary_path) as f:
+                existing_summary = yaml.safe_load(f) or {}
+
+        # Create new summary
         summary = {
-            "series_name": series_result.series_name,
-            "total_experiments": series_result.total_experiments,
-            "successful_experiments": series_result.successful_experiments,
-            "failed_experiments": series_result.failed_experiments,
-            "total_duration": series_result.total_duration,
-            "success_rate": series_result.successful_experiments / series_result.total_experiments,
-            "experiment_results": [
-                {
-                    "name": r.experiment_name,
-                    "success": r.success,
-                    "duration": r.duration,
-                    "error": r.error_message
-                }
-                for r in series_result.experiment_results
-            ]
+            "series_name": self.series_config.name,
+            "last_update": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "total_experiments": len(experiment_results),
+            "successful_experiments": sum(1 for r in experiment_results if r.success),
+            "failed_experiments": sum(1 for r in experiment_results if not r.success),
+            "total_duration": sum(r.duration for r in experiment_results),
+            "success_rate": (
+                sum(1 for r in experiment_results if r.success)
+                / len(experiment_results)
+                * 100
+                if experiment_results
+                else 0.0
+            ),
+            "experiment_results": [],
         }
-        
-        # Use I/O factory for saving
-        from psr_magpy.io import IOUtils
-        IOUtils.ensure_directory(summary_path)
-        with open(summary_path, 'w') as f:
-            yaml.dump(summary, f, default_flow_style=False, indent=2)
-        
+
+        # Merge with existing results
+        if "experiment_results" in existing_summary:
+            existing_results = {
+                r["name"]: r for r in existing_summary["experiment_results"]
+            }
+        else:
+            existing_results = {}
+
+        # Add new results
+        for result in experiment_results:
+            result_dict = OrderedDict(
+                [
+                    ("name", result.experiment_name),
+                    ("start_time", time.strftime("%Y-%m-%d %H:%M:%S")),
+                    ("duration", self._format_duration(result.duration)),
+                    ("success", result.success),
+                    ("error", result.error_message if not result.success else None),
+                ]
+            )
+
+            # Update or add result
+            if result.experiment_name in existing_results:
+                existing_results[result.experiment_name].update(result_dict)
+            else:
+                existing_results[result.experiment_name] = result_dict
+
+        # Sort results by name and add to summary
+        summary["experiment_results"] = sorted(
+            existing_results.values(), key=lambda x: x["name"]
+        )
+
+        # Create custom dumper to preserve dictionary order
+        class OrderedDumper(yaml.SafeDumper):
+            pass
+
+        def _dict_representer(
+            dumper: yaml.SafeDumper, data: OrderedDict
+        ) -> yaml.nodes.MappingNode:
+            return dumper.represent_mapping("tag:yaml.org,2002:map", data.items())
+
+        OrderedDumper.add_representer(OrderedDict, _dict_representer)
+
+        # Save summary
+        with open(summary_path, "w") as f:
+            yaml.dump(summary, f, Dumper=OrderedDumper, sort_keys=False, width=1000)
+
         logger.info(f"Results summary saved to: {summary_path}")
 
+    def _save_individual_configs(self, experiments: List[ExperimentConfig]) -> None:
+        """Save individual experiment configurations."""
+        # Use the series-specific configs directory
+        configs_dir = self.output_directory / self.series_config.name / "configs"
+        configs_dir.mkdir(parents=True, exist_ok=True)
 
-def run_experiment_series(series_config: ExperimentSeriesConfig,
-                         output_directory: Optional[Path] = None,
-                         save_individual_configs: bool = True,
-                         save_grids: bool = True,
-                         continue_on_failure: bool = True,
-                         max_log_size: int = 10 * 1024 * 1024,  # 10 MB
-                         log_backup_count: int = 5) -> SeriesResult:
+        logger.info(f"Saving {len(experiments)} individual configs to {configs_dir}")
+
+        for experiment in experiments:
+            config_path = configs_dir / f"{experiment.name}.yaml"
+            io_instance = get_io_factory().create_config_io(type(experiment))
+            io_instance.save(experiment, config_path, overwrite=True)
+
+        logger.info("Individual configs saved")
+
+
+def run_experiment_series(
+    series_config: ExperimentSeriesConfig,
+    experiment_numbers: Optional[List[int]] = None,
+    run_remaining: bool = False,
+    overwrite_results: bool = False,
+    overwrite_everything: bool = False,
+    save_individual_configs: bool = True,
+    save_grids: bool = True,
+    continue_on_failure: bool = True,
+) -> SeriesResult:
     """Convenience function to run an experiment series."""
     runner = ExperimentSeriesRunner(
         series_config=series_config,
-        output_directory=output_directory,
         save_individual_configs=save_individual_configs,
         save_grids=save_grids,
         continue_on_failure=continue_on_failure,
-        max_log_size=max_log_size,
-        log_backup_count=log_backup_count
+        experiment_numbers=experiment_numbers,
+        overwrite_everything=overwrite_everything,
+        run_remaining=run_remaining,
+        overwrite_results=overwrite_results,
     )
+
     return runner.run()
 
 
-def run_experiment_series_from_file(input_directory: str,
-                                   experiment_name: str,
-                                   output_directory: Optional[Path] = None,
-                                   save_individual_configs: bool = True,
-                                   save_grids: bool = True,
-                                   continue_on_failure: bool = True,
-                                   max_log_size: int = 10 * 1024 * 1024,  # 10 MB
-                                   log_backup_count: int = 5) -> SeriesResult:
-    """Load and run experiment series from config file."""
-    series_config = ExperimentSeriesConfig.load(input_directory, experiment_name)
+def run_experiment_series_from_file(
+    config_file: Union[str, Path],
+    input_directory: Optional[Union[str, Path]] = None,
+    experiment_numbers: Optional[List[int]] = None,
+    run_remaining: bool = False,
+    overwrite_results: bool = False,
+    overwrite_everything: bool = False,
+    save_individual_configs: bool = True,
+    save_grids: bool = True,
+    continue_on_failure: bool = True,
+) -> SeriesResult:
+    """Run experiment series from a configuration file."""
+    # Load series config
+    config_file = Path(config_file)
+    io_instance = get_io_factory().create_config_io(ExperimentSeriesConfig)
+    series_config = io_instance.load(config_file)
+
+    # Set input directory if provided
+    if input_directory is not None:
+        series_config.output_dir = input_directory
+
+    # Run series
     return run_experiment_series(
         series_config=series_config,
-        output_directory=output_directory,
+        experiment_numbers=experiment_numbers,
+        run_remaining=run_remaining,
+        overwrite_results=overwrite_results,
+        overwrite_everything=overwrite_everything,
         save_individual_configs=save_individual_configs,
         save_grids=save_grids,
         continue_on_failure=continue_on_failure,
-        max_log_size=max_log_size,
-        log_backup_count=log_backup_count
-    ) 
+    )

@@ -19,37 +19,37 @@ logger = get_logger(__name__, console_format_brief=True)
 
 class MultipoleType(Enum):
     """Enumeration for supported multipole field types."""
+
     DIPOLE = "dipole"
     QUADRUPOLE = "quadrupole"
 
 
 class FieldComponentParams(BaseModel):
     """Parameters for magnetic field components."""
-    
-    B_magnitude: float = Field(default=1.0, ge=0.0, description="Field strength scaling factor")
+
+    B_magnitude: float = Field(
+        default=1.0, ge=0.0, description="Field strength scaling factor"
+    )
     moment_orientation_latitude_degree: float = Field(
-        default=0.0, 
-        ge=0.0, 
-        le=90.0, 
-        description="Colatitude of magnetic axis (degrees)"
+        default=0.0,
+        ge=0.0,
+        le=90.0,
+        description="Colatitude of magnetic axis (degrees)",
     )
     moment_orientation_longitude_degree: float = Field(
-        default=0.0, 
-        ge=0.0, 
-        le=360.0, 
-        description="Longitude of magnetic axis (degrees)"
+        default=0.0,
+        ge=0.0,
+        le=360.0,
+        description="Longitude of magnetic axis (degrees)",
     )
     offset_r_ns: Union[List[float], NDArray[np.float32]] = Field(
-        default=[0.0, 0.0, 0.0],
-        description="Offset vector [x, y, z] in NS radii"
+        default=[0.0, 0.0, 0.0], description="Offset vector [x, y, z] in NS radii"
     )
-    moment_type: MultipoleType = Field(
-        description="Type of multipole"
-    )
-    
+    moment_type: MultipoleType = Field(description="Type of multipole")
+
     model_config = {"arbitrary_types_allowed": True}
-    
-    @field_validator('offset_r_ns')
+
+    @field_validator("offset_r_ns")
     @classmethod
     def validate_offset_vector(cls, v):
         """Validate offset vector has exactly 3 components."""
@@ -63,12 +63,11 @@ class FieldComponentParams(BaseModel):
         error_msg = f"Offset must be list or array, got {type(v)}"
         logger.error(error_msg)
         raise ValueError(error_msg)
-    
-  
+
 
 class FieldComponent(ABC):
     """Abstract base class for magnetic field components.
-    
+
     Provides common functionality for all field component types including
     coordinate transformations and parameter management.
     """
@@ -157,7 +156,9 @@ class FieldComponent(ABC):
         """Calculate the magnetic field at a given position in the spin frame."""
         # Input validation
         if not np.isfinite(r_spin_frame).all():
-            error_msg = f"Invalid position vector containing non-finite values: {r_spin_frame}"
+            error_msg = (
+                f"Invalid position vector containing non-finite values: {r_spin_frame}"
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
 

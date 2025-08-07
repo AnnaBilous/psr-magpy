@@ -1,68 +1,87 @@
+"""Runner for executing individual experiments."""
+
 import time
-from pathlib import Path
 from typing import Optional
+from pathlib import Path
 
-from psr_magpy.line.calculator import FieldLineCalculator
-from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line import FieldLineCalculator
 from psr_magpy.utils.logging_config import get_logger
-
 from .experiment_config import ExperimentConfig
+from .experiment_result import ExperimentResult
 
 logger = get_logger(__name__, console_format_brief=True)
 
 
 class ExperimentRunner:
-    """Simple experiment runner for field line calculations."""
-    
-    def __init__(self, config: ExperimentConfig):
-        """Initialize with experiment configuration."""
+    """Runner for executing individual experiments."""
+
+    def __init__(self, config: ExperimentConfig) -> None:
+        """Initialize experiment runner."""
         self.config = config
         logger.debug(f"Initialized runner for experiment: {config.name}")
-    
-    def run(self) -> Optional[object]:
-        """Run the complete experiment pipeline."""
+
+    def run(self) -> ExperimentResult:
+        """Run the experiment."""
         start_time = time.time()
         logger.info(f"Starting experiment: {self.config.name}")
-        
+
         try:
             # Create field
-            logger.debug("Creating magnetic field")
             field = self.config.field.create_field()
-            
+
             # Create grid
-            logger.debug("Creating grid")
             grid = self.config.grid.create_grid()
+            if grid is None:
+                error_msg = "Failed to create grid"
+                logger.error(error_msg)
+                return ExperimentResult(
+                    experiment_name=self.config.name,
+                    success=False,
+                    duration=time.time() - start_time,
+                    error_message=error_msg,
+                )
             logger.info(f"Grid created with {grid.nline} points")
-            
+
             # Create calculator
-            logger.debug("Creating field line calculator")
-            tracing_params = self.config.tracing.create_tracing_parameters()
-            calculator = FieldLineCalculator(field, grid, tracing_params)
-            
-            # Use template from config
-            logger.debug("Using template from config")
-            template = self.config.template
-            
-            # Run calculation
+            calculator = FieldLineCalculator(
+                field=field,
+                grid=grid,
+                params=self.config.tracing.create_tracing_parameters(),
+            )
+
+            # Run calculations
             logger.info("Starting field line calculations...")
-            results = calculator.get_field_lines(template)
-            
-            # Log completion
-            duration = time.time() - start_time
-            logger.info(f"Experiment completed in {duration:.2f}s")
-            
+            results = calculator.get_field_lines(self.config.template)
+
+            # Log results
+            logger.info(f"Experiment completed in {time.time() - start_time:.2f}s")
+            logger.info(f"Results: {results}")
+
+            # Check for errors in results
+            error_msg = None
             if results is not None:
-                logger.info(f"Results: {results}")
-                results.print_summary()
-            else:
-                logger.info("Results saved to disk")
-            
-            return results
-            
+                if hasattr(results, "reversed_error_warning"):
+                    error_msg = results.reversed_error_warning
+                elif hasattr(results, "dotprod_error"):
+                    error_msg = results.dotprod_error
+
+            return ExperimentResult(
+                experiment_name=self.config.name,
+                success=True,
+                duration=time.time() - start_time,
+                results=results,
+                error_message=error_msg,
+            )
+
         except Exception as e:
-            duration = time.time() - start_time
-            logger.error(f"Experiment failed after {duration:.2f}s: {e}")
-            raise
+            error_msg = str(e)
+            logger.error(f"✗ Experiment {self.config.name} failed: {error_msg}")
+            return ExperimentResult(
+                experiment_name=self.config.name,
+                success=False,
+                duration=time.time() - start_time,
+                error_message=error_msg,
+            )
 
 
 def run_experiment(config: ExperimentConfig) -> Optional[object]:
@@ -74,4 +93,4 @@ def run_experiment(config: ExperimentConfig) -> Optional[object]:
 def run_experiment_from_file(config_path: str) -> Optional[object]:
     """Load and run experiment from config file."""
     config = ExperimentConfig.load(config_path)
-    return run_experiment(config) 
+    return run_experiment(config)

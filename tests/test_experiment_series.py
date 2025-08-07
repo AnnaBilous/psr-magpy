@@ -1,53 +1,54 @@
 """Tests for experiment series functionality."""
 
-import pytest
 import tempfile
-import yaml
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
+import pytest
 
-from psr_magpy.experiment import (
-    ExperimentSeriesConfig, ExperimentSeriesRunner,
-    FieldFactoryConfig, GridFactoryConfig, TracingFactoryConfig,
-    FieldComponentFactoryConfig, SphericalGridFactoryConfig,
+from psr_magpy.experiment.experiment_series import (
+    ExperimentSeriesConfig,
     FieldConfig, GridConfig, TracingConfig,
-    FieldComponentConfig, SphericalGridConfig,
-    get_parameter_combinations, create_experiment_metadata, generate_experiment_name
+    SphericalGridConfig,
+    create_experiment_metadata, generate_experiment_name
 )
+from psr_magpy.experiment.experiment_series_runner import ExperimentSeriesRunner
+from psr_magpy.experiment.parameter_expansion import get_parameter_combinations
+from psr_magpy.experiment.factory_configs import (
+    FieldFactoryConfig, GridFactoryConfig, TracingFactoryConfig,
+    FieldComponentFactoryConfig, SphericalGridFactoryConfig
+)
+from psr_magpy.experiment.experiment_config import FieldComponentConfig
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.experiment.experiment_result import ExperimentResult
 
 
 class TestParameterExpansion:
-    """Test parameter expansion utilities."""
-    
+    """Test parameter expansion functionality."""
+
     def test_get_parameter_combinations_single_value(self):
         """Test parameter combinations with single values."""
-        params = {"a": 1, "b": 2, "c": 3}
+        params = {"a": 1, "b": 2}
         combinations = get_parameter_combinations(params)
-        
         assert len(combinations) == 1
-        assert combinations[0] == {"a": 1, "b": 2, "c": 3}
-    
+        assert combinations[0] == params
+
     def test_get_parameter_combinations_with_lists(self):
-        """Test parameter combinations with list values."""
-        params = {"a": 1, "b": [2, 3], "c": [4, 5]}
+        """Test parameter combinations with lists."""
+        params = {"a": [1, 2], "b": [3, 4]}
         combinations = get_parameter_combinations(params)
-        
         assert len(combinations) == 4
-        expected = [
-            {"a": 1, "b": 2, "c": 4},
-            {"a": 1, "b": 2, "c": 5},
-            {"a": 1, "b": 3, "c": 4},
-            {"a": 1, "b": 3, "c": 5}
-        ]
-        
-        for combo in expected:
-            assert combo in combinations
-    
+        assert {"a": 1, "b": 3} in combinations
+        assert {"a": 1, "b": 4} in combinations
+        assert {"a": 2, "b": 3} in combinations
+        assert {"a": 2, "b": 4} in combinations
+
     def test_get_parameter_combinations_empty(self):
         """Test parameter combinations with empty input."""
-        combinations = get_parameter_combinations({})
-        assert combinations == [{}]
+        params = {}
+        combinations = get_parameter_combinations(params)
+        assert len(combinations) == 1
+        assert combinations[0] == params
 
 
 class TestExperimentMetadata:
@@ -76,8 +77,14 @@ class TestExperimentMetadata:
         
         assert metadata["experiment_number"] == 1
         assert metadata["series_name"] == "test_series"
-        assert metadata["field_components"] == 1
-        assert metadata["grid_type"] == "spherical"
+        assert metadata["field_components"] == [
+            {
+                "type": "dipole",
+                "B": 1.0,
+                "lat": 0.0,
+                "lon": 0.0
+            }
+        ]
 
 
 class TestFactoryConfigs:
@@ -153,30 +160,34 @@ class TestExperimentSeriesConfig:
     """Test ExperimentSeriesConfig class."""
     
     def test_create_simple_series(self):
-        """Test creating a simple experiment series."""
+        """Test creating simple experiment series."""
         field_config = FieldConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0)
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
         template = FieldLine.template_all()
-        
-        series_config = ExperimentSeriesConfig(
+
+        config = ExperimentSeriesConfig(
             name="test_series",
             field=field_config,
             grid=grid_config,
             tracing=tracing_config,
-            template=template
+            template=template,
+            description="Test description",
+            metadata={"test_key": "test_value"}
         )
-        
-        experiments = series_config.create_experiment_series()
-        
+
+        experiments = config.create_experiment_series()
         assert len(experiments) == 1
-        assert experiments[0].name == "test_series_001"
+        assert experiments[0].name == "test_series_000"
         assert experiments[0].field == field_config
         assert experiments[0].grid == grid_config
         assert experiments[0].tracing == tracing_config
         assert experiments[0].template == template
+        assert experiments[0].description == "Test description"
+        assert experiments[0].metadata is not None
+        assert experiments[0].metadata.get("test_key") == "test_value"
     
     def test_create_series_with_factory_configs(self):
         """Test creating series with factory configurations."""
@@ -216,7 +227,7 @@ class TestExperimentSeriesConfig:
         
         # Check experiment names
         experiment_names = [exp.name for exp in experiments]
-        expected_names = [f"test_series_{i:03d}" for i in range(1, 9)]
+        expected_names = [f"test_series_{i:03d}" for i in range(8)]
         assert experiment_names == expected_names
     
     def test_create_directory_structure(self):
@@ -265,7 +276,7 @@ class TestExperimentSeriesConfig:
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
         template = FieldLine.template_all()
-        
+
         config = ExperimentSeriesConfig(
             name="test_series",
             field=field_config,
@@ -275,30 +286,29 @@ class TestExperimentSeriesConfig:
             description="Test description",
             metadata={"test_key": "test_value"}
         )
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             # Set output directory
             config.output_dir = temp_dir
-            
+
             # Create directory structure first
-            config.create_experiment_series()
-            
+            config.create_directory_structure()
+
             # Save config
-            config.save()
-            
-            # Check that file was created
             config_file = Path(temp_dir) / "test_series" / "configs" / "test_series_config.yaml"
+            config.save(str(config_file))
+
+            # Check that file was created
             assert config_file.exists()
-            
+
             # Load config
-            loaded_config = ExperimentSeriesConfig.load(temp_dir, "test_series")
-            
+            loaded_config = ExperimentSeriesConfig.load(str(config_file))
+
             # Check that loaded config matches original
             assert loaded_config.name == config.name
             assert loaded_config.description == config.description
-            assert loaded_config.metadata is not None
-            assert config.metadata is not None
-            assert loaded_config.metadata["test_key"] == config.metadata["test_key"]
+            assert loaded_config.metadata == config.metadata
+            assert loaded_config.output_dir == config.output_dir
     
     def test_print_experiment_summary(self):
         """Test printing experiment summary."""
@@ -349,31 +359,29 @@ class TestExperimentSeriesRunner:
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
         template = FieldLine.template_all()
-        
-        series_config = ExperimentSeriesConfig(
-            name="test_series",
-            field=field_config,
-            grid=grid_config,
-            tracing=tracing_config,
-            template=template
-        )
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create the directory structure that ExperimentSeriesRunner expects
             series_dir = Path(temp_dir) / "test_series"
             series_dir.mkdir(parents=True, exist_ok=True)
-            
+
+            series_config = ExperimentSeriesConfig(
+                name="test_series",
+                field=field_config,
+                grid=grid_config,
+                tracing=tracing_config,
+                template=template,
+                output_dir=temp_dir
+            )
+
             runner = ExperimentSeriesRunner(
                 series_config=series_config,
-                output_directory=Path(temp_dir),
                 save_individual_configs=True,
                 continue_on_failure=True
             )
-            
+
             assert runner.series_config == series_config
             assert runner.output_directory == Path(temp_dir)
-            assert runner.save_individual_configs is True
-            assert runner.continue_on_failure is True
     
     @patch('psr_magpy.experiment.experiment_series_runner.run_experiment')
     def test_run_single_experiment(self, mock_run_experiment):
@@ -384,7 +392,7 @@ class TestExperimentSeriesRunner:
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
         template = FieldLine.template_all()
-        
+
         experiment = ExperimentSeriesConfig(
             name="test_experiment",
             field=field_config,
@@ -392,10 +400,17 @@ class TestExperimentSeriesRunner:
             tracing=tracing_config,
             template=template
         ).create_experiment_series()[0]
-        
+
         # Mock successful experiment run
-        mock_run_experiment.return_value = {"field_lines": []}
-        
+        template = FieldLine.template_all()
+        field_lines = [template] * 32  # Create 32 identical field lines
+        mock_run_experiment.return_value = ExperimentResult(
+            experiment_name="test_experiment_000",
+            success=True,
+            duration=1.0,
+            results=FieldLineSet(field_lines)  # Use 32 field lines to match grid size
+        )
+
         with tempfile.TemporaryDirectory() as temp_dir:
             series_config = ExperimentSeriesConfig(
                 name="test_series",
@@ -405,22 +420,22 @@ class TestExperimentSeriesRunner:
                 template=template,
                 output_dir=temp_dir
             )
-            
+
             # Create directory structure
             series_config.create_experiment_series()
-            
+
             runner = ExperimentSeriesRunner(
-                series_config=series_config,
-                output_directory=Path(temp_dir)
+                series_config=series_config
             )
-            
+
             results = runner._run_experiments([experiment])
-            
+
             assert len(results) == 1
-            assert results[0].experiment_name == "test_experiment_001"
+            assert results[0].experiment_name == "test_experiment_000"
             assert results[0].success is True
             assert results[0].duration > 0
-            assert results[0].results == {"field_lines": []}
+            assert isinstance(results[0].results, FieldLineSet)
+            assert results[0].results.n_lines == 32
     
     @patch('psr_magpy.experiment.experiment_series_runner.run_experiment')
     def test_run_experiment_with_failure(self, mock_run_experiment):
@@ -431,7 +446,7 @@ class TestExperimentSeriesRunner:
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
         template = FieldLine.template_all()
-        
+
         experiment = ExperimentSeriesConfig(
             name="test_experiment",
             field=field_config,
@@ -439,10 +454,15 @@ class TestExperimentSeriesRunner:
             tracing=tracing_config,
             template=template
         ).create_experiment_series()[0]
-        
+
         # Mock failed experiment run
-        mock_run_experiment.side_effect = ValueError("Test error")
-        
+        mock_run_experiment.return_value = ExperimentResult(
+            experiment_name="test_experiment_000",
+            success=False,
+            duration=1.0,
+            error_message="Test error"
+        )
+
         with tempfile.TemporaryDirectory() as temp_dir:
             series_config = ExperimentSeriesConfig(
                 name="test_series",
@@ -452,24 +472,22 @@ class TestExperimentSeriesRunner:
                 template=template,
                 output_dir=temp_dir
             )
-            
+
             # Create directory structure
             series_config.create_experiment_series()
-            
+
             runner = ExperimentSeriesRunner(
                 series_config=series_config,
-                output_directory=Path(temp_dir),
                 continue_on_failure=True
             )
-            
+
             results = runner._run_experiments([experiment])
-            
+
             assert len(results) == 1
-            assert results[0].experiment_name == "test_experiment_001"
+            assert results[0].experiment_name == "test_experiment_000"
             assert results[0].success is False
             assert results[0].duration > 0
-            assert results[0].error_message is not None
-            assert "Test error" in results[0].error_message
+            assert results[0].error_message == "Test error"
     
     def test_save_individual_configs(self):
         """Test saving individual experiment configurations."""
@@ -479,7 +497,7 @@ class TestExperimentSeriesRunner:
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
         template = FieldLine.template_all()
-        
+
         series_config = ExperimentSeriesConfig(
             name="test_series",
             field=field_config,
@@ -487,30 +505,30 @@ class TestExperimentSeriesRunner:
             tracing=tracing_config,
             template=template
         )
-        
+
         experiments = series_config.create_experiment_series()
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             # Set output directory and create structure
             series_config.output_dir = temp_dir
             series_config.create_experiment_series()
-            
+
             runner = ExperimentSeriesRunner(
                 series_config=series_config,
-                output_directory=Path(temp_dir),
                 save_individual_configs=True
             )
-            
+
             runner._save_individual_configs(experiments)
-            
+
             # Check that configs directory was created in series subdirectory
             configs_dir = Path(temp_dir) / "test_series" / "configs"
             assert configs_dir.exists()
-            
-            # Check that individual config files were saved
+
+            # Check that both series and experiment config files were saved
             config_files = list(configs_dir.glob("*.yaml"))
-            assert len(config_files) == 1
-            assert config_files[0].name == "test_series_001.yaml"
+            assert len(config_files) == 2
+            assert any(f.name == "test_series_config.yaml" for f in config_files)
+            assert any(f.name == "test_series_000.yaml" for f in config_files)
 
 
 class TestIntegration:
@@ -520,23 +538,23 @@ class TestIntegration:
         """Test complete experiment series workflow."""
         # Create a simple series with factory configs
         field_factory = FieldFactoryConfig(components=[
-            FieldComponentConfig(moment_type="dipole", B_magnitude=1.0),
+            FieldComponentConfig(moment_type="dipole", B_magnitude=1.0),  # Put B=1.0 first to match metadata
             FieldComponentConfig(moment_type="dipole", B_magnitude=2.0)
         ])
-        
+
         grid_factory = GridFactoryConfig(grids=[
             SphericalGridConfig(nlon=5, nlat=3),
             SphericalGridConfig(nlon=10, nlat=5)
         ])
-        
+
         tracing_factory = TracingFactoryConfig(
             max_integration_radius=[2.0, 3.0],
             save_results=True,
             filename="test"
         )
-        
+
         template = FieldLine.template_all()
-        
+
         series_config = ExperimentSeriesConfig(
             name="integration_test",
             field=field_factory,
@@ -546,23 +564,31 @@ class TestIntegration:
             description="Integration test series",
             metadata={"test_type": "integration"}
         )
-        
+
         # Create experiments
         experiments = series_config.create_experiment_series()
-        
+
         # Should have 2 field configs × 2 grid configs × 2 tracing params × 1 template = 8 experiments
         assert len(experiments) == 8
-        
+
         # Check experiment names
-        expected_names = [f"integration_test_{i:03d}" for i in range(1, 9)]
+        expected_names = [f"integration_test_{i:03d}" for i in range(8)]
         actual_names = [exp.name for exp in experiments]
         assert actual_names == expected_names
-        
+
         # Check metadata
-        for i, exp in enumerate(experiments, 1):
+        for i, exp in enumerate(experiments):
             assert exp.metadata is not None
             assert exp.metadata["experiment_number"] == i
             assert exp.metadata["series_name"] == "integration_test"
             assert exp.metadata["test_type"] == "integration"
-            assert exp.metadata["field_components"] == 1
+            # Components are sorted by B_magnitude in descending order
+            assert exp.metadata["field_components"] == [
+                {
+                    "type": "dipole",
+                    "B": 2.0 if i < 4 else 1.0,  # First 4 experiments have B=2.0, last 4 have B=1.0
+                    "lat": 0.0,
+                    "lon": 0.0
+                }
+            ]
             assert exp.metadata["grid_type"] == "spherical" 

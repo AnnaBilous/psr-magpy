@@ -1,4 +1,5 @@
 """Central logging configuration for psr-magpy."""
+
 import logging
 import logging.handlers
 import sys
@@ -11,6 +12,7 @@ from typing import Optional, Union, Dict, List
 # Try to import colorlog for colored console output
 try:
     import colorlog
+
     HAS_COLORLOG = True
 except ImportError:
     HAS_COLORLOG = False
@@ -127,7 +129,7 @@ def setup_logging(
         else:
             handler_levels["console"] = logging.DEBUG
             handler_levels["file"] = logging.DEBUG
-    
+
     # Convert string log level to int if needed
     if isinstance(log_level, str):
         log_level = getattr(logging, log_level.upper())
@@ -139,7 +141,7 @@ def setup_logging(
     # Set default formats
     if log_format is None:
         log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    
+
     # Use a more concise format for console if requested
     if console_format_brief:
         format_parts = []
@@ -147,11 +149,11 @@ def setup_logging(
             format_parts.append("[%(process)d]")
         if show_filename:
             format_parts.append("[%(filename)s]")
-        
+
         prefix = " ".join(format_parts)
         if prefix:
             prefix += " "
-            
+
         console_format = f"{prefix}%(levelname)-8s %(message)s"
     else:
         format_parts = ["%(asctime)s"]
@@ -159,28 +161,28 @@ def setup_logging(
             format_parts.append("[%(process)d]")
         if show_filename:
             format_parts.append("[%(filename)s]")
-            
+
         prefix = " ".join(format_parts)
         console_format = f"{prefix} - %(name)s - %(levelname)s - %(message)s"
-    
+
     if date_format is None:
         date_format = "%Y-%m-%d %H:%M:%S"
 
     # Create formatters
     file_formatter = logging.Formatter(log_format, date_format)
-    
+
     # Use colored formatter for console if available and requested
     if HAS_COLORLOG and use_colors:
         color_formatter = colorlog.ColoredFormatter(
             "%(log_color)s" + console_format,
             datefmt=date_format,
             log_colors={
-                'DEBUG': 'cyan',
-                'INFO': 'green',
-                'WARNING': 'yellow',
-                'ERROR': 'red',
-                'CRITICAL': 'red,bg_white',
-            }
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "red,bg_white",
+            },
         )
     else:
         color_formatter = logging.Formatter(console_format, date_format)
@@ -213,9 +215,7 @@ def setup_logging(
 
         # Use RotatingFileHandler instead of FileHandler
         file_handler = logging.handlers.RotatingFileHandler(
-            log_file,
-            maxBytes=max_file_size,
-            backupCount=backup_count
+            log_file, maxBytes=max_file_size, backupCount=backup_count
         )
         file_handler.setLevel(handler_levels.get("file", LogLevels.FILE))
         file_handler.setFormatter(file_formatter)
@@ -245,8 +245,10 @@ def setup_logging(
     # Log handler levels
     for handler in root_logger.handlers:
         handler_name = (
-            "console" if isinstance(handler, logging.StreamHandler) and not 
-            isinstance(handler, logging.handlers.RotatingFileHandler) else "file"
+            "console"
+            if isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, logging.handlers.RotatingFileHandler)
+            else "file"
         )
         logger.debug(
             f"{handler_name} handler level: {logging.getLevelName(handler.level)}"
@@ -256,10 +258,7 @@ def setup_logging(
 
 
 def get_logger(
-    name: str, 
-    show_process_id: bool = False,
-    show_filename: bool = True,
-    **kwargs
+    name: str, show_process_id: bool = False, show_filename: bool = True, **kwargs
 ) -> logging.Logger:
     """
     Get a logger with the given name, setting up logging if needed.
@@ -310,7 +309,7 @@ def set_debug_for_modules(module_names: List[str], enable: bool = True) -> None:
     level = logging.DEBUG if enable else logging.INFO
     for module_name in module_names:
         logging.getLogger(module_name).setLevel(level)
-        
+
     logger = logging.getLogger(__name__)
     action = "Enabled" if enable else "Disabled"
     logger.info(f"{action} debug logging for modules: {', '.join(module_names)}")

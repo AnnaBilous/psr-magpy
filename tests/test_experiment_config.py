@@ -7,15 +7,27 @@ from pathlib import Path
 from typing import Dict, Any
 
 from psr_magpy.experiment.experiment_config import (
-    FieldComponentConfig, FieldConfig, SphericalGridConfig, RandomGridConfig,
-    HealpixGridConfig, CustomGridConfig, GridConfig, TracingConfig,
-    ExperimentConfig, FieldFactoryConfig, GridFactoryConfig, TemplateFactoryConfig,
-    ExperimentSeriesConfig
+    ExperimentConfig,
+    FieldConfig,
+    GridConfig,
+    TracingConfig,
+    FieldComponentConfig,
+    SphericalGridConfig,
+    RandomGridConfig,
+    HealpixGridConfig,
+    CustomGridConfig,
 )
+from psr_magpy.experiment.factory_configs import (
+    FieldFactoryConfig,
+    GridFactoryConfig,
+    TemplateFactoryConfig,
+)
+from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.grid.grid import SphericalGrid, RandomGrid, HealpixGrid, CustomGrid
 from psr_magpy.line.tracing_parameters import TracingParameters
+from psr_magpy.io.base import IOUtils
 
 # Ensure I/O module is imported for registration
 import psr_magpy.io
@@ -541,8 +553,6 @@ class TestExperimentConfig:
     
     def test_convert_for_yaml(self):
         """Test YAML conversion utilities."""
-        from psr_magpy.io import IOUtils
-        
         # Test tuple conversion
         test_data = {"tuple": (1, 2, 3), "list": [1, 2, 3], "dict": {"a": 1}}
         converted: Any = IOUtils.convert_for_yaml(test_data)
@@ -683,7 +693,7 @@ class TestExperimentSeriesConfig:
         
         experiments = config.create_experiment_series()
         assert len(experiments) == 1
-        assert experiments[0].name == "simple_series_001"
+        assert experiments[0].name == "simple_series_000"
         assert experiments[0].field == field
         assert experiments[0].grid == grid
         assert experiments[0].tracing == tracing

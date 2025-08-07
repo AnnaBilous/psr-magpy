@@ -21,7 +21,7 @@ class SaveFlags:
 
     footpoint_id is always True and cannot be disabled.
     """
-    
+
     save_footpoint_id: bool = True
     save_r_line: bool = False
     save_pa_line: bool = False
@@ -31,7 +31,7 @@ class SaveFlags:
     save_b_ini: bool = False
     save_b_r_ini_angle: bool = False
     save_reversed_error: bool = False
-    
+
     def __repr__(self) -> str:
         """Return string representation of save flags."""
         enabled_flags = [flag for flag in vars(self) if getattr(self, flag)]
@@ -40,6 +40,7 @@ class SaveFlags:
 
 class PropertyName(Enum):
     """Enum of all available properties"""
+
     FOOTPOINT_ID = "save_footpoint_id"
     R_LINE = "save_r_line"
     PA_LINE = "save_pa_line"
@@ -63,8 +64,10 @@ class PropertyName(Enum):
 
 class PropertyValidationError(ValueError):
     """Custom exception for property validation errors."""
-    
-    def __init__(self, message: str, property_name: Optional[str] = None, value: Any = None):
+
+    def __init__(
+        self, message: str, property_name: Optional[str] = None, value: Any = None
+    ):
         self.message = message
         self.property_name = property_name
         self.value = value
@@ -73,12 +76,12 @@ class PropertyValidationError(ValueError):
 
 class PropertyValue(BaseModel):
     """Pydantic model for validating individual property values."""
-    
+
     property_name: PropertyName
     value: Any
     enabled: bool = True
-    
-    @field_validator('property_name')
+
+    @field_validator("property_name")
     @classmethod
     def validate_property_name(cls, v):
         """Validate that property name is a valid PropertyName enum."""
@@ -87,77 +90,89 @@ class PropertyValue(BaseModel):
                 if isinstance(v, str):
                     v = PropertyName[v.upper()]
                 else:
-                    raise PropertyValidationError(f"Invalid property name type: {type(v)}")
+                    raise PropertyValidationError(
+                        f"Invalid property name type: {type(v)}"
+                    )
             except KeyError:
                 raise PropertyValidationError(f"Invalid property name: {v}")
         return v
-    
-    @field_validator('value')
+
+    @field_validator("value")
     @classmethod
     def validate_value(cls, v, info):
         """Validate property value based on property type."""
-        property_name = info.data['property_name']
+        property_name = info.data["property_name"]
         if property_name is None:
             return v
-        
+
         # Allow None values for unset properties
         if v is None:
             return v
-        
+
         # Type-specific validation
         if property_name == PropertyName.FOOTPOINT_ID:
             if not isinstance(v, int):
                 raise PropertyValidationError(
                     f"footpoint_id must be an integer, got {type(v)}",
-                    property_name.key_name, v
+                    property_name.key_name,
+                    v,
                 )
             if v < 0:
                 raise PropertyValidationError(
                     f"footpoint_id must be non-negative, got {v}",
-                    property_name.key_name, v
+                    property_name.key_name,
+                    v,
                 )
-        
+
         elif property_name in [PropertyName.R_LINE, PropertyName.PA_LINE]:
             # These should be numpy arrays or lists of coordinates
-            if not hasattr(v, '__len__'):
+            if not hasattr(v, "__len__"):
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be an array-like object, got {type(v)}",
-                    property_name.key_name, v
+                    property_name.key_name,
+                    v,
                 )
-        
-        elif property_name in [PropertyName.R_MAX, PropertyName.R_CYL_MAX, PropertyName.Z_ABS_MAX]:
+
+        elif property_name in [
+            PropertyName.R_MAX,
+            PropertyName.R_CYL_MAX,
+            PropertyName.Z_ABS_MAX,
+        ]:
             # These should be numeric values (can be 0 for cylindrical coordinates)
             if not isinstance(v, (int, float)) or not (v >= 0):
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be a non-negative number, got {v}",
-                    property_name.key_name, v
+                    property_name.key_name,
+                    v,
                 )
-        
+
         elif property_name in [PropertyName.B_INI, PropertyName.B_R_INI_ANGLE]:
             # These should be numeric values (can be negative)
             if not isinstance(v, (int, float)):
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be a number, got {type(v)}",
-                    property_name.key_name, v
+                    property_name.key_name,
+                    v,
                 )
-        
+
         elif property_name == PropertyName.REVERSED_ERROR:
             # This should be a non-negative float (error distance)
             if not isinstance(v, (int, float)) or v < 0:
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be a non-negative number, got {v}",
-                    property_name.key_name, v
+                    property_name.key_name,
+                    v,
                 )
-        
+
         return v
 
 
 class PropertySystem:
     """Unified property management system with validation, storage, and save flags."""
-    
+
     def __init__(self, **kwargs):
         """Initialize property system with save flags.
-        
+
         Args:
             **kwargs: Boolean flags for which properties to save.
                      Examples:
@@ -167,11 +182,13 @@ class PropertySystem:
         # Process save flags
         self.save_flags = self._process_flags(**kwargs)
         self.enabled_properties = self.get_enabled_properties()
-        self._properties: Dict[PropertyName, Any] = {prop: None for prop in PropertyName}
-        
+        self._properties: Dict[PropertyName, Any] = {
+            prop: None for prop in PropertyName
+        }
+
         logger.debug(f"Initialized PropertySystem with flags: {self.save_flags}")
         logger.debug(f"Enabled properties: {self.get_enabled_property_names()}")
-    
+
     def get_enabled_properties(self) -> Set[PropertyName]:
         """Get set of enabled PropertyName enums."""
         enabled_properties = set()
@@ -179,11 +196,11 @@ class PropertySystem:
             if getattr(self.save_flags, prop.flag_name):
                 enabled_properties.add(prop)
         return enabled_properties
-    
+
     def get_enabled_property_names(self) -> list:
         """Get list of enabled property key names."""
         return [prop.key_name for prop in self.get_enabled_properties()]
-    
+
     def is_property_enabled(self, prop: Union[PropertyName, str]) -> bool:
         """Check if a specific property is enabled."""
         try:
@@ -191,17 +208,14 @@ class PropertySystem:
             return getattr(self.save_flags, property_enum.flag_name, False)
         except (KeyError, ValueError):
             return False
-    
+
     def get_flags_dict(self) -> Dict[str, bool]:
         """Get save flags as a dictionary."""
-        return {
-            flag: getattr(self.save_flags, flag) 
-            for flag in vars(self.save_flags)
-        }
-    
+        return {flag: getattr(self.save_flags, flag) for flag in vars(self.save_flags)}
+
     def validate_flags(self) -> None:
         """Validate that save flags are consistent.
-        
+
         Raises
         ------
         ValueError
@@ -211,9 +225,9 @@ class PropertySystem:
             error_msg = "footpoint_id must always be enabled"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         logger.debug("Save flags validation passed")
-    
+
     def _process_flags(self, **kwargs) -> SaveFlags:
         """Process kwargs to create SaveFlags instance."""
         # Create flags dictionary with defaults
@@ -226,18 +240,18 @@ class PropertySystem:
             if prop == PropertyName.FOOTPOINT_ID:
                 value = True
             flags_dict[prop.flag_name] = value
-        
+
         # Create SaveFlags instance
         save_flags = SaveFlags(**flags_dict)
-        
+
         # Validate the flags
         self._validate_flags_internal(save_flags)
-        
+
         return save_flags
-    
+
     def _validate_flags_internal(self, save_flags: SaveFlags) -> None:
         """Internal validation of save flags.
-        
+
         Raises
         ------
         ValueError
@@ -247,7 +261,7 @@ class PropertySystem:
             error_msg = "footpoint_id must always be enabled"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         # Log enabled properties at debug level
         if logger.isEnabledFor(logging.DEBUG):
             enabled_props = [
@@ -256,10 +270,10 @@ class PropertySystem:
                 if getattr(save_flags, prop.flag_name)
             ]
             logger.debug(f"Enabled properties: {enabled_props}")
-    
+
     def get_property(self, prop: Union[PropertyName, str]) -> Optional[Any]:
         """Get a property value if it's enabled.
-        
+
         Raises
         ------
         PropertyValidationError
@@ -272,10 +286,10 @@ class PropertySystem:
         except PropertyValidationError as e:
             logger.error(str(e))
             raise
-    
+
     def set_property(self, **kwargs: Any) -> None:
         """Set multiple property values if they're enabled.
-        
+
         Raises
         ------
         PropertyValidationError
@@ -287,7 +301,7 @@ class PropertySystem:
                 property_enum = self._validate_property_name(key)
                 self._validate_property_access(property_enum)
                 # Always cast footpoint_id to Python int
-                if property_enum.key_name == 'footpoint_id' and value is not None:
+                if property_enum.key_name == "footpoint_id" and value is not None:
                     value = int(value)
                 validated_value = self._validate_property_value(property_enum, value)
                 self._properties[property_enum] = validated_value
@@ -295,27 +309,26 @@ class PropertySystem:
             except PropertyValidationError as e:
                 logger.error(str(e))
                 raise
-    
+
     def get_property_names(self) -> list:
         """Get list of enabled property key names."""
         return [prop.key_name for prop in self.enabled_properties]
-    
+
     def get_property_values(self) -> Dict[str, Any]:
         """Get dictionary of property values for enabled properties."""
         return {
-            prop.key_name: self._properties[prop]
-            for prop in self.enabled_properties
+            prop.key_name: self._properties[prop] for prop in self.enabled_properties
         }
-    
+
     def clear_properties(self) -> None:
         """Clear all property values (set to None)."""
         for prop in PropertyName:
             self._properties[prop] = None
         logger.debug("Cleared all property values")
-    
+
     def validate_property_set(self, **kwargs: Any) -> Dict[str, Any]:
         """Validate multiple property values for setting.
-        
+
         Raises
         ------
         PropertyValidationError
@@ -323,51 +336,51 @@ class PropertySystem:
         """
         validated_properties = {}
         validation_errors = []
-        
+
         for key, value in kwargs.items():
             try:
                 # Validate property name
                 property_enum = self._validate_property_name(key)
-                
+
                 # Validate property access
                 self._validate_property_access(property_enum)
-                
+
                 # Validate property value
                 validated_value = self._validate_property_value(property_enum, value)
                 validated_properties[key] = validated_value
-                
+
             except PropertyValidationError as e:
                 validation_errors.append(str(e))
-        
+
         if validation_errors:
             error_msg = f"Property validation failed: {'; '.join(validation_errors)}"
             logger.error(error_msg)
             raise PropertyValidationError(error_msg)
-        
+
         logger.debug(f"Validated {len(validated_properties)} properties successfully")
         return validated_properties
-    
+
     def get_validation_summary(self) -> Dict[str, Any]:
         """Get a summary of validation configuration."""
         return {
-            'enabled_properties': [prop.key_name for prop in self.enabled_properties],
-            'total_properties': len(PropertyName),
-            'validation_rules': {
-                'footpoint_id': 'non-negative integer',
-                'r_line': 'array-like object',
-                'pa_line': 'array-like object',
-                'r_max': 'positive number',
-                'r_cyl_max': 'positive number',
-                'z_abs_max': 'positive number',
-                'b_ini': 'number',
-                'b_r_ini_angle': 'number',
-                'reversed_error': 'non-negative number'
-            }
+            "enabled_properties": [prop.key_name for prop in self.enabled_properties],
+            "total_properties": len(PropertyName),
+            "validation_rules": {
+                "footpoint_id": "non-negative integer",
+                "r_line": "array-like object",
+                "pa_line": "array-like object",
+                "r_max": "positive number",
+                "r_cyl_max": "positive number",
+                "z_abs_max": "positive number",
+                "b_ini": "number",
+                "b_r_ini_angle": "number",
+                "reversed_error": "non-negative number",
+            },
         }
-    
+
     def _validate_property_name(self, prop: Union[PropertyName, str]) -> PropertyName:
         """Validate and convert property name to PropertyName enum.
-        
+
         Raises
         ------
         PropertyValidationError
@@ -376,26 +389,28 @@ class PropertySystem:
         try:
             if isinstance(prop, PropertyName):
                 return prop
-            
+
             if isinstance(prop, str):
                 property_enum = PropertyName[prop.upper()]
                 logger.debug(f"Converted string '{prop}' to PropertyName enum")
                 return property_enum
-            
+
             raise PropertyValidationError(
                 f"Property must be PropertyName enum or string, got {type(prop)}"
             )
-            
+
         except KeyError:
             error_msg = f"Invalid property name: {prop}"
-            logger.error(f"{error_msg}. Valid properties: {[p.key_name for p in PropertyName]}")
+            logger.error(
+                f"{error_msg}. Valid properties: {[p.key_name for p in PropertyName]}"
+            )
             raise PropertyValidationError(
                 f"{error_msg}. Must be one of: {[p.key_name for p in PropertyName]}"
             )
-    
+
     def _validate_property_access(self, prop: PropertyName) -> None:
         """Validate that a property is enabled for access.
-        
+
         Raises
         ------
         PropertyValidationError
@@ -405,13 +420,12 @@ class PropertySystem:
             warning_msg = f"Attempting to access disabled property: {prop.key_name}"
             logger.warning(warning_msg)
             raise PropertyValidationError(
-                f"Property {prop.key_name} is not enabled",
-                prop.key_name
+                f"Property {prop.key_name} is not enabled", prop.key_name
             )
-    
+
     def _validate_property_value(self, prop: PropertyName, value: Any) -> Any:
         """Validate a property value using Pydantic.
-        
+
         Raises
         ------
         PropertyValidationError
@@ -420,20 +434,18 @@ class PropertySystem:
         try:
             # Create PropertyValue model for validation
             property_value = PropertyValue(
-                property_name=prop,
-                value=value,
-                enabled=prop in self.enabled_properties
+                property_name=prop, value=value, enabled=prop in self.enabled_properties
             )
             return property_value.value
-            
+
         except ValidationError as e:
             # Convert Pydantic validation error to our custom error
             error_details = []
             for error in e.errors():
-                field = error.get('loc', ['unknown'])[-1]
-                msg = error.get('msg', 'Validation error')
+                field = error.get("loc", ["unknown"])[-1]
+                msg = error.get("msg", "Validation error")
                 error_details.append(f"{field}: {msg}")
-            
+
             error_msg = f"Property validation failed for {prop.key_name}: {'; '.join(error_details)}"
             logger.error(error_msg)
-            raise PropertyValidationError(error_msg, prop.key_name, value) 
+            raise PropertyValidationError(error_msg, prop.key_name, value)

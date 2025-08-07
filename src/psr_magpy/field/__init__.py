@@ -12,7 +12,7 @@ from .visualization import FieldVisualizer
 
 __all__ = [
     "FieldComponent",
-    "DipoleFieldComponent", 
+    "DipoleFieldComponent",
     "QuadrupoleFieldComponent",
     "MultipoleType",
     "FieldComponentParams",
