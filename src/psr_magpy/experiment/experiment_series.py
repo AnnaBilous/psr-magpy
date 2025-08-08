@@ -8,6 +8,7 @@ from typing import List, Optional, Union, Dict, Any, ClassVar
 from pydantic import BaseModel
 import yaml
 from pathlib import Path
+import shutil
 
 from .experiment_config import (
     ExperimentConfig,
@@ -71,7 +72,7 @@ class ExperimentSeriesConfig(BaseModel):
         logger.info("Creating experiment series: %s", self.name)
 
         # Create output directory structure
-        self.create_directory_structure()
+        self.create_directory_structure(overwrite)
 
         # Create experiments
         experiments = self._create_experiments()
@@ -396,27 +397,39 @@ class ExperimentSeriesConfig(BaseModel):
         logger.info(f"Loaded {len(experiments)} experiments from {configs_dir}")
         return experiments
 
-    def create_directory_structure(self) -> None:
-        """Create output directory structure."""
+    def create_directory_structure(self, overwrite: bool = False) -> None:
+        """Create output directory structure.
+        
+        Args:
+            overwrite: Whether to overwrite existing directories
+        """
         if self.output_dir is None:
             # Create series directory
             series_dir = Path(self.name)
+            if overwrite and series_dir.exists():
+                shutil.rmtree(series_dir)
             series_dir.mkdir(parents=True, exist_ok=True)
             logger.info("Created output directory structure under: %s", series_dir)
 
             # Create subdirectories
             for subdir in ["lines", "grids", "configs", "logs"]:
                 subdir_path = series_dir / subdir
+                if overwrite and subdir_path.exists():
+                    shutil.rmtree(subdir_path)
                 subdir_path.mkdir(parents=True, exist_ok=True)
         else:
             # Create series directory
             series_dir = Path(self.output_dir) / self.name
+            if overwrite and series_dir.exists():
+                shutil.rmtree(series_dir)
             series_dir.mkdir(parents=True, exist_ok=True)
             logger.info("Created output directory structure under: %s", series_dir)
 
             # Create subdirectories
             for subdir in ["lines", "grids", "configs", "logs"]:
                 subdir_path = series_dir / subdir
+                if overwrite and subdir_path.exists():
+                    shutil.rmtree(subdir_path)
                 subdir_path.mkdir(parents=True, exist_ok=True)
 
     def _create_experiments(self) -> List[ExperimentConfig]:

@@ -50,7 +50,7 @@ class BatchFileManager:
 
     def find_batch_files(self) -> List[BatchFileInfo]:
         """Find all batch files for the base filename."""
-        pattern = str(self.output_directory / f"{self.base_filename.stem}_batch_*.fits")
+        pattern = str(self.output_directory / f"{self.base_filename.stem}*_batch_*.fits")
         batch_files = glob.glob(pattern)
 
         if not batch_files:
@@ -63,7 +63,8 @@ class BatchFileManager:
             try:
                 # Extract batch index from filename
                 filename = path.name
-                batch_index = int(filename.split("_batch_")[1].split(".")[0])
+                batch_part = filename.split("_batch_")[1].split(".")[0]
+                batch_index = int(batch_part.split("_")[0])
 
                 # Get file info
                 stat = path.stat()
@@ -93,38 +94,27 @@ class BatchFileManager:
             logger.info("No batch files to organize")
             return None
 
-        # Create batch directory
-        batch_dir = self.output_directory / f"{self.base_filename.stem}_batches"
+        # Use the parent directory (lines directory)
+        output_dir = self.output_directory
 
-        # Clean up existing files in batch directory
-        if batch_dir.exists():
-            logger.info(f"Cleaning up existing files in {batch_dir}")
-            for file_path in batch_dir.iterdir():
-                if file_path.is_file():
-                    try:
-                        file_path.unlink()
-                        logger.debug(f"Removed existing file: {file_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to remove {file_path}: {e}")
-        else:
-            batch_dir.mkdir(parents=True, exist_ok=True)
-
-        logger.info(f"Organizing {len(batch_files)} batch files into {batch_dir}")
+        logger.info(f"Organizing {len(batch_files)} batch files in {output_dir}")
 
         if self.progress_tracker:
-            self.progress_tracker.log_io_start("organize", batch_dir, len(batch_files))
+            self.progress_tracker.log_io_start("organize", output_dir, len(batch_files))
 
         try:
-            # Move and rename batch files to subdirectory
+            # Move and rename batch files
             for i, batch_info in enumerate(batch_files):
                 if self.progress_tracker:
                     self.progress_tracker.update_io_progress(
                         i, len(batch_files), f"Moving {batch_info.path.name}"
                     )
 
-                # Rename to organized format: batch_001_out_of_004.fits, batch_002_out_of_004.fits, etc.
-                new_filename = f"batch_{i+1:03d}_out_of_{len(batch_files):03d}.fits"
-                new_path = batch_dir / new_filename
+                # Keep experiment name from original filename
+                experiment_name = self.base_filename.stem
+                # Rename to organized format: experiment_name_batch_001_out_of_004.fits
+                new_filename = f"{experiment_name}_batch_{i+1:03d}_out_of_{len(batch_files):03d}.fits"
+                new_path = output_dir / new_filename
                 shutil.move(str(batch_info.path), str(new_path))
                 logger.debug(
                     f"Moved and renamed {batch_info.path.name} to {new_filename}"
@@ -132,13 +122,13 @@ class BatchFileManager:
 
             if self.progress_tracker:
                 self.progress_tracker.log_io_completion(
-                    "organize", batch_dir, 0.0, len(batch_files)
+                    "organize", output_dir, 0.0, len(batch_files)
                 )
 
             logger.info(
-                f"Successfully organized and renamed {len(batch_files)} batch files into {batch_dir}"
+                f"Successfully organized and renamed {len(batch_files)} batch files"
             )
-            return batch_dir
+            return output_dir
 
         except Exception as e:
             error_msg = f"Failed to organize batch files: {e}"
@@ -166,7 +156,7 @@ class BatchFileManager:
                 )
 
             f.write(
-                f"\nBatch files are intentionally kept separate due to large size.\n"
+                f"\nBatch files are kept in the lines directory.\n"
             )
             f.write(
                 f"Each file contains a subset of field lines from the calculation.\n"

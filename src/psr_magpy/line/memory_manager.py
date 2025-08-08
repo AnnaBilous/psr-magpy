@@ -35,6 +35,7 @@ class MemoryManager:
         self.save_results = save_results
         self._results_in_memory: Optional[FieldLineSet] = None
         self._results_in_memory_size: float = 0.0
+        self._batch_files_created = False
 
         logger.debug(
             f"Initialized MemoryManager with max_file_size_mb={max_file_size_mb}, save_results={save_results}"
@@ -213,6 +214,9 @@ class MemoryManager:
             f"Wrote {self._results_in_memory.n_field_lines} field lines to {batch_filename}"
         )
 
+        # Mark that batch files were created
+        self._batch_files_created = True
+
         # Reset memory
         self._results_in_memory = None
         self._results_in_memory_size = 0.0
@@ -224,7 +228,7 @@ class MemoryManager:
         batch_manager = BatchFileManager(
             base_filename=filename,
             organize_files=True,
-            cleanup_batch_files=False,  # Keep batch files by default
+            cleanup_batch_files=False,  # Keep batch files during organization
             progress_tracker=progress_tracker,
         )
 
@@ -239,6 +243,9 @@ class MemoryManager:
             logger.info(
                 f"Batch summary: {summary['batch_files']} files, {summary['total_size_mb']:.1f} MB total"
             )
+
+            # Clean up original batch files after successful organization
+            batch_manager.cleanup_batch_files()
         else:
             logger.info("No batch files found to organize")
 
@@ -251,3 +258,8 @@ class MemoryManager:
     def memory_usage_mb(self) -> float:
         """Get current memory usage in MB."""
         return self._results_in_memory_size / (1024 * 1024)
+
+    @property
+    def batch_files_created(self) -> bool:
+        """Whether any batch files were created during processing."""
+        return self._batch_files_created

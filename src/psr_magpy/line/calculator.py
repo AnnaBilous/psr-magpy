@@ -3,6 +3,7 @@ from multiprocessing import Pool
 from typing import Optional
 import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
+from pathlib import Path
 
 from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.field_line import FieldLine
@@ -99,20 +100,26 @@ class FieldLineCalculator:
         if self.context.params.output.save_results and results is not None:
             filename = self.context.params.output.filename
             if filename:
-                # Use the new I/O system to save results
-                get_io_factory().save_data(results, filename, overwrite=True)
-                logger.info(f"Results saved to {filename}")
-            else:
-                logger.warning("save_results=True but no filename specified")
+                # Save results with batch naming even if no intermediate batches were created
+                filename_path = Path(filename)
+                batch_filename = (
+                    filename_path.parent / f"{filename_path.stem}_batch_001_out_of_001.fits"
+                )
 
-        # Rename and organize batch files if any were created
-        if (
-            self.context.params.output.save_results
-            and self.context.params.output.filename
-        ):
-            self.context.memory_manager.rename_batch_files(
-                self.context.params.output.filename, self.context.progress_tracker
-            )
+                # Save results
+                get_io_factory().save_data(results, batch_filename, overwrite=True)
+                self.context.progress_tracker.log_io_completion(
+                    "save", str(batch_filename), elapsed, results.n_field_lines
+                )
+
+                # Mark that batch files were created
+                self.context.memory_manager._batch_files_created = True
+
+                # Rename and organize batch files if any were created
+                if self.context.memory_manager.batch_files_created:
+                    self.context.memory_manager.rename_batch_files(
+                        filename, self.context.progress_tracker
+                    )
 
         self.context.progress_tracker.log_calculation_completion(
             elapsed,

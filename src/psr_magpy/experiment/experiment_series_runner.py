@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any, Union, cast
 from collections import OrderedDict
 import shutil
 import yaml
+import glob
 
 from .experiment_config import ExperimentConfig
 from .experiment_series import ExperimentSeriesConfig
@@ -321,15 +322,21 @@ class ExperimentSeriesRunner:
 
         # Add new results
         for result in experiment_results:
-            result_dict = OrderedDict(
-                [
-                    ("name", result.experiment_name),
-                    ("start_time", time.strftime("%Y-%m-%d %H:%M:%S")),
-                    ("duration", self._format_duration(result.duration)),
-                    ("success", result.success),
-                    ("error", result.error_message if not result.success else None),
-                ]
-            )
+            # Count batch files
+            batch_pattern = str(self.output_directory / self.series_config.name / "lines" / f"{result.experiment_name}*batch_*_out_of_*.fits")
+            batch_files = glob.glob(batch_pattern)
+            logger.debug(f"Batch file pattern: {batch_pattern}")
+            logger.debug(f"Found batch files: {batch_files}")
+
+            result_dict = {
+                "name": result.experiment_name,
+                "start_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "duration": self._format_duration(result.duration),
+                "success": result.success,
+                "error": result.error_message if not result.success else None,
+                "batch_files": len(batch_files)
+            }
+            result_dict = OrderedDict(result_dict.items())
 
             # Update or add result
             if result.experiment_name in existing_results:
