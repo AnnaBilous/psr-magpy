@@ -1,6 +1,6 @@
 import time
 from multiprocessing import Pool
-from typing import Optional
+from typing import Optional, Union
 import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
 from pathlib import Path
@@ -40,7 +40,7 @@ class FieldLineCalculator:
     def get_field_lines(
         self,
         template: FieldLine,
-    ) -> Optional[FieldLineSet]:
+    ) -> Optional[Union[FieldLineSet, LightFieldLineSet]]:
         with self.context.progress_tracker.track_calculation("Field line calculation"):
             # Check if we can skip memory estimation and batch calculation
             if self._can_skip_memory_estimation():
@@ -55,8 +55,7 @@ class FieldLineCalculator:
                 self._process_in_batches(template, optimal_batch_size)
 
             results = self.context.memory_manager.results_in_memory
-            self._finalize_results(results)
-        return results
+            return self._finalize_results(results)
 
     def _can_skip_memory_estimation(self) -> bool:
         """Check if we can skip memory estimation and batch calculation."""
@@ -100,10 +99,12 @@ class FieldLineCalculator:
         n_field_lines = results.n_field_lines if results is not None else 0
         error_msg = None
         if results is not None:
-            if hasattr(results, "reversed_error_warning"):
-                reversed_error = float(results.reversed_error_warning.split(":")[1].strip())
-                if reversed_error > self.context.params.integration.reversed_error_threshold:
-                    error_msg = f"Reversed error ({reversed_error:.3f}) exceeds threshold ({self.context.params.integration.reversed_error_threshold:.3f})"
+            if hasattr(results, "reversed_error"):
+                reversed_errors = results.reversed_error
+                max_error = float(np.max(reversed_errors))
+                if max_error > self.context.params.integration.reversed_error_threshold:
+                    error_msg = f"Reversed error ({max_error:.3f}) exceeds threshold ({self.context.params.integration.reversed_error_threshold:.3f})"
+                    logger.warning(error_msg)  # Log as warning since it doesn't affect success
             elif hasattr(results, "dotprod_error"):
                 error_msg = results.dotprod_error
 
@@ -142,8 +143,8 @@ class FieldLineCalculator:
         # Return lightweight result object
         return LightFieldLineSet(
             n_field_lines=n_field_lines,
-            reversed_error_warning=error_msg if hasattr(results, "reversed_error_warning") else None,
-            dotprod_error=error_msg if hasattr(results, "dotprod_error") else None
+            reversed_error_warning=error_msg if error_msg and "Reversed error" in error_msg else None,
+            dotprod_error=error_msg if error_msg and "dotprod_error" in error_msg else None
         )
 
     def _process_in_batches(self, template: FieldLine, batch_size: int) -> None:

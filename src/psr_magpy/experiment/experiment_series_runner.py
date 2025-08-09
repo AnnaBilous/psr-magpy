@@ -306,7 +306,7 @@ class ExperimentSeriesRunner:
             "total_experiments": len(experiment_results),
             "successful_experiments": sum(1 for r in experiment_results if r.success),
             "failed_experiments": sum(1 for r in experiment_results if not r.success),
-            "total_duration": sum(r.duration for r in experiment_results),
+            "total_duration": self._format_duration(sum(r.duration for r in experiment_results)),
             "success_rate": (
                 sum(1 for r in experiment_results if r.success)
                 / len(experiment_results)
@@ -333,15 +333,29 @@ class ExperimentSeriesRunner:
             logger.debug(f"Batch file pattern: {batch_pattern}")
             logger.debug(f"Found batch files: {batch_files}")
 
+            # Create result dictionary with all fields
             result_dict = {
                 "name": result.experiment_name,
                 "start_time": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "duration": self._format_duration(result.duration),
                 "success": result.success,
-                "error": result.error_message if not result.success else None,
                 "batch_files": len(batch_files)
             }
-            result_dict = OrderedDict(result_dict.items())
+
+            # Add error message if present
+            if result.error_message:
+                result_dict["error"] = result.error_message
+
+            # Convert to OrderedDict
+            ordered_items = []
+            ordered_items.append(("name", result_dict["name"]))
+            ordered_items.append(("start_time", result_dict["start_time"]))
+            ordered_items.append(("duration", result_dict["duration"]))
+            ordered_items.append(("success", result_dict["success"]))
+            if "error" in result_dict:
+                ordered_items.append(("error", result_dict["error"]))
+            ordered_items.append(("batch_files", result_dict["batch_files"]))
+            result_dict = OrderedDict(ordered_items)
 
             # Update or add result
             if result.experiment_name in existing_results:

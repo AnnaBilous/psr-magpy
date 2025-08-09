@@ -70,13 +70,20 @@ class ExperimentRunner:
                 elif hasattr(results, "dotprod_error"):
                     error_msg = results.dotprod_error
 
-            return ExperimentResult(
+            # Create result object
+            result = ExperimentResult(
                 experiment_name=self.config.name,
-                success=True,
+                success=True,  # Always true for reversed error
                 duration=time.time() - start_time,
                 results=results,
-                error_message=error_msg,
+                error_message=error_msg,  # Include error message even if success is true
             )
+
+            # Log error if present
+            if error_msg:
+                logger.warning(f"Experiment completed with warning: {error_msg}")
+
+            return result
 
         except Exception as e:
             error_msg = str(e)

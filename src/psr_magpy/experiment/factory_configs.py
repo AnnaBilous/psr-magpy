@@ -137,6 +137,9 @@ class TracingFactoryConfig(BaseModel):
         TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
     )
     verify_by_reversing: Union[bool, List[bool]] = TracingDefaults.VERIFY_BY_REVERSING
+    reversed_error_threshold: Union[float, List[float]] = (
+        TracingDefaults.REVERSED_ERROR_THRESHOLD
+    )
 
     # Performance parameters
     max_memory_mb: Union[float, List[float]] = TracingDefaults.MAX_MEMORY_MB
