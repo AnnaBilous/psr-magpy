@@ -101,7 +101,9 @@ class FieldLineCalculator:
         error_msg = None
         if results is not None:
             if hasattr(results, "reversed_error_warning"):
-                error_msg = results.reversed_error_warning
+                reversed_error = float(results.reversed_error_warning.split(":")[1].strip())
+                if reversed_error > self.context.params.integration.reversed_error_threshold:
+                    error_msg = f"Reversed error ({reversed_error:.3f}) exceeds threshold ({self.context.params.integration.reversed_error_threshold:.3f})"
             elif hasattr(results, "dotprod_error"):
                 error_msg = results.dotprod_error
 

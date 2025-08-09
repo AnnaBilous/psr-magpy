@@ -36,6 +36,7 @@ class TracingDefaults:
     MAX_STEP = 0.01
     TRACE_OPEN_LINES_BACKWARDS = False
     VERIFY_BY_REVERSING = False
+    REVERSED_ERROR_THRESHOLD = 1.e-3  # Maximum allowed reversed error
 
     # Performance parameters
     MAX_MEMORY_MB = 100.0
@@ -103,6 +104,11 @@ class IntegrationParameters(BaseModel):
     verify_by_reversing: bool = Field(
         default=TracingDefaults.VERIFY_BY_REVERSING,
         description="Whether to verify field line tracing by reversing the integration",
+    )
+    reversed_error_threshold: float = Field(
+        default=TracingDefaults.REVERSED_ERROR_THRESHOLD,
+        gt=0,
+        description="Maximum allowed reversed error before marking as error",
     )
 
     @model_validator(mode="after")

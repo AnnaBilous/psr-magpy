@@ -276,6 +276,7 @@ class TracingConfig(BaseModel):
     max_step: float = TracingDefaults.MAX_STEP
     trace_open_lines_backwards: bool = TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
     verify_by_reversing: bool = TracingDefaults.VERIFY_BY_REVERSING
+    reversed_error_threshold: float = TracingDefaults.REVERSED_ERROR_THRESHOLD
 
     # Performance parameters
     max_memory_mb: float = TracingDefaults.MAX_MEMORY_MB
@@ -309,6 +310,7 @@ class TracingConfig(BaseModel):
             max_step=self.max_step,
             trace_open_lines_backwards=self.trace_open_lines_backwards,
             verify_by_reversing=self.verify_by_reversing,
+            reversed_error_threshold=self.reversed_error_threshold,
         )
 
         performance = PerformanceParameters(
