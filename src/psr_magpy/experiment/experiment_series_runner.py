@@ -143,6 +143,9 @@ class ExperimentSeriesRunner:
                 if not self.continue_on_failure:
                     raise
 
+            # Update summary after each experiment
+            self._save_results_summary(results)
+
         return results
 
     def run(self) -> SeriesResult:
@@ -218,9 +221,6 @@ class ExperimentSeriesRunner:
         start_time = time.time()
         results = self._run_experiments(experiments)
         total_duration = time.time() - start_time
-
-        # Save results summary
-        self._save_results_summary(results)
 
         return SeriesResult(
             series_name=self.series_config.name,

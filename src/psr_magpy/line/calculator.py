@@ -7,7 +7,7 @@ from pathlib import Path
 
 from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.field_line import FieldLine
-from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.line.field_line_set import FieldLineSet, LightFieldLineSet
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.calculation_context import CalculationContext
@@ -96,6 +96,15 @@ class FieldLineCalculator:
             else 0
         )
 
+        # Extract necessary attributes before saving
+        n_field_lines = results.n_field_lines if results is not None else 0
+        error_msg = None
+        if results is not None:
+            if hasattr(results, "reversed_error_warning"):
+                error_msg = results.reversed_error_warning
+            elif hasattr(results, "dotprod_error"):
+                error_msg = results.dotprod_error
+
         # Save results to disk if requested
         if self.context.params.output.save_results and results is not None:
             filename = self.context.params.output.filename
@@ -109,7 +118,7 @@ class FieldLineCalculator:
                 # Save results
                 get_io_factory().save_data(results, batch_filename, overwrite=True)
                 self.context.progress_tracker.log_io_completion(
-                    "save", str(batch_filename), elapsed, results.n_field_lines
+                    "save", str(batch_filename), elapsed, n_field_lines
                 )
 
                 # Mark that batch files were created
@@ -125,7 +134,14 @@ class FieldLineCalculator:
             elapsed,
             self.context.params.output.save_results,
             self.context.params.output.filename or "",
-            results.n_field_lines if results else 0,
+            n_field_lines,
+        )
+
+        # Return lightweight result object
+        return LightFieldLineSet(
+            n_field_lines=n_field_lines,
+            reversed_error_warning=error_msg if hasattr(results, "reversed_error_warning") else None,
+            dotprod_error=error_msg if hasattr(results, "dotprod_error") else None
         )
 
     def _process_in_batches(self, template: FieldLine, batch_size: int) -> None:

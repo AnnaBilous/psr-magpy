@@ -137,7 +137,7 @@ def test_yaml_field_order(tmp_path):
     # Check order of fields in experiment results
     first_result = summary["experiment_results"][0]
     fields = list(first_result.keys())
-    assert fields == ["name", "start_time", "duration", "success", "error"]
+    assert fields == ["name", "start_time", "duration", "success", "error", "batch_files"]
 
 def test_duration_formatting(tmp_path):
     """Test duration formatting in summary."""

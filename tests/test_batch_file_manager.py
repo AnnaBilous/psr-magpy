@@ -69,18 +69,18 @@ class TestBatchFileManager:
     def test_organize_batch_files(self):
         """Test organizing batch files."""
         self.create_sample_batch_files(3)
-        
+
         batch_manager = BatchFileManager(
             str(self.base_filename),
             organize_files=True,
             cleanup_batch_files=False
         )
-        
+
         batch_dir = batch_manager.organize_batch_files()
-        
+
         assert batch_dir is not None
         assert batch_dir.exists()
-        assert batch_dir.name == f"{self.base_filename.stem}_batches"
+        assert batch_dir == self.base_filename.parent  # Files are organized in the same directory
         
         # Check that files were moved
         moved_files = list(batch_dir.glob("*.fits"))

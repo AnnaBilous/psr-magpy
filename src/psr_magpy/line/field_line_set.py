@@ -1,3 +1,7 @@
+"""Field line set module."""
+
+from dataclasses import dataclass
+from typing import Optional
 from typing import List, Union
 from sys import getsizeof
 import numpy as np
@@ -8,6 +12,14 @@ from psr_magpy.line.property_system import PropertyName
 
 
 logger = get_logger(__name__, console_format_brief=True)
+
+
+@dataclass
+class LightFieldLineSet:
+    """Lightweight version of FieldLineSet containing only necessary attributes."""
+    n_field_lines: int
+    reversed_error_warning: Optional[str] = None
+    dotprod_error: Optional[str] = None
 
 
 class FieldLineSet(FieldLine):
