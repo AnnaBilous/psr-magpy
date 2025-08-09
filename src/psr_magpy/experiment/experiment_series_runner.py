@@ -146,6 +146,10 @@ class ExperimentSeriesRunner:
             # Update summary after each experiment
             self._save_results_summary(results)
 
+            # Clear results from memory after saving
+            if result.results is not None:
+                result.results = None
+
         return results
 
     def run(self) -> SeriesResult:
