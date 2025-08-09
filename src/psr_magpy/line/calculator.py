@@ -1,4 +1,5 @@
 import time
+import gc
 from multiprocessing import Pool
 from typing import Optional, Union
 import numpy as np
@@ -132,6 +133,12 @@ class FieldLineCalculator:
                     self.context.memory_manager.rename_batch_files(
                         filename, self.context.progress_tracker
                     )
+
+                # Clear memory after saving
+                self.context.memory_manager._results_in_memory = None
+                self.context.memory_manager._results_in_memory_size = 0.0
+                gc.collect()
+                logger.info("Cleared memory after saving results")
 
         self.context.progress_tracker.log_calculation_completion(
             elapsed,
