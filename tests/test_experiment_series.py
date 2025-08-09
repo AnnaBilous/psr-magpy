@@ -434,8 +434,8 @@ class TestExperimentSeriesRunner:
             assert results[0].experiment_name == "test_experiment_000"
             assert results[0].success is True
             assert results[0].duration > 0
-            assert isinstance(results[0].results, FieldLineSet)
-            assert results[0].results.n_lines == 32
+            # Results field is cleared after saving to disk
+            assert results[0].results is None
     
     @patch('psr_magpy.experiment.experiment_series_runner.run_experiment')
     def test_run_experiment_with_failure(self, mock_run_experiment):

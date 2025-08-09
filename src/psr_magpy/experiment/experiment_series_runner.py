@@ -80,14 +80,14 @@ class ExperimentSeriesRunner:
                     "Experiment %s already completed. Skipping (use overwrite_results=True to rerun).",
                     experiment.name,
                 )
-                results.append(
-                    ExperimentResult(
-                        experiment_name=experiment.name,
-                        success=True,
-                        duration=0.0,
-                        results=None,
-                    )
+                result = ExperimentResult(
+                    experiment_name=experiment.name,
+                    success=True,
+                    duration=0.0,
+                    results=None,
                 )
+                results.append(result)
+                self._save_results_summary([result])
                 continue
 
             # Configure experiment to save results
@@ -124,7 +124,6 @@ class ExperimentSeriesRunner:
                     )
                     if not self.continue_on_failure:
                         raise RuntimeError(error_msg)
-                results.append(result)
             except Exception as e:
                 duration = time.time() - exp_start_time
                 result = ExperimentResult(
@@ -139,16 +138,18 @@ class ExperimentSeriesRunner:
                     duration,
                     str(e),
                 )
-                results.append(result)
                 if not self.continue_on_failure:
                     raise
 
             # Update summary after each experiment
-            self._save_results_summary(results)
+            self._save_results_summary([result])
 
             # Clear results from memory after saving
             if result.results is not None:
                 result.results = None
+
+            # Keep only the latest result
+            results = [result]
 
         return results
 

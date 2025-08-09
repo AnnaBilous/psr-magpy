@@ -109,15 +109,15 @@ class FieldComponent(ABC):
     def moment_orientation(self) -> PhysicsSphericalRepresentation:
         """Get moment orientation in spherical coordinates (cached)."""
         return PhysicsSphericalRepresentation(
-            phi=self.params.moment_orientation_longitude_degree * u.deg,
-            theta=self.params.moment_orientation_latitude_degree * u.deg,
+            phi=u.Quantity(self.params.moment_orientation_longitude_degree, u.deg),
+            theta=u.Quantity(self.params.moment_orientation_latitude_degree, u.deg),
             r=0,
         )
 
     @cached_property
     def moment_offset_vector(self) -> NDArray[np.float32]:
         """Get moment offset vector (cached)."""
-        return self.params.offset_r_ns
+        return np.asarray(self.params.offset_r_ns, dtype=np.float32)
 
     @cached_property
     def rotate_magn_to_spin_frame(self) -> Rotation:

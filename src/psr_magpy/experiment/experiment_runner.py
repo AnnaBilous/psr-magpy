@@ -53,6 +53,11 @@ class ExperimentRunner:
             logger.info("Starting field line calculations...")
             results = calculator.get_field_lines(self.config.template)
 
+            # Clear references to free memory
+            calculator = None
+            field = None
+            grid = None
+
             # Log results
             logger.info(f"Experiment completed in {time.time() - start_time:.2f}s")
             logger.info(f"Results: {results}")
