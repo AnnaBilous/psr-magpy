@@ -66,7 +66,6 @@ class ExperimentSeriesRunner:
         """Run a list of experiments."""
         results: List[ExperimentResult] = []
         lines_dir = self.output_directory / self.series_config.name / "lines"
-        lines_dir.mkdir(exist_ok=True)
 
         for i, experiment in enumerate(experiments, 1):
             logger.info(
@@ -95,15 +94,23 @@ class ExperimentSeriesRunner:
             experiment.tracing.filename = str(lines_dir / f"{experiment.name}.fits")
             experiment.tracing.overwrite = True
 
+            # Create lines directory if needed
+            if not lines_dir.exists():
+                lines_dir.mkdir(parents=True, exist_ok=True)
+
             # Save grid if requested
             if self.save_grids:
                 grids_dir = self.output_directory / self.series_config.name / "grids"
-                grids_dir.mkdir(exist_ok=True)
                 grid = experiment.grid.create_grid()
                 if grid is not None:
                     grid_path = grids_dir / f"{experiment.name}.fits"
-                    grid.save_to_fits(str(grid_path))
-                    logger.info("Saved grid to: %s", grid_path)
+                    if not grid_path.exists() or self.overwrite_results:
+                        if not grids_dir.exists():
+                            grids_dir.mkdir(parents=True, exist_ok=True)
+                        grid.save_to_fits(str(grid_path))
+                        logger.info("Saved grid to: %s", grid_path)
+                    else:
+                        logger.info("Grid file already exists, skipping: %s", grid_path)
 
             # Run the experiment
             exp_start_time = time.time()
@@ -158,20 +165,22 @@ class ExperimentSeriesRunner:
         # Create output directories
         series_dir = self.output_directory / self.series_config.name
 
-        # Clean up if overwrite_everything is True
-        if self.overwrite_everything and series_dir.exists():
-            # Delete all files and subdirectories except configs
-            for item in series_dir.iterdir():
-                if item.name != "configs":
-                    if item.is_dir():
-                        shutil.rmtree(item)
-                    else:
-                        item.unlink()
+        # Only create directories if they don't exist or if overwrite is enabled
+        if not series_dir.exists() or self.overwrite_everything:
+            # Clean up if overwrite_everything is True
+            if self.overwrite_everything and series_dir.exists():
+                # Delete all files and subdirectories except configs
+                for item in series_dir.iterdir():
+                    if item.name != "configs":
+                        if item.is_dir():
+                            shutil.rmtree(item)
+                        else:
+                            item.unlink()
 
-        # Create subdirectories
-        for subdir in ["lines", "grids", "configs", "logs"]:
-            subdir_path = series_dir / subdir
-            subdir_path.mkdir(parents=True, exist_ok=True)
+            # Create subdirectories
+            for subdir in ["lines", "grids", "configs", "logs"]:
+                subdir_path = series_dir / subdir
+                subdir_path.mkdir(parents=True, exist_ok=True)
 
         # Set up logging
         log_file = series_dir / "logs" / f"{self.series_config.name}.log"
@@ -299,24 +308,6 @@ class ExperimentSeriesRunner:
             with open(summary_path) as f:
                 existing_summary = yaml.safe_load(f) or {}
 
-        # Create new summary
-        summary = {
-            "series_name": self.series_config.name,
-            "last_update": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "total_experiments": len(experiment_results),
-            "successful_experiments": sum(1 for r in experiment_results if r.success),
-            "failed_experiments": sum(1 for r in experiment_results if not r.success),
-            "total_duration": self._format_duration(sum(r.duration for r in experiment_results)),
-            "success_rate": (
-                sum(1 for r in experiment_results if r.success)
-                / len(experiment_results)
-                * 100
-                if experiment_results
-                else 0.0
-            ),
-            "experiment_results": [],
-        }
-
         # Merge with existing results
         if "experiment_results" in existing_summary:
             existing_results = {
@@ -363,10 +354,37 @@ class ExperimentSeriesRunner:
             else:
                 existing_results[result.experiment_name] = result_dict
 
-        # Sort results by name and add to summary
-        summary["experiment_results"] = sorted(
-            existing_results.values(), key=lambda x: x["name"]
-        )
+        # Sort results by name
+        sorted_results = sorted(existing_results.values(), key=lambda x: x["name"])
+
+        # Create new summary with updated statistics
+        summary = {
+            "series_name": self.series_config.name,
+            "last_update": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "total_experiments": len(sorted_results),
+            "successful_experiments": sum(1 for r in sorted_results if r["success"]),
+            "failed_experiments": sum(1 for r in sorted_results if not r["success"]),
+            "total_duration": self._format_duration(
+                sum(
+                    float(r["duration"].rstrip("s")) 
+                    if r["duration"].endswith("s") 
+                    else float(r["duration"].rstrip("min")) * 60 
+                    if r["duration"].endswith("min") 
+                    else float(r["duration"].rstrip("h")) * 3600 
+                    if r["duration"].endswith("h") 
+                    else float(r["duration"].rstrip("d")) * 86400 
+                    for r in sorted_results
+                )
+            ),
+            "success_rate": (
+                sum(1 for r in sorted_results if r["success"])
+                / len(sorted_results)
+                * 100
+                if sorted_results
+                else 0.0
+            ),
+            "experiment_results": sorted_results,
+        }
 
         # Create custom dumper to preserve dictionary order
         class OrderedDumper(yaml.SafeDumper):
@@ -389,14 +407,19 @@ class ExperimentSeriesRunner:
         """Save individual experiment configurations."""
         # Use the series-specific configs directory
         configs_dir = self.output_directory / self.series_config.name / "configs"
-        configs_dir.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Saving {len(experiments)} individual configs to {configs_dir}")
 
         for experiment in experiments:
             config_path = configs_dir / f"{experiment.name}.yaml"
-            io_instance = get_io_factory().create_config_io(type(experiment))
-            io_instance.save(experiment, config_path, overwrite=True)
+            if not config_path.exists() or self.overwrite_results:
+                if not configs_dir.exists():
+                    configs_dir.mkdir(parents=True, exist_ok=True)
+                io_instance = get_io_factory().create_config_io(type(experiment))
+                io_instance.save(experiment, config_path, overwrite=True)
+                logger.info(f"Saved config to: {config_path}")
+            else:
+                logger.info(f"Config file already exists, skipping: {config_path}")
 
         logger.info("Individual configs saved")
 

@@ -401,36 +401,50 @@ class ExperimentSeriesConfig(BaseModel):
         """Create output directory structure.
         
         Args:
-            overwrite: Whether to overwrite existing directories
+            overwrite: Whether to overwrite configs directory
         """
         if self.output_dir is None:
             # Create series directory
             series_dir = Path(self.name)
-            if overwrite and series_dir.exists():
-                shutil.rmtree(series_dir)
-            series_dir.mkdir(parents=True, exist_ok=True)
-            logger.info("Created output directory structure under: %s", series_dir)
+            if not series_dir.exists():
+                series_dir.mkdir(parents=True, exist_ok=True)
+                logger.info("Created output directory structure under: %s", series_dir)
 
-            # Create subdirectories
-            for subdir in ["lines", "grids", "configs", "logs"]:
-                subdir_path = series_dir / subdir
-                if overwrite and subdir_path.exists():
-                    shutil.rmtree(subdir_path)
-                subdir_path.mkdir(parents=True, exist_ok=True)
+                # Create subdirectories
+                for subdir in ["lines", "grids", "configs", "logs"]:
+                    subdir_path = series_dir / subdir
+                    subdir_path.mkdir(parents=True, exist_ok=True)
+            else:
+                # Only overwrite configs directory if overwrite is True
+                if overwrite:
+                    configs_dir = series_dir / "configs"
+                    if configs_dir.exists():
+                        shutil.rmtree(configs_dir)
+                    configs_dir.mkdir(parents=True, exist_ok=True)
+                    logger.info("Recreated configs directory: %s", configs_dir)
+                else:
+                    logger.info("Using existing directory structure: %s", series_dir)
         else:
             # Create series directory
             series_dir = Path(self.output_dir) / self.name
-            if overwrite and series_dir.exists():
-                shutil.rmtree(series_dir)
-            series_dir.mkdir(parents=True, exist_ok=True)
-            logger.info("Created output directory structure under: %s", series_dir)
+            if not series_dir.exists():
+                series_dir.mkdir(parents=True, exist_ok=True)
+                logger.info("Created output directory structure under: %s", series_dir)
 
-            # Create subdirectories
-            for subdir in ["lines", "grids", "configs", "logs"]:
-                subdir_path = series_dir / subdir
-                if overwrite and subdir_path.exists():
-                    shutil.rmtree(subdir_path)
-                subdir_path.mkdir(parents=True, exist_ok=True)
+                # Create subdirectories
+                for subdir in ["lines", "grids", "configs", "logs"]:
+                    subdir_path = series_dir / subdir
+                    subdir_path.mkdir(parents=True, exist_ok=True)
+            else:
+                # Only overwrite configs directory if overwrite is True
+                if overwrite:
+                    configs_dir = series_dir / "configs"
+                    if configs_dir.exists():
+                        shutil.rmtree(configs_dir)
+                    configs_dir.mkdir(parents=True, exist_ok=True)
+                    logger.info("Recreated configs directory: %s", configs_dir)
+                else:
+                    logger.info("Using existing directory structure: %s", series_dir)
 
     def _create_experiments(self) -> List[ExperimentConfig]:
         """Create all experiment configurations from factory configs.
