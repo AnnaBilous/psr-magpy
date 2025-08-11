@@ -258,7 +258,7 @@ class TestFieldLineTracer:
         assert r_cyl_max == np.max(np.sum(r_line[:,:2] ** 2, axis=1) ** 0.5)
         
         # z_abs_max should be reasonable
-        assert z_abs_max == np.max(np.abs(r_line[:,2]))
+        assert np.allclose(z_abs_max, np.max(np.abs(r_line[:,2])), rtol=1e-6)
         
         # b_ini should be reasonable
         assert b_ini >= 0

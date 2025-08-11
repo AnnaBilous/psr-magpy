@@ -149,7 +149,6 @@ class FieldLineTracer:
         
         # Use internal integration method
         field_line = self.integrate_field_line(r_initial_array, K, self.params.integration.max_integration_radius, self.params.integration.trace_open_lines_backwards)
-        print(field_line)
         
         # Use dt from integration parameters
         dt = self.params.integration.dt
@@ -206,11 +205,6 @@ class FieldLineTracer:
                 r_reversed_final = field_line_reversed.sol(field_line_reversed.t[-1])
                 # Calculate distance from original starting point
                 distance_from_start = np.sqrt(np.sum((r_reversed_final - r_initial_array)**2))
-                if distance_from_start > 100:
-                    print(r_reversed_final, r_initial_array)
-                    print(r_initial_array_reversed)
-                    print(field_line_reversed.sol(field_line_reversed.t))
-                    print("===============")
                 output.set_property(reversed_error=distance_from_start)
             else:
                 # If reversed integration failed, set a large error

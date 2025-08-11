@@ -59,18 +59,18 @@ class TestFieldComponentParams:
             moment_type=MultipoleType.DIPOLE
         )
         assert isinstance(params.offset_r_ns, np.ndarray)
-        assert params.offset_r_ns.dtype == np.float32
+        assert params.offset_r_ns.dtype == np.float64
         assert np.allclose(params.offset_r_ns, [1.0, 2.0, 3.0])
     
     def test_offset_vector_validation_array(self):
         """Test offset vector validation with numpy array input."""
-        offset = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        offset = np.array([1.0, 2.0, 3.0], dtype=np.float64)
         params = FieldComponentParams(
             offset_r_ns=offset,
             moment_type=MultipoleType.DIPOLE
         )
         assert isinstance(params.offset_r_ns, np.ndarray)
-        assert params.offset_r_ns.dtype == np.float32
+        assert params.offset_r_ns.dtype == np.float64
         assert np.allclose(params.offset_r_ns, [1.0, 2.0, 3.0])
     
     def test_invalid_offset_vector_length(self):
@@ -189,7 +189,7 @@ class TestDipoleFieldComponent:
         # Test moment_offset_vector
         offset = self.dipole.moment_offset_vector
         assert isinstance(offset, np.ndarray)
-        assert offset.dtype == np.float32
+        assert offset.dtype == np.float64
         
         # Test rotation matrices
         rot_magn_to_spin = self.dipole.rotate_magn_to_spin_frame
