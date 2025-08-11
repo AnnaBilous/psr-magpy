@@ -42,7 +42,7 @@ class TracingDefaults:
     # Performance parameters
     MAX_MEMORY_MB = 100.0
     SAFETY_FACTOR = 0.9
-    MAX_BATCH_SIZE = 1000  # Single source of truth for batch size
+    MAX_BATCH_SIZE = 10000  # Single source of truth for batch size
     CHECK_INTERVAL_SEC = 1.0
     N_CORES = None  # Auto-detect
     N_TRIAL = 10
