@@ -26,22 +26,24 @@ class MemoryManager:
         config: PerformanceParameters,
         tracer: FieldLineTracer,
         max_file_size_mb: float = 100.0,
-        save_results: bool = True,
+        save_results_to_disk: bool = True,
+        keep_results_in_memory: bool = False,
     ) -> None:
         """Initialize memory manager."""
         self.config = config
         self.tracer = tracer
         self.max_file_size_mb = max_file_size_mb
-        self.save_results = save_results
+        self.save_results_to_disk = save_results_to_disk
+        self.keep_results_in_memory = keep_results_in_memory
         self._results_in_memory: Optional[FieldLineSet] = None
         self._results_in_memory_size: float = 0.0
         self._batch_files_created = False
 
         logger.debug(
-            f"Initialized MemoryManager with max_file_size_mb={max_file_size_mb}, save_results={save_results}"
+            f"Initialized MemoryManager with max_file_size_mb={max_file_size_mb}, save_results_to_disk={save_results_to_disk}, keep_results_in_memory={keep_results_in_memory}"
         )
 
-        if not save_results:
+        if not save_results_to_disk:
             logger.info("Disk writing disabled - all results will be kept in memory")
         elif max_file_size_mb <= 0:
             logger.warning(
@@ -141,15 +143,20 @@ class MemoryManager:
         memory_mb = self._results_in_memory_size / (1024 * 1024)
 
         # Check against the configured max_memory_mb threshold
-        if self.save_results and memory_mb > self.config.max_memory_mb:
+        if self.save_results_to_disk and memory_mb > self.config.max_memory_mb and not self.keep_results_in_memory:
             logger.info(
                 f"Memory threshold reached ({memory_mb:.1f} MB > {self.config.max_memory_mb} MB), writing to disk"
             )
             self._write_results_to_disk(filename, batch_idx)
-        elif not self.save_results and memory_mb > self.config.max_memory_mb:
-            logger.warning(
-                f"Memory usage ({memory_mb:.1f} MB) exceeds threshold ({self.config.max_memory_mb} MB) but save_results=False - keeping in memory"
-            )
+        elif not self.save_results_to_disk and memory_mb > self.config.max_memory_mb:
+            if self.keep_results_in_memory:
+                logger.warning(
+                    f"Memory usage ({memory_mb:.1f} MB) exceeds threshold ({self.config.max_memory_mb} MB) but keep_results_in_memory=True - keeping in memory (use at your own risk)"
+                )
+            else:
+                logger.warning(
+                    f"Memory usage ({memory_mb:.1f} MB) exceeds threshold ({self.config.max_memory_mb} MB) but save_results_to_disk=False - keeping in memory"
+                )
 
         return self._results_in_memory
 

@@ -261,14 +261,14 @@ class ProgressTracker:
     def log_calculation_completion(
         self,
         elapsed: float,
-        save_results: bool,
+        save_results_to_disk: bool,
         filename: str = "",
         n_field_lines: int = 0,
     ) -> None:
         """Log the completion of field line calculations."""
         logger.info(f"Calculations completed in {elapsed:.1f} seconds")
 
-        if save_results:
+        if save_results_to_disk:
             logger.info(f"Results saved to {filename}")
         else:
             logger.info(f"Returning {n_field_lines} field lines in memory")

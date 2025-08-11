@@ -133,6 +133,7 @@ class TracingFactoryConfig(BaseModel):
     surface_radius: Union[float, List[float]] = TracingDefaults.SURFACE_RADIUS
     dt: Union[float, List[float]] = TracingDefaults.DT
     max_step: Union[float, List[float]] = TracingDefaults.MAX_STEP
+    method: Union[str, List[str]] = TracingDefaults.METHOD
     trace_open_lines_backwards: Union[bool, List[bool]] = (
         TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
     )
@@ -155,7 +156,8 @@ class TracingFactoryConfig(BaseModel):
     )
 
     # Output parameters
-    save_results: Union[bool, List[bool]] = TracingDefaults.SAVE_RESULTS
+    save_results_to_disk: Union[bool, List[bool]] = TracingDefaults.SAVE_RESULTS_TO_DISK
+    keep_results_in_memory: Union[bool, List[bool]] = TracingDefaults.KEEP_RESULTS_IN_MEMORY
     filename: Union[Optional[str], List[Optional[str]]] = TracingDefaults.FILENAME
     output_format: Union[str, List[str]] = TracingDefaults.OUTPUT_FORMAT
     overwrite: Union[bool, List[bool]] = TracingDefaults.OVERWRITE

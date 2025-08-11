@@ -46,7 +46,7 @@ class TestFieldLineCalculator:
         self.params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0, threshold_line_distance=1.0),
             performance=PerformanceParameters(n_trial=5),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False, keep_results_in_memory=True)
         )
     
     def test_initialization(self):
@@ -87,7 +87,7 @@ class TestMemoryEstimationSkipping:
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=5, skip_memory_estimation=True),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator = FieldLineCalculator(self.field, grid, params)
@@ -101,7 +101,7 @@ class TestMemoryEstimationSkipping:
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=25.0),
             performance=PerformanceParameters(n_trial=5, skip_memory_estimation=False),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator = FieldLineCalculator(self.field, grid, params)
@@ -115,7 +115,7 @@ class TestMemoryEstimationSkipping:
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=50),  # Default skip_memory_estimation=False
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator = FieldLineCalculator(self.field, grid, params)
@@ -129,12 +129,12 @@ class TestMemoryEstimationSkipping:
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=5, skip_memory_estimation=True),
-            output=OutputParameters(save_results=True, filename="test.fits")
+            output=OutputParameters(save_results_to_disk=True, filename="test.fits")
         )
         
         calculator = FieldLineCalculator(self.field, grid, params)
         
-        # Should skip: user requested skip_memory_estimation=True (overrides save_results)
+        # Should skip: user requested skip_memory_estimation=True (overrides save_results_to_disk)
         assert calculator._can_skip_memory_estimation() is True
     
     def test_user_control_overrides_all_conditions(self):
@@ -145,7 +145,7 @@ class TestMemoryEstimationSkipping:
         params_skip = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=100.0),  # Large R_max
             performance=PerformanceParameters(n_trial=5, skip_memory_estimation=True),
-            output=OutputParameters(save_results=True, filename="test.fits")  # Saving results
+            output=OutputParameters(save_results_to_disk=True, filename="test.fits")  # Saving results
         )
         calculator_skip = FieldLineCalculator(self.field, grid, params_skip)
         assert calculator_skip._can_skip_memory_estimation() is True
@@ -154,7 +154,7 @@ class TestMemoryEstimationSkipping:
         params_no_skip = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=2.0),  # Small R_max but > threshold_line_distance
             performance=PerformanceParameters(n_trial=5, skip_memory_estimation=False),
-            output=OutputParameters(save_results=False)  # Not saving results
+            output=OutputParameters(save_results_to_disk=False)  # Not saving results
         )
         calculator_no_skip = FieldLineCalculator(self.field, grid, params_no_skip)
         assert calculator_no_skip._can_skip_memory_estimation() is False
@@ -169,13 +169,13 @@ class TestMemoryEstimationSkipping:
         params_skip_small = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=10, skip_memory_estimation=True),  # Small n_trial for small grid
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         params_skip_large = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=100, skip_memory_estimation=True),  # Larger n_trial for large grid
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator_small_skip = FieldLineCalculator(self.field, grid_small, params_skip_small)
@@ -188,13 +188,13 @@ class TestMemoryEstimationSkipping:
         params_no_skip_small = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=10, skip_memory_estimation=False),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         params_no_skip_large = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=100, skip_memory_estimation=False),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator_small_no_skip = FieldLineCalculator(self.field, grid_small, params_no_skip_small)
@@ -222,7 +222,7 @@ class TestCalculatorBehavior:
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=10, skip_memory_estimation=True),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator = FieldLineCalculator(self.field, grid, params)
@@ -241,7 +241,7 @@ class TestCalculatorBehavior:
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=25.0),  # Large R_max
             performance=PerformanceParameters(n_trial=10, skip_memory_estimation=False),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator = FieldLineCalculator(self.field, grid, params)
@@ -262,14 +262,14 @@ class TestCalculatorBehavior:
         params_skip = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=10, skip_memory_estimation=True),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         # Configuration that doesn't skip memory estimation
         params_no_skip = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=10, skip_memory_estimation=False),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator_skip = FieldLineCalculator(self.field, grid, params_skip)
@@ -311,7 +311,7 @@ class TestCalculatorEdgeCases:
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=2),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator = FieldLineCalculator(self.field, grid, params)
@@ -331,7 +331,7 @@ class TestCalculatorEdgeCases:
         params_skip = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=2, skip_memory_estimation=True),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator_skip = FieldLineCalculator(self.field, grid, params_skip)
@@ -341,7 +341,7 @@ class TestCalculatorEdgeCases:
         params_no_skip = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
             performance=PerformanceParameters(n_trial=2, skip_memory_estimation=False),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         calculator_no_skip = FieldLineCalculator(self.field, grid, params_no_skip)

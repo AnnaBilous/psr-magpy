@@ -362,7 +362,7 @@ class TestTracingConfig:
         assert config.skip_memory_estimation is False
         
         # Output parameters
-        assert config.save_results is False
+        assert config.save_results_to_disk is False
         assert config.filename is None
         assert config.output_format == "fits"
         assert config.overwrite is False
@@ -373,14 +373,14 @@ class TestTracingConfig:
             max_integration_radius=15.0,
             dt=0.1,
             n_cores=4,
-            save_results=True,
+            save_results_to_disk=True,
             filename="test.fits"
         )
         
         assert config.max_integration_radius == 15.0
         assert config.dt == 0.1
         assert config.n_cores == 4
-        assert config.save_results is True
+        assert config.save_results_to_disk is True
         assert config.filename == "test.fits"
     
     def test_create_tracing_parameters(self):
@@ -389,8 +389,8 @@ class TestTracingConfig:
             max_integration_radius=12.0,
             dt=0.05,
             n_cores=2,
-            save_results=True,
-            filename="test_output.fits"  # Required when save_results=True
+            save_results_to_disk=True,
+            filename="test_output.fits"  # Required when save_results_to_disk=True
         )
         
         params = config.create_tracing_parameters()
@@ -398,7 +398,7 @@ class TestTracingConfig:
         assert params.integration.max_integration_radius == 12.0
         assert params.integration.dt == 0.05
         assert params.performance.n_cores == 2
-        assert params.output.save_results is True
+        assert params.output.save_results_to_disk is True
     
     def test_get_complete_config(self):
         """Test getting complete configuration."""
@@ -412,7 +412,7 @@ class TestTracingConfig:
         assert complete["max_integration_radius"] == 15.0
         assert complete["dt"] == 0.1
         assert complete["n_cores"] == 4
-        assert complete["save_results"] is False  # default
+        assert complete["save_results_to_disk"] is False  # default
         assert complete["output_format"] == "fits"  # default
 
 
@@ -757,7 +757,7 @@ class TestIntegration:
             dt=0.1,
             n_cores=2,
             skip_memory_estimation=True,
-            save_results=False
+            save_results_to_disk=False
         )
         template = FieldLine.template_coordinates_and_PA()
         
@@ -816,7 +816,7 @@ class TestIntegration:
             max_integration_radius=15.0,
             dt=0.05,
             n_cores=4,
-            save_results=True,
+            save_results_to_disk=True,
             filename="test_output.fits"
         )
         template = FieldLine.template_all()
@@ -866,7 +866,7 @@ class TestIntegration:
             assert loaded_config.tracing.max_integration_radius == config.tracing.max_integration_radius
             assert loaded_config.tracing.dt == config.tracing.dt
             assert loaded_config.tracing.n_cores == config.tracing.n_cores
-            assert loaded_config.tracing.save_results == config.tracing.save_results
+            assert loaded_config.tracing.save_results_to_disk == config.tracing.save_results_to_disk
             assert loaded_config.tracing.filename == config.tracing.filename
             
             # Verify template configuration

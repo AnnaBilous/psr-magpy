@@ -42,7 +42,7 @@ class TestFieldLineTracer:
         # Create default tracing parameters
         self.params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         # Create tracer instance
@@ -64,7 +64,7 @@ class TestFieldLineTracer:
                 t_span=(0.0, 2e6),
                 rtol=1e-9,
             ),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
     
         tracer = FieldLineTracer(self.field, custom_params)
@@ -137,7 +137,7 @@ class TestFieldLineTracer:
         # Use a custom tracer with a safe t_span to avoid memory errors
         safe_params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         tracer = FieldLineTracer(self.field, safe_params)
         # Test different positions
@@ -195,7 +195,7 @@ class TestFieldLineTracer:
                 threshold_line_distance=1.0,
                 dt=0.001,
             ),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         tracer_small_dt = FieldLineTracer(self.field, small_dt_params)
         
@@ -215,7 +215,7 @@ class TestFieldLineTracer:
                 dt=0.1,
                 t_span=(0.0, 1e4),
             ),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         tracer_large_dt = FieldLineTracer(self.field, large_dt_params)
         
@@ -353,7 +353,7 @@ class TestFieldLineTracer:
                 rtol=1e-6,
                 atol=1e-6,
             ),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         low_tol_params = TracingParameters(
             integration=IntegrationParameters(
@@ -362,7 +362,7 @@ class TestFieldLineTracer:
                 rtol=1e-10,
                 atol=1e-10,
             ),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         high_tol_tracer = FieldLineTracer(self.field, high_tol_params)
@@ -391,7 +391,7 @@ class TestFieldLineTracer:
         # Test with different surface radius
         custom_params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, surface_radius=0.5),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         custom_tracer = FieldLineTracer(self.field, custom_params)
@@ -412,7 +412,7 @@ class TestFieldLineTracer:
         # Test with shorter time span
         short_span_params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 1e5)),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         
         short_span_tracer = FieldLineTracer(self.field, short_span_params)
@@ -509,7 +509,7 @@ class TestFieldLineTracerIntegration:
         self.field = MultipoleField([self.dipole])
         self.params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
     
     def test_integration_handler_initialization(self):
@@ -536,7 +536,7 @@ class TestFieldLineTracerIntegration:
                 dt=0.1,
                 t_span=(0.0, 1e4),
             ),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         tracer = FieldLineTracer(self.field, params)
         
@@ -600,7 +600,7 @@ class TestFieldLineTracerPerformance:
         self.field = MultipoleField([self.dipole])
         self.params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         self.tracer = FieldLineTracer(self.field, self.params)
     
@@ -635,7 +635,7 @@ class TestFieldLineTracerPerformance:
         # Use custom parameters with shorter time span to avoid memory issues
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         tracer = FieldLineTracer(self.field, params)
         

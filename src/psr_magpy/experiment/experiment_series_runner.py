@@ -90,7 +90,7 @@ class ExperimentSeriesRunner:
                 continue
 
             # Configure experiment to save results
-            experiment.tracing.save_results = True
+            experiment.tracing.save_results_to_disk = True
             experiment.tracing.filename = str(lines_dir / f"{experiment.name}.fits")
             experiment.tracing.overwrite = True
 

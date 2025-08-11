@@ -108,6 +108,7 @@ class FieldLineTracer:
             'args': [K],
             'dense_output': True,
             'events': (self.event_detector.hit_surface, self.event_detector.hit_Rmax),
+            'method': self.params.integration.method,
             'rtol': rtol,
             'atol': atol,
             'max_step': max_step
@@ -148,6 +149,7 @@ class FieldLineTracer:
         
         # Use internal integration method
         field_line = self.integrate_field_line(r_initial_array, K, self.params.integration.max_integration_radius, self.params.integration.trace_open_lines_backwards)
+        print(field_line)
         
         # Use dt from integration parameters
         dt = self.params.integration.dt

@@ -12,6 +12,9 @@ from typing import (
     TYPE_CHECKING,
 )
 
+if TYPE_CHECKING:
+    from astropy.coordinates import CartesianRepresentation
+
 
 from pathlib import Path
 import numpy as np
@@ -164,10 +167,12 @@ class CustomGridConfig(BaseModel):
     """Configuration for custom grid."""
 
     nline_ori: int
-    coordinates: Optional[List[List[float]]] = None
+    coordinates: Optional[Any] = None  # Accept any type, validate in create_grid
     grid_file_path: Optional[str] = Field(
         default=None, description="Path to saved grid file"
     )
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 class GridConfig(BaseModel):
@@ -237,16 +242,24 @@ class GridConfig(BaseModel):
             params.pop(
                 "grid_file_path", None
             )  # Remove file path when creating from scratch
-            if isinstance(params["coordinates"], list):
-                # Convert list coordinates to CartesianRepresentation
+            
+            # Handle different coordinate formats
+            if params["coordinates"] is not None:
                 from astropy.coordinates import CartesianRepresentation
                 import numpy as np
-
-                params["coordinates"] = CartesianRepresentation(
-                    x=np.array(params["coordinates"][0]),
-                    y=np.array(params["coordinates"][1]),
-                    z=np.array(params["coordinates"][2]),
-                )
+                
+                if isinstance(params["coordinates"], list):
+                    # Convert list coordinates to CartesianRepresentation
+                    params["coordinates"] = CartesianRepresentation(
+                        x=np.array(params["coordinates"][0]),
+                        y=np.array(params["coordinates"][1]),
+                        z=np.array(params["coordinates"][2]),
+                    )
+                elif not isinstance(params["coordinates"], CartesianRepresentation):
+                    error_msg = f"Coordinates must be list of lists or CartesianRepresentation, got {type(params['coordinates'])}"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
+            
             return CustomGrid(**params)
         elif self.spherical is not None:
             logger.info("Creating SphericalGrid from scratch")
@@ -274,6 +287,7 @@ class TracingConfig(BaseModel):
     surface_radius: float = TracingDefaults.SURFACE_RADIUS
     dt: float = TracingDefaults.DT
     max_step: float = TracingDefaults.MAX_STEP
+    method: str = TracingDefaults.METHOD
     trace_open_lines_backwards: bool = TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
     verify_by_reversing: bool = TracingDefaults.VERIFY_BY_REVERSING
     reversed_error_threshold: float = TracingDefaults.REVERSED_ERROR_THRESHOLD
@@ -290,7 +304,8 @@ class TracingConfig(BaseModel):
     skip_memory_estimation: bool = TracingDefaults.SKIP_MEMORY_ESTIMATION
 
     # Output parameters
-    save_results: bool = TracingDefaults.SAVE_RESULTS
+    save_results_to_disk: bool = TracingDefaults.SAVE_RESULTS_TO_DISK
+    keep_results_in_memory: bool = TracingDefaults.KEEP_RESULTS_IN_MEMORY
     filename: Optional[str] = TracingDefaults.FILENAME
     output_format: str = TracingDefaults.OUTPUT_FORMAT
     overwrite: bool = TracingDefaults.OVERWRITE
@@ -308,6 +323,7 @@ class TracingConfig(BaseModel):
             surface_radius=self.surface_radius,
             dt=self.dt,
             max_step=self.max_step,
+            method=self.method,
             trace_open_lines_backwards=self.trace_open_lines_backwards,
             verify_by_reversing=self.verify_by_reversing,
             reversed_error_threshold=self.reversed_error_threshold,
@@ -326,7 +342,8 @@ class TracingConfig(BaseModel):
         )
 
         output = OutputParameters(
-            save_results=self.save_results,
+            save_results_to_disk=self.save_results_to_disk,
+            keep_results_in_memory=self.keep_results_in_memory,
             filename=self.filename,
             output_format=self.output_format,
             overwrite=self.overwrite,
@@ -463,7 +480,7 @@ class ExperimentConfig:
             progress_bar=TracingDefaults.PROGRESS_BAR,
             verbose=TracingDefaults.VERBOSE,
             skip_memory_estimation=True,
-            save_results=False,
+            save_results_to_disk=False,
             filename=None,
             output_format=TracingDefaults.OUTPUT_FORMAT,
             overwrite=TracingDefaults.OVERWRITE,

@@ -99,11 +99,11 @@ class PropertyCalculator:
         """Prepare position vectors for saving."""
         if getattr(template.save_flags, PropertyName.R_LINE.flag_name):
             if line_R_max >= self.threshold_line_distance:
-                r_line_save = r.T
+                r_line_save = r.T.astype(np.float32)
                 logger.debug(f"Prepared r_line with {r_line_save.shape[0]} points")
             else:
                 r_line_save = np.array(
-                    []
+                    [], dtype=np.float32
                 )  # Line traced but didn't reach threshold_line_distance
                 logger.debug(
                     "Line did not reach threshold_line_distance, saving empty array"
@@ -152,18 +152,18 @@ class PropertyCalculator:
                 t_phi = np.arctan2(y, x)
                 t_theta = np.arccos(z / np.where(r_sph == 0, 1, r_sph))
 
-                l0 = np.zeros((3, Npoints), dtype=float)
+                l0 = np.zeros((3, Npoints), dtype=np.float32)
                 l0[0, :] = -np.sin(t_phi)
                 l0[1, :] = np.cos(t_phi)
                 l0[2, :] = 0
 
-                m0 = np.zeros((3, Npoints), dtype=float)
+                m0 = np.zeros((3, Npoints), dtype=np.float32)
                 m0[0, :] = np.cos(t_theta) * np.cos(t_phi)
                 m0[1, :] = np.cos(t_theta) * np.sin(t_phi)
                 m0[2, :] = -np.sin(t_theta)
                 nom = np.sum(n_norm * l0, axis=0)
                 denom = np.sum(n_norm * m0, axis=0)
-                PA = np.arctan2(nom, denom)
+                PA = np.arctan2(nom, denom).astype(np.float32)
 
                 # PA is prone to numerical instability when FL tangent's azimuth is close to multiple of pi
                 # and LOS colatitude is close to 90 degrees.
@@ -185,7 +185,7 @@ class PropertyCalculator:
                 logger.debug(f"Calculated PA line with {len(PA)} points")
 
             else:
-                PA = np.array([])
+                PA = np.array([], dtype=np.float32)
                 logger.debug(
                     "Line did not reach threshold_line_distance, saving empty PA array"
                 )

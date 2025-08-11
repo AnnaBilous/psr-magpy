@@ -34,6 +34,7 @@ class TracingDefaults:
     SURFACE_RADIUS = 1.0 - 1.0e-8
     DT = 0.01
     MAX_STEP = 0.01
+    METHOD = "RK45"  # Integration method for ODE solver
     TRACE_OPEN_LINES_BACKWARDS = False
     VERIFY_BY_REVERSING = False
     REVERSED_ERROR_THRESHOLD = 1.e-3  # Maximum allowed reversed error
@@ -50,7 +51,8 @@ class TracingDefaults:
     SKIP_MEMORY_ESTIMATION = False
 
     # Output parameters
-    SAVE_RESULTS = False
+    SAVE_RESULTS_TO_DISK = False
+    KEEP_RESULTS_IN_MEMORY = False
     FILENAME = None
     OUTPUT_FORMAT = "fits"
     OVERWRITE = False
@@ -96,6 +98,10 @@ class IntegrationParameters(BaseModel):
         default=TracingDefaults.MAX_STEP,
         gt=0,
         description="Maximum step size for integration",
+    )
+    method: str = Field(
+        default=TracingDefaults.METHOD,
+        description="Integration method for ODE solver (e.g., 'RK45', 'DOP853', 'BDF', 'Radau')",
     )
     trace_open_lines_backwards: bool = Field(
         default=TracingDefaults.TRACE_OPEN_LINES_BACKWARDS,
@@ -232,9 +238,13 @@ class PerformanceParameters(BaseModel):
 class OutputParameters(BaseModel):
     """Output and file I/O parameters."""
 
-    save_results: bool = Field(
-        default=TracingDefaults.SAVE_RESULTS,
+    save_results_to_disk: bool = Field(
+        default=TracingDefaults.SAVE_RESULTS_TO_DISK,
         description="Whether to save results to disk",
+    )
+    keep_results_in_memory: bool = Field(
+        default=TracingDefaults.KEEP_RESULTS_IN_MEMORY,
+        description="Whether to keep full results in memory (use at your own risk)",
     )
     filename: Optional[str] = Field(
         default=TracingDefaults.FILENAME,
@@ -251,15 +261,20 @@ class OutputParameters(BaseModel):
     @model_validator(mode="after")
     def validate_filename(self):
         """Validate filename configuration."""
-        if self.save_results and not self.filename:
-            error_msg = "Filename must be specified when save_results is True"
+        if self.save_results_to_disk and not self.filename:
+            error_msg = "Filename must be specified when save_results_to_disk is True"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        if not self.save_results and self.filename:
-            logger.warning("Filename specified but save_results is False")
+        if not self.save_results_to_disk and self.filename:
+            logger.warning("Filename specified but save_results_to_disk is False")
             raise ValueError(
-                "filename should not be specified when save_results is False"
+                "filename should not be specified when save_results_to_disk is False"
             )
+        
+        if self.keep_results_in_memory:
+            logger.warning("keep_results_in_memory=True: Use at your own risk - this may consume significant memory")
+            if not self.save_results_to_disk:
+                logger.warning("keep_results_in_memory=True with save_results_to_disk=False: Results will be kept in memory but not saved to disk")
 
         if self.filename:
             directory = os.path.dirname(self.filename)

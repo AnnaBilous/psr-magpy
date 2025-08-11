@@ -27,7 +27,7 @@ class TestCalculationContext:
         # Create parameters with safe t_span and n_trial <= grid.nline
         self.params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         self.params.performance.n_trial = 10
     
@@ -44,8 +44,8 @@ class TestCalculationContext:
         assert context.progress_tracker is not None
     
     def test_initialization_with_default_params(self):
-        """Test initialization with default parameters (but output=OutputParameters(save_results=False))."""
-        params = TracingParameters(output=OutputParameters(save_results=False))
+        """Test initialization with default parameters (but output=OutputParameters(save_results_to_disk=False))."""
+        params = TracingParameters(output=OutputParameters(save_results_to_disk=False))
         params.performance.n_trial = 10
         context = CalculationContext(
             self.field,
@@ -73,7 +73,7 @@ class TestCalculationContext:
         # Create context with small max_memory_mb to force flushing
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
-            output=OutputParameters(save_results=False),
+            output=OutputParameters(save_results_to_disk=False),
             performance=PerformanceParameters(max_memory_mb=0.001)  # Very small memory limit
         )
         params.performance.n_trial = 10
@@ -112,7 +112,7 @@ class TestCalculationContext:
         # Create parameters with n_trial > grid size
         invalid_params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
-            output=OutputParameters(save_results=False)
+            output=OutputParameters(save_results_to_disk=False)
         )
         invalid_params.performance.n_trial = 1000  # More than grid size (10)
         

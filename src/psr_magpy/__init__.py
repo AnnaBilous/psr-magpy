@@ -15,7 +15,8 @@ from .line.tracing_parameters import TracingParameters, IntegrationParameters
 from .line.field_line import FieldLine
 
 # Experiment system
-from .experiment import ExperimentConfig, ExperimentSeriesConfig
+from .experiment import ExperimentConfig, ExperimentSeriesConfig, FieldComponentConfig, CustomGridConfig, GridConfig
+from .experiment.experiment_config import TracingConfig, FieldConfig
 from .experiment.factory_configs import (
     FieldComponentFactoryConfig,
     FieldFactoryConfig,

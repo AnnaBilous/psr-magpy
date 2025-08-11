@@ -149,6 +149,7 @@ class MultipoleField:
             mag = np.linalg.norm(F)
             if mag > 0:
                 F /= mag
+
         return F
 
     def _calculate_grid_field(

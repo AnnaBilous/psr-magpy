@@ -121,12 +121,12 @@ class TestFactoryConfigs:
         """Test TracingFactoryConfig."""
         factory = TracingFactoryConfig(
             max_integration_radius=[2.0, 3.0],
-            save_results=True,
+            save_results_to_disk=True,
             filename="test"
         )
         
         assert factory.max_integration_radius == [2.0, 3.0]
-        assert factory.save_results is True
+        assert factory.save_results_to_disk is True
         assert factory.filename == "test"
     
     def test_field_component_factory_config(self):
@@ -206,7 +206,7 @@ class TestExperimentSeriesConfig:
         # Tracing factory with multiple parameters
         tracing_factory = TracingFactoryConfig(
             max_integration_radius=[2.0, 3.0],
-            save_results=True,
+            save_results_to_disk=True,
             filename="test"
         )
         
@@ -324,7 +324,7 @@ class TestExperimentSeriesConfig:
         
         tracing_factory = TracingFactoryConfig(
             max_integration_radius=[2.0, 3.0],
-            save_results=True,
+            save_results_to_disk=True,
             filename="test"
         )
         
@@ -549,7 +549,7 @@ class TestIntegration:
 
         tracing_factory = TracingFactoryConfig(
             max_integration_radius=[2.0, 3.0],
-            save_results=True,
+            save_results_to_disk=True,
             filename="test"
         )
 

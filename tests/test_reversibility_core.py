@@ -77,7 +77,8 @@ class TestFieldLineReversibilityCore:
                 n_cores=1
             ),
             output=OutputParameters(
-                save_results=False,
+                save_results_to_disk=False,
+                keep_results_in_memory=True,  # Keep full results for reversibility testing
                 filename=None
             )
         )
@@ -459,7 +460,8 @@ class TestReversedErrorFunctionality:
                 n_cores=1
             ),
             output=OutputParameters(
-                save_results=False,
+                save_results_to_disk=False,
+                keep_results_in_memory=True,  # Keep full results for reversibility testing
                 filename=None
             )
         )
@@ -494,7 +496,8 @@ class TestReversedErrorFunctionality:
                 n_cores=1
             ),
             output=OutputParameters(
-                save_results=False,
+                save_results_to_disk=False,
+                keep_results_in_memory=True,  # Keep full results for reversibility testing
                 filename=None
             )
         )
@@ -528,7 +531,8 @@ class TestReversedErrorFunctionality:
                 n_cores=1
             ),
             output=OutputParameters(
-                save_results=False,
+                save_results_to_disk=False,
+                keep_results_in_memory=True,  # Keep full results for reversibility testing
                 filename=None
             )
         )
@@ -567,7 +571,8 @@ class TestReversedErrorFunctionality:
                     n_cores=1
                 ),
                 output=OutputParameters(
-                    save_results=False,
+                    save_results_to_disk=False,
+                    keep_results_in_memory=True,  # Keep full results for reversibility testing
                     filename=None
                 )
             )
@@ -602,7 +607,8 @@ class TestReversedErrorFunctionality:
                 n_cores=1
             ),
             output=OutputParameters(
-                save_results=False,
+                save_results_to_disk=False,
+                keep_results_in_memory=True,  # Keep full results for reversibility testing
                 filename=None
             )
         )

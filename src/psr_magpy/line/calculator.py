@@ -110,7 +110,7 @@ class FieldLineCalculator:
                 error_msg = results.dotprod_error
 
         # Save results to disk if requested
-        if self.context.params.output.save_results and results is not None:
+        if self.context.params.output.save_results_to_disk and results is not None:
             filename = self.context.params.output.filename
             if filename:
                 # Save results with batch naming even if no intermediate batches were created
@@ -142,17 +142,23 @@ class FieldLineCalculator:
 
         self.context.progress_tracker.log_calculation_completion(
             elapsed,
-            self.context.params.output.save_results,
+            self.context.params.output.save_results_to_disk,
             self.context.params.output.filename or "",
             n_field_lines,
         )
 
-        # Return lightweight result object
-        return LightFieldLineSet(
-            n_field_lines=n_field_lines,
-            reversed_error_warning=error_msg if error_msg and "Reversed error" in error_msg else None,
-            dotprod_error=error_msg if error_msg and "dotprod_error" in error_msg else None
-        )
+        # Return results based on configuration
+        if self.context.params.output.keep_results_in_memory and self.context.memory_manager.results_in_memory is not None:
+            # Return full results in memory
+            logger.info("Returning full results in memory (keep_results_in_memory=True)")
+            return self.context.memory_manager.results_in_memory
+        else:
+            # Return lightweight result object
+            return LightFieldLineSet(
+                n_field_lines=n_field_lines,
+                reversed_error_warning=error_msg if error_msg and "Reversed error" in error_msg else None,
+                dotprod_error=error_msg if error_msg and "dotprod_error" in error_msg else None
+            )
 
     def _process_in_batches(self, template: FieldLine, batch_size: int) -> None:
         """Process field lines in batches."""

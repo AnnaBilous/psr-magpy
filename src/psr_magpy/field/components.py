@@ -42,7 +42,7 @@ class FieldComponentParams(BaseModel):
         le=360.0,
         description="Longitude of magnetic axis (degrees)",
     )
-    offset_r_ns: Union[List[float], NDArray[np.float32]] = Field(
+    offset_r_ns: Union[List[float], NDArray[np.float64]] = Field(
         default=[0.0, 0.0, 0.0], description="Offset vector [x, y, z] in NS radii"
     )
     moment_type: MultipoleType = Field(description="Type of multipole")
@@ -54,7 +54,7 @@ class FieldComponentParams(BaseModel):
     def validate_offset_vector(cls, v):
         """Validate offset vector has exactly 3 components."""
         if isinstance(v, (list, np.ndarray)):
-            v_array = np.asarray(v, dtype=np.float32)
+            v_array = np.asarray(v, dtype=np.float64)
             if v_array.shape != (3,):
                 error_msg = f"Offset vector must have exactly 3 components, got shape {v_array.shape}"
                 logger.error(error_msg)
@@ -79,7 +79,7 @@ class FieldComponent(ABC):
         B_magnitude: float = 1.0,
         moment_orientation_latitude_degree: float = 0.0,
         moment_orientation_longitude_degree: float = 0.0,
-        offset_r_ns: Union[List[float], NDArray[np.float32]] = [0.0, 0.0, 0.0],
+        offset_r_ns: Union[List[float], NDArray[np.float64]] = [0.0, 0.0, 0.0],
     ) -> None:
         """Initialize FieldComponent with given parameters."""
         logger.info(
@@ -115,9 +115,9 @@ class FieldComponent(ABC):
         )
 
     @cached_property
-    def moment_offset_vector(self) -> NDArray[np.float32]:
+    def moment_offset_vector(self) -> NDArray[np.float64]:
         """Get moment offset vector (cached)."""
-        return np.asarray(self.params.offset_r_ns, dtype=np.float32)
+        return np.asarray(self.params.offset_r_ns, dtype=np.float64)
 
     @cached_property
     def rotate_magn_to_spin_frame(self) -> Rotation:
@@ -134,8 +134,8 @@ class FieldComponent(ABC):
 
     @abstractmethod
     def _calculate_field(
-        self, r_magn_frame: NDArray[np.float32]
-    ) -> NDArray[np.float32]:
+        self, r_magn_frame: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
         """Calculate magnetic field in the magnetic frame."""
         pass
 
@@ -145,14 +145,14 @@ class FieldComponent(ABC):
         pass
 
     def _transform_to_magnetic_frame(
-        self, r_spin_frame: NDArray[np.float32]
-    ) -> NDArray[np.float32]:
+        self, r_spin_frame: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
         """Transform coordinates from spin frame to magnetic frame."""
         r_offset_spin_frame = r_spin_frame - self.moment_offset_vector
         r_magn_frame = self.rotate_spin_to_magn_frame.apply(r_offset_spin_frame)
         return r_magn_frame
 
-    def get_field(self, r_spin_frame: NDArray[np.float32]) -> NDArray[np.float32]:
+    def get_field(self, r_spin_frame: NDArray[np.float64]) -> NDArray[np.float64]:
         """Calculate the magnetic field at a given position in the spin frame."""
         # Input validation
         if not np.isfinite(r_spin_frame).all():
@@ -199,7 +199,7 @@ class DipoleFieldComponent(FieldComponent):
         B_magnitude: float = 1.0,
         moment_orientation_latitude_degree: float = 0.0,
         moment_orientation_longitude_degree: float = 0.0,
-        offset_r_ns: Union[List[float], NDArray[np.float32]] = [0.0, 0.0, 0.0],
+        offset_r_ns: Union[List[float], NDArray[np.float64]] = [0.0, 0.0, 0.0],
     ) -> None:
         """Initialize DipoleFieldComponent with given parameters."""
         super().__init__(
@@ -210,8 +210,8 @@ class DipoleFieldComponent(FieldComponent):
         )
 
     def _calculate_field(
-        self, r_magn_frame: NDArray[np.float32]
-    ) -> NDArray[np.float32]:
+        self, r_magn_frame: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
         """Calculate dipole magnetic field in the magnetic frame."""
         x, y, z = r_magn_frame
         r = (x**2 + y**2 + z**2) ** 0.5
@@ -219,7 +219,7 @@ class DipoleFieldComponent(FieldComponent):
 
         if r < 1e-10:  # Avoid singularity at origin
             logger.warning(f"Position too close to origin (r={r:.2e}), field undefined")
-            return np.zeros_like(r_magn_frame)
+            return np.zeros_like(r_magn_frame, dtype=np.float64)
 
         try:
             B_magnetic_frame = (
@@ -230,7 +230,8 @@ class DipoleFieldComponent(FieldComponent):
                         1.5 * z * x,
                         1.5 * z * y,
                         z**2 - 0.5 * r_cyl**2,
-                    ]
+                    ],
+                    dtype=np.float64
                 )
             )
 
@@ -255,7 +256,7 @@ class QuadrupoleFieldComponent(FieldComponent):
         B_magnitude: float = 1.0,
         moment_orientation_latitude_degree: float = 0.0,
         moment_orientation_longitude_degree: float = 0.0,
-        offset_r_ns: Union[List[float], NDArray[np.float32]] = [0.0, 0.0, 0.0],
+        offset_r_ns: Union[List[float], NDArray[np.float64]] = [0.0, 0.0, 0.0],
     ) -> None:
         """Initialize QuadrupoleFieldComponent with given parameters."""
         super().__init__(
@@ -266,15 +267,15 @@ class QuadrupoleFieldComponent(FieldComponent):
         )
 
     def _calculate_field(
-        self, r_magn_frame: NDArray[np.float32]
-    ) -> NDArray[np.float32]:
+        self, r_magn_frame: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
         """Calculate quadrupole magnetic field in the magnetic frame."""
         x, y, z = r_magn_frame
         r = (x**2 + y**2 + z**2) ** 0.5
 
         if r < 1e-10:  # Avoid singularity at origin
             logger.warning(f"Position too close to origin (r={r:.2e}), field undefined")
-            return np.zeros_like(r_magn_frame)
+            return np.zeros_like(r_magn_frame, dtype=np.float64)
 
         try:
             denom = (0.5 * (5 * z**2 / r**2 - 1) / r) ** -1
@@ -287,7 +288,8 @@ class QuadrupoleFieldComponent(FieldComponent):
                         x / denom,
                         y / denom,
                         z / denom - z / r,
-                    ]
+                    ],
+                    dtype=np.float64
                 )
             )
 

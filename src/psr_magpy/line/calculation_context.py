@@ -49,10 +49,11 @@ class CalculationContext:
             self.params.performance,
             self._tracer,
             max_file_size_mb=self.params.performance.max_memory_mb,  # Use the configured max_memory_mb
-            save_results=self.params.output.save_results,
+            save_results_to_disk=self.params.output.save_results_to_disk,
+            keep_results_in_memory=self.params.output.keep_results_in_memory,
         )
         logger.debug(
-            f"Created MemoryManager with max_memory_mb={self.params.performance.max_memory_mb}, save_results={self.params.output.save_results}"
+            f"Created MemoryManager with max_memory_mb={self.params.performance.max_memory_mb}, save_results_to_disk={self.params.output.save_results_to_disk}, keep_results_in_memory={self.params.output.keep_results_in_memory}"
         )
 
         # Initialize progress tracker with parameters from config
