@@ -296,6 +296,7 @@ class TracingConfig(BaseModel):
     max_memory_mb: float = TracingDefaults.MAX_MEMORY_MB
     safety_factor: float = TracingDefaults.SAFETY_FACTOR
     max_batch_size: int = TracingDefaults.MAX_BATCH_SIZE
+    batch_size_safety_factor: int = TracingDefaults.BATCH_SIZE_SAFETY_FACTOR
     check_interval_sec: float = TracingDefaults.CHECK_INTERVAL_SEC
     n_cores: Optional[int] = TracingDefaults.N_CORES
     n_trial: int = TracingDefaults.N_TRIAL
@@ -333,6 +334,7 @@ class TracingConfig(BaseModel):
             max_memory_mb=self.max_memory_mb,
             safety_factor=self.safety_factor,
             max_batch_size=self.max_batch_size,
+            batch_size_safety_factor=self.batch_size_safety_factor,
             check_interval_sec=self.check_interval_sec,
             n_cores=self.n_cores,
             n_trial=self.n_trial,

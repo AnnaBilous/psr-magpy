@@ -67,6 +67,7 @@ class MemoryManager:
     ) -> Tuple[float, float]:
         """Estimate memory requirements using simplified heuristics."""
         logger.info(f"Estimating memory requirements with {n_trial} trial lines")
+        logger.info(f"DEBUG: MemoryManager config.max_memory_mb = {self.config.max_memory_mb}")
         time_start = time.time()
 
         if grid.nline is None:
@@ -89,10 +90,11 @@ class MemoryManager:
         temp_tracer = self.tracer.__class__(self.tracer.field, temp_params)
 
         # Process trial batch with verification disabled
-        trial_indices = np.arange(n_trial)
+        # Use random indices for better representation of the grid
+        trial_indices = np.random.choice(grid.nline, size=n_trial, replace=False)
         trial_grid = grid.subset_grid(trial_indices)
         trial_results = self._process_trial_batch(trial_grid, template, temp_tracer)
-
+ 
         # Calculate size per line
         trial_size = trial_results.estimate_size() / n_trial
         trial_size_mb = trial_size / (1024 * 1024)
@@ -109,13 +111,12 @@ class MemoryManager:
     def calculate_batch_size(
         self, estimated_line_size: float, total_field_lines: Optional[int] = None
     ) -> int:
-        """Calculate optimal batch size using simplified heuristics."""
-        # Simple heuristic: use 50% of available memory or max_batch_size, whichever is smaller
-        available_mb = psutil.virtual_memory().available / (1024 * 1024)
-        safe_memory_mb = min(available_mb * 0.5, self.config.max_memory_mb)
-
+        """Calculate optimal batch size using max_memory_mb / batch_size_safety_factor."""
+        # Use max_memory_mb divided by safety factor for batch size calculation
+        logger.info(f"DEBUG: calculate_batch_size - config.max_memory_mb = {self.config.max_memory_mb}")
+        batch_memory_mb = self.config.max_memory_mb / self.config.batch_size_safety_factor
         estimated_line_size_mb = estimated_line_size / (1024 * 1024)
-        batch_size = int(safe_memory_mb / estimated_line_size_mb)
+        batch_size = int(batch_memory_mb / estimated_line_size_mb)
         batch_size = min(batch_size, self.config.max_batch_size)
 
         # If total field lines is provided, ensure batch size doesn't exceed it
@@ -123,9 +124,13 @@ class MemoryManager:
             batch_size = min(batch_size, total_field_lines)
 
         logger.info(
-            f"Batch size: {batch_size} lines ({batch_size * estimated_line_size_mb:.1f} MB)"
+            f"Batch size calculation: max_memory_mb={self.config.max_memory_mb}, "
+            f"batch_size_safety_factor={self.config.batch_size_safety_factor}, "
+            f"batch_memory_mb={batch_memory_mb:.1f}, "
+            f"estimated_line_size_mb={estimated_line_size_mb:.6f}, "
+            f"batch_size={batch_size} lines ({batch_size * estimated_line_size_mb:.1f} MB)"
         )
-
+        
         return batch_size
 
     def add_results(
@@ -145,17 +150,17 @@ class MemoryManager:
         # Check against the configured max_memory_mb threshold
         if self.save_results_to_disk and memory_mb > self.config.max_memory_mb and not self.keep_results_in_memory:
             logger.info(
-                f"Memory threshold reached ({memory_mb:.1f} MB > {self.config.max_memory_mb} MB), writing to disk"
+                f"Memory threshold reached ({memory_mb:.1f} MB > {self.config.max_memory_mb:.1f} MB), writing to disk"
             )
             self._write_results_to_disk(filename, batch_idx)
         elif not self.save_results_to_disk and memory_mb > self.config.max_memory_mb:
             if self.keep_results_in_memory:
                 logger.warning(
-                    f"Memory usage ({memory_mb:.1f} MB) exceeds threshold ({self.config.max_memory_mb} MB) but keep_results_in_memory=True - keeping in memory (use at your own risk)"
+                    f"Memory usage ({memory_mb:.1f} MB) exceeds threshold ({self.config.max_memory_mb:.1f} MB) but keep_results_in_memory=True - keeping in memory (use at your own risk)"
                 )
             else:
                 logger.warning(
-                    f"Memory usage ({memory_mb:.1f} MB) exceeds threshold ({self.config.max_memory_mb} MB) but save_results_to_disk=False - keeping in memory"
+                    f"Memory usage ({memory_mb:.1f} MB) exceeds threshold ({self.config.max_memory_mb:.1f} MB) but save_results_to_disk=False - keeping in memory"
                 )
 
         return self._results_in_memory

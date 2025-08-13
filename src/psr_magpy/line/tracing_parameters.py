@@ -43,6 +43,7 @@ class TracingDefaults:
     MAX_MEMORY_MB = 100.0
     SAFETY_FACTOR = 0.9
     MAX_BATCH_SIZE = 10000  # Single source of truth for batch size
+    BATCH_SIZE_SAFETY_FACTOR = 5  # Safety factor for batch size calculation
     CHECK_INTERVAL_SEC = 1.0
     N_CORES = None  # Auto-detect
     N_TRIAL = 10
@@ -169,6 +170,11 @@ class PerformanceParameters(BaseModel):
         default=TracingDefaults.MAX_BATCH_SIZE,
         gt=0,
         description="Maximum batch size to process",
+    )
+    batch_size_safety_factor: int = Field(
+        default=TracingDefaults.BATCH_SIZE_SAFETY_FACTOR,
+        gt=0,
+        description="Safety factor for batch size calculation (max_memory_mb / batch_size_safety_factor)",
     )
     check_interval_sec: float = Field(
         default=TracingDefaults.CHECK_INTERVAL_SEC,

@@ -146,6 +146,7 @@ class TracingFactoryConfig(BaseModel):
     max_memory_mb: Union[float, List[float]] = TracingDefaults.MAX_MEMORY_MB
     safety_factor: Union[float, List[float]] = TracingDefaults.SAFETY_FACTOR
     max_batch_size: Union[int, List[int]] = TracingDefaults.MAX_BATCH_SIZE
+    batch_size_safety_factor: Union[int, List[int]] = TracingDefaults.BATCH_SIZE_SAFETY_FACTOR
     check_interval_sec: Union[float, List[float]] = TracingDefaults.CHECK_INTERVAL_SEC
     n_cores: Union[Optional[int], List[Optional[int]]] = TracingDefaults.N_CORES
     n_trial: Union[int, List[int]] = TracingDefaults.N_TRIAL

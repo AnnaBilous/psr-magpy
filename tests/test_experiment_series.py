@@ -592,3 +592,49 @@ class TestIntegration:
                 }
             ]
             assert exp.metadata["grid_type"] == "spherical" 
+
+    def test_create_directory_structure_overwrite_cleans_all_directories(self):
+        """Test that overwrite=True cleans up configs, grids, and lines directories."""
+        import tempfile
+        import shutil
+        
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create a config with output directory
+            config = ExperimentSeriesConfig(
+                name="test_series",
+                field=FieldConfig(components=[]),
+                grid=GridConfig(spherical=SphericalGridConfig(nlon=2, nlat=2)),
+                tracing=TracingConfig(),
+                template=FieldLine.template_coordinates_and_PA(),
+                output_dir=temp_dir
+            )
+            
+            # Create initial directory structure
+            config.create_directory_structure(overwrite=False)
+            
+            # Create some dummy files in each directory
+            configs_dir = config.get_configs_dir()
+            grids_dir = config.get_grids_dir()
+            lines_dir = config.get_lines_dir()
+            
+            (configs_dir / "dummy_config.yaml").write_text("dummy")
+            (grids_dir / "dummy_grid.fits").write_text("dummy")
+            (lines_dir / "dummy_line.fits").write_text("dummy")
+            
+            # Verify files exist
+            assert (configs_dir / "dummy_config.yaml").exists()
+            assert (grids_dir / "dummy_grid.fits").exists()
+            assert (lines_dir / "dummy_line.fits").exists()
+            
+            # Now call with overwrite=True
+            config.create_directory_structure(overwrite=True)
+            
+            # Verify all directories were cleaned and recreated
+            assert configs_dir.exists()
+            assert grids_dir.exists()
+            assert lines_dir.exists()
+            
+            # Verify dummy files were removed
+            assert not (configs_dir / "dummy_config.yaml").exists()
+            assert not (grids_dir / "dummy_grid.fits").exists()
+            assert not (lines_dir / "dummy_line.fits").exists() 

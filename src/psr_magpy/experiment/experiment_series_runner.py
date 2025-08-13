@@ -30,8 +30,9 @@ class ExperimentSeriesRunner:
         save_individual_configs: bool = False,
         continue_on_failure: bool = True,
         experiment_numbers: Optional[List[int]] = None,
-        overwrite_everything: bool = False,
-        overwrite_results: bool = False,
+        delete_existing_data: bool = False,
+        delete_existing_lines: bool = False,
+        overwrite_experiments: bool = False,
         run_remaining: bool = False,
         log_rotation_max_bytes: float = 10 * 1024 * 1024,  # 10 MB
         log_rotation_backup_count: int = 5,
@@ -45,8 +46,9 @@ class ExperimentSeriesRunner:
         self.save_individual_configs = save_individual_configs
         self.continue_on_failure = continue_on_failure
         self.experiment_numbers = experiment_numbers
-        self.overwrite_everything = overwrite_everything
-        self.overwrite_results = overwrite_results
+        self.delete_existing_data = delete_existing_data
+        self.delete_existing_lines = delete_existing_lines
+        self.overwrite_experiments = overwrite_experiments
         self.run_remaining = run_remaining
         self.log_rotation_max_bytes = log_rotation_max_bytes
         self.log_rotation_backup_count = log_rotation_backup_count
@@ -74,9 +76,9 @@ class ExperimentSeriesRunner:
 
             # Check if already completed
             result_file = lines_dir / f"{experiment.name}.fits"
-            if result_file.exists() and not self.overwrite_results:
+            if result_file.exists() and not self.overwrite_experiments:
                 logger.info(
-                    "Experiment %s already completed. Skipping (use overwrite_results=True to rerun).",
+                    "Experiment %s already completed. Skipping (use overwrite_experiments=True to rerun).",
                     experiment.name,
                 )
                 result = ExperimentResult(
@@ -104,7 +106,7 @@ class ExperimentSeriesRunner:
                 grid = experiment.grid.create_grid()
                 if grid is not None:
                     grid_path = grids_dir / f"{experiment.name}.fits"
-                    if not grid_path.exists() or self.overwrite_results:
+                    if not grid_path.exists() or self.overwrite_experiments:
                         if not grids_dir.exists():
                             grids_dir.mkdir(parents=True, exist_ok=True)
                         grid.save_to_fits(str(grid_path))
@@ -165,22 +167,37 @@ class ExperimentSeriesRunner:
         # Create output directories
         series_dir = self.output_directory / self.series_config.name
 
-        # Only create directories if they don't exist or if overwrite is enabled
-        if not series_dir.exists() or self.overwrite_everything:
-            # Clean up if overwrite_everything is True
-            if self.overwrite_everything and series_dir.exists():
-                # Delete all files and subdirectories except configs
-                for item in series_dir.iterdir():
-                    if item.name != "configs":
-                        if item.is_dir():
-                            shutil.rmtree(item)
-                        else:
-                            item.unlink()
-
-            # Create subdirectories
-            for subdir in ["lines", "grids", "configs", "logs"]:
-                subdir_path = series_dir / subdir
-                subdir_path.mkdir(parents=True, exist_ok=True)
+        # Handle directory cleanup based on parameters
+        if self.delete_existing_data and series_dir.exists():
+            # Delete everything except configs
+            for item in series_dir.iterdir():
+                if item.name != "configs":
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+            logger.info("Deleted all existing data (except configs)")
+        elif self.delete_existing_lines and series_dir.exists():
+            # Delete only lines directory and summary files
+            lines_dir = series_dir / "lines"
+            if lines_dir.exists():
+                shutil.rmtree(lines_dir)
+                logger.info("Deleted existing lines directory")
+            
+            # Delete summary files
+            summary_files = list(series_dir.glob("*_results_summary.yaml"))
+            for summary_file in summary_files:
+                summary_file.unlink()
+                logger.info("Deleted existing summary file: %s", summary_file)
+        
+        # Create directories if they don't exist
+        if not series_dir.exists():
+            series_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create subdirectories
+        for subdir in ["lines", "grids", "configs", "logs"]:
+            subdir_path = series_dir / subdir
+            subdir_path.mkdir(parents=True, exist_ok=True)
 
         # Set up logging
         log_file = series_dir / "logs" / f"{self.series_config.name}.log"
@@ -269,7 +286,7 @@ class ExperimentSeriesRunner:
 
         remaining_experiments = []
         for i, exp in enumerate(self.series_config.create_experiment_series()):
-            if exp.name not in completed_experiments or self.overwrite_results:
+            if exp.name not in completed_experiments or self.overwrite_experiments:
                 remaining_experiments.append(exp)
 
         return remaining_experiments
@@ -412,7 +429,7 @@ class ExperimentSeriesRunner:
 
         for experiment in experiments:
             config_path = configs_dir / f"{experiment.name}.yaml"
-            if not config_path.exists() or self.overwrite_results:
+            if not config_path.exists() or self.overwrite_experiments:
                 if not configs_dir.exists():
                     configs_dir.mkdir(parents=True, exist_ok=True)
                 io_instance = get_io_factory().create_config_io(type(experiment))
@@ -428,8 +445,9 @@ def run_experiment_series(
     series_config: ExperimentSeriesConfig,
     experiment_numbers: Optional[List[int]] = None,
     run_remaining: bool = False,
-    overwrite_results: bool = False,
-    overwrite_everything: bool = False,
+    delete_existing_data: bool = False,
+    delete_existing_lines: bool = False,
+    overwrite_experiments: bool = False,
     save_individual_configs: bool = True,
     save_grids: bool = True,
     continue_on_failure: bool = True,
@@ -441,9 +459,10 @@ def run_experiment_series(
         save_grids=save_grids,
         continue_on_failure=continue_on_failure,
         experiment_numbers=experiment_numbers,
-        overwrite_everything=overwrite_everything,
+        delete_existing_data=delete_existing_data,
+        delete_existing_lines=delete_existing_lines,
+        overwrite_experiments=overwrite_experiments,
         run_remaining=run_remaining,
-        overwrite_results=overwrite_results,
     )
 
     return runner.run()
@@ -454,8 +473,9 @@ def run_experiment_series_from_file(
     input_directory: Optional[Union[str, Path]] = None,
     experiment_numbers: Optional[List[int]] = None,
     run_remaining: bool = False,
-    overwrite_results: bool = False,
-    overwrite_everything: bool = False,
+    delete_existing_data: bool = False,
+    delete_existing_lines: bool = False,
+    overwrite_experiments: bool = False,
     save_individual_configs: bool = True,
     save_grids: bool = True,
     continue_on_failure: bool = True,
@@ -475,8 +495,9 @@ def run_experiment_series_from_file(
         series_config=series_config,
         experiment_numbers=experiment_numbers,
         run_remaining=run_remaining,
-        overwrite_results=overwrite_results,
-        overwrite_everything=overwrite_everything,
+        delete_existing_data=delete_existing_data,
+        delete_existing_lines=delete_existing_lines,
+        overwrite_experiments=overwrite_experiments,
         save_individual_configs=save_individual_configs,
         save_grids=save_grids,
         continue_on_failure=continue_on_failure,

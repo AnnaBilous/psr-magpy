@@ -401,7 +401,7 @@ class ExperimentSeriesConfig(BaseModel):
         """Create output directory structure.
         
         Args:
-            overwrite: Whether to overwrite configs directory
+            overwrite: Whether to overwrite existing directories (configs, grids, lines)
         """
         if self.output_dir is None:
             # Create series directory
@@ -415,13 +415,19 @@ class ExperimentSeriesConfig(BaseModel):
                     subdir_path = series_dir / subdir
                     subdir_path.mkdir(parents=True, exist_ok=True)
             else:
-                # Only overwrite configs directory if overwrite is True
+                # Clean up directories if overwrite is True
                 if overwrite:
-                    configs_dir = series_dir / "configs"
-                    if configs_dir.exists():
-                        shutil.rmtree(configs_dir)
-                    configs_dir.mkdir(parents=True, exist_ok=True)
-                    logger.info("Recreated configs directory: %s", configs_dir)
+                    for subdir in ["configs", "grids", "lines"]:
+                        subdir_path = series_dir / subdir
+                        if subdir_path.exists():
+                            shutil.rmtree(subdir_path)
+                            logger.info("Removed existing %s directory: %s", subdir, subdir_path)
+                    
+                    # Recreate cleaned directories
+                    for subdir in ["lines", "grids", "configs", "logs"]:
+                        subdir_path = series_dir / subdir
+                        subdir_path.mkdir(parents=True, exist_ok=True)
+                    logger.info("Recreated output directories for: %s", series_dir)
                 else:
                     logger.info("Using existing directory structure: %s", series_dir)
         else:
@@ -436,13 +442,19 @@ class ExperimentSeriesConfig(BaseModel):
                     subdir_path = series_dir / subdir
                     subdir_path.mkdir(parents=True, exist_ok=True)
             else:
-                # Only overwrite configs directory if overwrite is True
+                # Clean up directories if overwrite is True
                 if overwrite:
-                    configs_dir = series_dir / "configs"
-                    if configs_dir.exists():
-                        shutil.rmtree(configs_dir)
-                    configs_dir.mkdir(parents=True, exist_ok=True)
-                    logger.info("Recreated configs directory: %s", configs_dir)
+                    for subdir in ["configs", "grids", "lines"]:
+                        subdir_path = series_dir / subdir
+                        if subdir_path.exists():
+                            shutil.rmtree(subdir_path)
+                            logger.info("Removed existing %s directory: %s", subdir, subdir_path)
+                    
+                    # Recreate cleaned directories
+                    for subdir in ["lines", "grids", "configs", "logs"]:
+                        subdir_path = series_dir / subdir
+                        subdir_path.mkdir(parents=True, exist_ok=True)
+                    logger.info("Recreated output directories for: %s", series_dir)
                 else:
                     logger.info("Using existing directory structure: %s", series_dir)
 

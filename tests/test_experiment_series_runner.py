@@ -87,10 +87,10 @@ def test_overwrite_everything(tmp_path):
     (series_dir / "test.fits").touch()
     (series_dir / f"{series_config.name}_results_summary.yaml").touch()
     
-    # Run with overwrite_everything
+    # Run with delete_existing_data
     run_experiment_series(
         series_config=series_config,
-        overwrite_everything=True
+        delete_existing_data=True
     )
     
     # Check directories are clean
