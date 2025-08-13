@@ -6,6 +6,8 @@ directory structure and optionally clean up temporary batch files.
 
 import glob
 import shutil
+import time
+import os
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
@@ -86,6 +88,41 @@ class BatchFileManager:
         logger.info(f"Found {len(batch_infos)} batch files")
         return batch_infos
 
+    def _check_filesystem_health(self, directory: Path) -> bool:
+        """Check if the filesystem is healthy for file operations."""
+        try:
+            # Check if directory exists and is writable
+            if not directory.exists():
+                logger.error(f"Directory does not exist: {directory}")
+                return False
+                
+            if not os.access(directory, os.W_OK):
+                logger.error(f"Directory is not writable: {directory}")
+                return False
+            
+            # Check available disk space (require at least 100MB free)
+            disk_usage = shutil.disk_usage(directory)
+            free_gb = disk_usage.free / (1024**3)
+            if free_gb < 0.1:  # Less than 100MB
+                logger.error(f"Insufficient disk space: {free_gb:.2f} GB free")
+                return False
+                
+            # Try to create a test file
+            test_file = directory / f".test_write_{int(time.time())}"
+            try:
+                test_file.write_text("test")
+                test_file.unlink()  # Clean up
+            except Exception as e:
+                logger.error(f"Cannot write to directory: {e}")
+                return False
+                
+            logger.debug(f"Filesystem health check passed for {directory}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Filesystem health check failed: {e}")
+            return False
+
     def organize_batch_files(self) -> Optional[Path]:
         """Organize batch files into a subdirectory."""
         batch_files = self.find_batch_files()
@@ -97,13 +134,19 @@ class BatchFileManager:
         # Use the parent directory (lines directory)
         output_dir = self.output_directory
 
+        # Check filesystem health before proceeding
+        if not self._check_filesystem_health(output_dir):
+            error_msg = f"Filesystem health check failed for {output_dir}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
         logger.info(f"Organizing {len(batch_files)} batch files in {output_dir}")
 
         if self.progress_tracker:
             self.progress_tracker.log_io_start("organize", output_dir, len(batch_files))
 
         try:
-            # Move and rename batch files
+            # Move and rename batch files with retry logic
             for i, batch_info in enumerate(batch_files):
                 if self.progress_tracker:
                     self.progress_tracker.update_io_progress(
@@ -115,10 +158,41 @@ class BatchFileManager:
                 # Rename to organized format: experiment_name_batch_001_out_of_004.fits
                 new_filename = f"{experiment_name}_batch_{i+1:03d}_out_of_{len(batch_files):03d}.fits"
                 new_path = output_dir / new_filename
-                shutil.move(str(batch_info.path), str(new_path))
-                logger.debug(
-                    f"Moved and renamed {batch_info.path.name} to {new_filename}"
-                )
+                
+                # Retry logic for file operations
+                max_retries = 3
+                retry_delay = 0.5  # seconds
+                
+                for attempt in range(max_retries):
+                    try:
+                        # Check if source file still exists
+                        if not batch_info.path.exists():
+                            logger.warning(f"Source file {batch_info.path} no longer exists, skipping")
+                            break
+                            
+                        # Check if destination already exists
+                        if new_path.exists():
+                            logger.warning(f"Destination {new_path} already exists, removing old file")
+                            new_path.unlink()
+                        
+                        # Perform the move operation
+                        shutil.move(str(batch_info.path), str(new_path))
+                        logger.debug(
+                            f"Moved and renamed {batch_info.path.name} to {new_filename}"
+                        )
+                        break  # Success, exit retry loop
+                        
+                    except (OSError, IOError) as e:
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Move attempt {attempt + 1} failed for {batch_info.path}: {e}")
+                            logger.warning(f"Retrying in {retry_delay} seconds...")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                        else:
+                            # Final attempt failed
+                            error_msg = f"Failed to move {batch_info.path} after {max_retries} attempts: {e}"
+                            logger.error(error_msg)
+                            raise RuntimeError(error_msg)
 
             if self.progress_tracker:
                 self.progress_tracker.log_io_completion(
@@ -133,7 +207,16 @@ class BatchFileManager:
         except Exception as e:
             error_msg = f"Failed to organize batch files: {e}"
             logger.error(error_msg)
-            raise
+            # Log additional diagnostic information
+            logger.error(f"Output directory: {output_dir}")
+            logger.error(f"Directory exists: {output_dir.exists()}")
+            logger.error(f"Directory writable: {os.access(output_dir, os.W_OK) if output_dir.exists() else 'N/A'}")
+            logger.error(f"Available disk space: {shutil.disk_usage(output_dir).free / (1024**3):.2f} GB")
+            
+            # Fallback: log warning but don't fail the entire operation
+            logger.warning("Batch file organization failed, but batch files remain available")
+            logger.warning("You may need to manually organize the batch files later")
+            return None
 
     def _create_summary_file(
         self, batch_files: List[BatchFileInfo], summary_path: Path

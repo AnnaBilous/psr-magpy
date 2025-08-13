@@ -254,7 +254,18 @@ class MemoryManager:
             # Clean up original batch files after successful organization
             batch_manager.cleanup_batch_files()
         else:
-            logger.info("No batch files found to organize")
+            # Check if organization failed or no files were found
+            batch_files = batch_manager.find_batch_files()
+            if batch_files:
+                logger.warning("Batch file organization failed, but batch files are still available")
+                logger.warning("Batch files remain in their original location with temporary names")
+                # Still provide summary of available files
+                summary = batch_manager.get_batch_summary()
+                logger.info(
+                    f"Available batch files: {summary['batch_files']} files, {summary['total_size_mb']:.1f} MB total"
+                )
+            else:
+                logger.info("No batch files found to organize")
 
     @property
     def results_in_memory(self) -> Optional[FieldLineSet]:
