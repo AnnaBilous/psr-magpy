@@ -128,12 +128,6 @@ class FieldLineCalculator:
                 # Mark that batch files were created
                 self.context.memory_manager._batch_files_created = True
 
-                # Rename and organize batch files if any were created
-                if self.context.memory_manager.batch_files_created:
-                    self.context.memory_manager.rename_batch_files(
-                        filename, self.context.progress_tracker
-                    )
-
                 # Clear memory after saving
                 self.context.memory_manager._results_in_memory = None
                 self.context.memory_manager._results_in_memory_size = 0.0
@@ -211,6 +205,15 @@ class FieldLineCalculator:
 
         # Close progress bar
         progress_bar.close()
+        
+        # Rename batch files after all batches are processed
+        if (self.context.params.output.save_results_to_disk and 
+            self.context.memory_manager.batch_files_created):
+            filename = self.context.params.output.filename
+            if filename:
+                self.context.memory_manager.rename_batch_files(
+                    filename, self.context.progress_tracker
+                )
 
     def _process_batch(
         self,

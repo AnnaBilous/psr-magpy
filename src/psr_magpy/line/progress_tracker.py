@@ -269,7 +269,7 @@ class ProgressTracker:
         logger.info(f"Calculations completed in {elapsed:.1f} seconds")
 
         if save_results_to_disk:
-            logger.info(f"Results saved to {filename}")
+            logger.info(f"Results saved to {filename[:-5]} in batches")
         else:
             logger.info(f"Returning {n_field_lines} field lines in memory")
 
