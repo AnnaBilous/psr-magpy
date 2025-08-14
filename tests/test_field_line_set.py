@@ -34,7 +34,7 @@ class TestFieldLineSetInitialization:
         # Create sample field lines for testing
         self.template_basic = FieldLine(save_r_line=True, save_r_max=True)
         self.template_all = FieldLine.template_all()
-        self.template_coords = FieldLine.template_coordinates_only()
+        self.template_coords = FieldLine.template_line_coordinates_only()
         
         # Create sample field line data
         self.sample_field_line = self._create_sample_field_line(self.template_basic)
@@ -158,6 +158,12 @@ class TestFieldLineSetAppend:
         
         if template.property_system.is_property_enabled('r_max'):
             field_line.set_property(r_max=2.0)
+        
+        if template.property_system.is_property_enabled('b_line'):
+            field_line.set_property(b_line=[np.array([1.0, 2.0], dtype=np.float32)])
+        
+        if template.property_system.is_property_enabled('curvature_line'):
+            field_line.set_property(curvature_line=[np.array([0.5, 1.0], dtype=np.float32)])
         
         return field_line
     
@@ -296,6 +302,12 @@ class TestFieldLineSetProperties:
         
         if template.property_system.is_property_enabled('b_r_ini_angle'):
             field_line.set_property(b_r_ini_angle=0.0)
+        
+        if template.property_system.is_property_enabled('b_line'):
+            field_line.set_property(b_line=[np.array([1.0, 2.0], dtype=np.float32)])
+        
+        if template.property_system.is_property_enabled('curvature_line'):
+            field_line.set_property(curvature_line=[np.array([0.5, 1.0], dtype=np.float32)])
         
         return field_line
     
@@ -719,5 +731,11 @@ class TestFieldLineSetIntegration:
         
         if template.property_system.is_property_enabled('b_r_ini_angle'):
             field_line.set_property(b_r_ini_angle=float(np.random.rand()))
+        
+        if template.property_system.is_property_enabled('b_line'):
+            field_line.set_property(b_line=[np.random.rand(10).astype(np.float32)])
+        
+        if template.property_system.is_property_enabled('curvature_line'):
+            field_line.set_property(curvature_line=[np.random.rand(10).astype(np.float32)])
         
         return field_line 

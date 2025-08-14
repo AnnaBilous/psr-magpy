@@ -157,8 +157,8 @@ class ExperimentSeriesRunner:
             if result.results is not None:
                 result.results = None
 
-            # Keep only the latest result
-            results = [result]
+            # Add result to the list
+            results.append(result)
 
         return results
 
@@ -218,12 +218,17 @@ class ExperimentSeriesRunner:
 
         # Load or create experiments
         if self.run_remaining:
+            # Get total experiments first to know the series size
+            all_experiments = self.series_config.load_experiments()
+            total_experiments_in_series = len(all_experiments)
+            
             experiments = self._get_remaining_experiments()
             if not experiments:
                 logger.info("No remaining experiments to run")
                 return SeriesResult(
                     series_name=self.series_config.name,
-                    total_experiments=0,
+                    total_experiments=total_experiments_in_series,
+                    experiments_in_this_session=0,
                     successful_experiments=0,
                     failed_experiments=0,
                     total_duration=0.0,
@@ -232,6 +237,8 @@ class ExperimentSeriesRunner:
                 )
         else:
             experiments = self.series_config.load_experiments()
+            # Store total number of experiments in series before filtering
+            total_experiments_in_series = len(experiments)
 
         # Filter experiments by number if specified
         if self.experiment_numbers is not None:
@@ -242,7 +249,7 @@ class ExperimentSeriesRunner:
                     continue
                 filtered_experiments.append(experiments[i])
             experiments = filtered_experiments
-            logger.info(f"Running {len(experiments)} selected experiments")
+            logger.info(f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total")
 
         # Save individual configs if requested
         if self.save_individual_configs:
@@ -255,7 +262,8 @@ class ExperimentSeriesRunner:
 
         return SeriesResult(
             series_name=self.series_config.name,
-            total_experiments=len(results),
+            total_experiments=total_experiments_in_series,
+            experiments_in_this_session=len(results),
             successful_experiments=sum(1 for r in results if r.success),
             failed_experiments=sum(1 for r in results if not r.success),
             total_duration=total_duration,

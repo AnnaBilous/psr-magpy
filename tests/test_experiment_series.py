@@ -605,7 +605,7 @@ class TestIntegration:
                 field=FieldConfig(components=[]),
                 grid=GridConfig(spherical=SphericalGridConfig(nlon=2, nlat=2)),
                 tracing=TracingConfig(),
-                template=FieldLine.template_coordinates_and_PA(),
+                template=FieldLine.template_properties_along_line(),
                 output_dir=temp_dir
             )
             

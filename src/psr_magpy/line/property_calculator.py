@@ -18,9 +18,15 @@ logger = get_logger(__name__, console_format_brief=True)
 class PropertyCalculator:
     """Calculates properties for field lines."""
 
-    def __init__(self, threshold_line_distance: float):
-        """Initialize property calculator."""
+    def __init__(self, threshold_line_distance: float, field=None):
+        """Initialize property calculator.
+        
+        Args:
+            threshold_line_distance: Distance threshold for line tracing
+            field: Magnetic field object for calculating B_line and curvature_line
+        """
         self.threshold_line_distance = threshold_line_distance
+        self.field = field
         logger.debug(
             f"Initialized PropertyCalculator with threshold_line_distance={threshold_line_distance}"
         )
@@ -32,6 +38,7 @@ class PropertyCalculator:
         B_initial: np.ndarray,
         dotprod: float,
         K: float,
+        dt: float,
         template: FieldLine,
     ) -> Dict[str, Any]:
         """Calculate properties for a field line."""
@@ -69,6 +76,8 @@ class PropertyCalculator:
                     if getattr(template.save_flags, prop.flag_name)
                     else None
                 )
+            elif prop.key_name == "b_line":
+                props[prop.key_name] = self.prep_b_line(r, line_R_max, template)
             elif prop.key_name == "b_r_ini_angle":
                 if getattr(template.save_flags, prop.flag_name):
                     # Check for suspiciously large dot product values
@@ -85,6 +94,13 @@ class PropertyCalculator:
                     props[prop.key_name] = None
             elif prop.key_name == "pa_line":
                 props[prop.key_name] = self.prep_pa_line(r, K, line_R_max, template)
+            elif prop.key_name == "curvature_line":
+                if getattr(template.save_flags, prop.flag_name):
+                    curvature = self.prep_curvature_line(r, dt, line_R_max, template)
+                    props[prop.key_name] = curvature
+                else:
+                    props[prop.key_name] = None
+                
 
         # Remove None values from kwargs
         props = {k: v for k, v in props.items() if v is not None}
@@ -114,15 +130,49 @@ class PropertyCalculator:
         return r_line_save
 
     def prep_curvature_line(
-        self, r: np.ndarray, line_R_max: float, template: FieldLine
-    ) -> Optional[np.ndarray]:
-        """Calculate curvature along field line.
-
-        To be added later. This is not used in the current implementation.
+        self, r: np.ndarray, dt: float, line_R_max: float, template: FieldLine
+    ) -> Optional[list]:
         """
-        # Note: CURVATURE_LINE is not in PropertyName enum, so this method is not used
-        # Keeping for future implementation
-        return None
+        Curvature for a 3D parametric curve r[k] = (x,y,z) sampled at uniform steps dt.
+        Returns:
+            curvature: radius of curvature
+        """
+        if getattr(template.save_flags, PropertyName.CURVATURE_LINE.flag_name):
+            if line_R_max >= self.threshold_line_distance:
+                eps=1e-12
+                R = r.T
+        
+                # First and second derivatives wrt t (uniform spacing)
+                R1 = np.gradient(R, dt, axis=0, edge_order=2)   # r'(t)
+                R2 = np.gradient(R1, dt, axis=0, edge_order=2)  # r''(t)
+
+                # Speed and unit tangent
+                v = np.linalg.norm(R1, axis=1)
+                good_v = v > eps
+
+                # Curvature: ||r' x r''|| / ||r'||^3
+                cross12 = np.cross(R1, R2)
+                cross12_norm = np.linalg.norm(cross12, axis=1)
+                kappa = np.full(R.shape[0], np.nan)
+                kappa[good_v] = cross12_norm[good_v] / (v[good_v]**3 + eps)
+
+                curvature_radius = np.full_like(kappa, np.nan)
+                good_k = (kappa > eps)
+                curvature_radius[good_k] = 1.0 / kappa[good_k]
+
+                # Return as a list containing a single 1D array
+                logger.debug(f"Calculated curvature line with {len(curvature_radius)} points")
+                
+            else:
+                curvature_radius = np.array([], dtype=np.float32)
+                logger.debug(
+                    "Line did not reach threshold_line_distance, saving empty curvature array"
+                )
+        else:
+            curvature_radius = None
+            logger.debug("curvature line saving disabled")
+        return curvature_radius
+
 
     def prep_pa_line(
         self, r: np.ndarray, B_dir: float, line_R_max: float, template: FieldLine
@@ -193,3 +243,34 @@ class PropertyCalculator:
             PA = None
             logger.debug("PA line saving disabled")
         return PA
+
+    def prep_b_line(
+        self, r: np.ndarray, line_R_max: float, template: FieldLine
+    ) -> Optional[np.ndarray]:
+        """Calculate magnetic field strength along the field line.
+
+        Computes the absolute value of the magnetic field at each point
+        along the field line.
+        """
+        if getattr(template.save_flags, PropertyName.B_LINE.flag_name):
+            if self.field is not None:
+                if line_R_max >= self.threshold_line_distance:
+                    # Calculate magnetic field at each point along the field line
+                    num_points = r.shape[1]
+                    b_values = np.zeros(num_points, dtype=np.float32)
+                    for i in range(num_points):
+                        point = r[:, i]  # Extract single 3D point
+                        b = self.field.get_total_field(point, K=1, normalize=False)
+                        b_values[i] = np.linalg.norm(b)                 
+                    logger.debug(f"Calculated B_line with {len(b_values)} points")
+                 
+                else:
+                    b_values = np.array([], dtype=np.float32)
+                    logger.debug("Line did not reach threshold_line_distance, saving empty B array")
+                return b_values
+            else:
+                logger.warning("Field object not provided, cannot calculate b_line")
+                return None
+        else:
+            logger.debug("B_line saving disabled")
+            return None

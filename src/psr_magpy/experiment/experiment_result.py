@@ -22,6 +22,7 @@ class SeriesResult:
 
     series_name: str
     total_experiments: int
+    experiments_in_this_session: int
     successful_experiments: int
     failed_experiments: int
     total_duration: float

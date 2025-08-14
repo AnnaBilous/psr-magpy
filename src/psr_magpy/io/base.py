@@ -78,6 +78,11 @@ class IOUtils:
             logger.debug("Value is None, using default format 'D'")
             return "D"
 
+        # Handle lists (including lists of arrays) - check this first
+        if isinstance(value, list):
+            logger.debug(f"List detected with {len(value)} elements, using format 'PE'")
+            return "PE"
+
         # Handle arrays with shape
         if isinstance(value, np.ndarray) and value.size > 0:
             shape = value.shape

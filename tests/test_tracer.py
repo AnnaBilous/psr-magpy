@@ -431,10 +431,10 @@ class TestFieldLineTracer:
         # Test all template methods
         templates = [
             ("all", FieldLine.template_all()),
-            ("all_except_line_and_PA", FieldLine.template_all_except_line_and_PA()),
+            ("all_except_along_line", FieldLine.template_all_except_along_line()),
             ("OFL_calc", FieldLine.template_OFL_calc()),
             ("coordinates_only", FieldLine.template_coordinates_only()),
-            ("coordinates_and_PA", FieldLine.template_coordinates_and_PA()),
+            ("properties_along_line", FieldLine.template_properties_along_line()),
             ("surface_properties", FieldLine.template_surface_properties()),
         ]
         
@@ -630,7 +630,7 @@ class TestFieldLineTracerPerformance:
         import psutil
         import os
         
-        template = FieldLine.template_all_except_line_and_PA()
+        template = FieldLine.template_all_except_along_line()
         
         # Use custom parameters with shorter time span to avoid memory issues
         params = TracingParameters(

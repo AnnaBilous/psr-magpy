@@ -122,10 +122,12 @@ class FieldLine:
             save_z_abs_max=True,
             save_b_ini=True,
             save_b_r_ini_angle=True,
+            save_b_line=True,
+            save_curvature_line=True,
         )
 
     @classmethod
-    def template_all_except_line_and_PA(cls) -> "FieldLine":
+    def template_all_except_along_line(cls) -> "FieldLine":
         """Create configuration template with all properties enabled except line coordinates and PA.
 
         This template defines which properties to save during field line tracing.
@@ -149,7 +151,7 @@ class FieldLine:
         return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True)
 
     @classmethod
-    def template_coordinates_only(cls) -> "FieldLine":
+    def template_line_coordinates_only(cls) -> "FieldLine":
         """Create configuration template with line coordinates only (r_line).
 
         This template defines which properties to save during field line tracing.
@@ -158,16 +160,16 @@ class FieldLine:
         return cls(save_r_line=True)
 
     @classmethod
-    def template_coordinates_and_PA(cls) -> "FieldLine":
+    def template_properties_along_line(cls) -> "FieldLine":
         """Create configuration template with line coordinates and PA (r_line, pa_line).
 
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.
         """
-        return cls(save_r_line=True, save_pa_line=True)
+        return cls(save_r_line=True, save_pa_line=True, save_b_line=True, save_curvature_line=True)
 
     @classmethod
-    def template_surface_properties(cls) -> "FieldLine":
+    def template_surface_field_properties(cls) -> "FieldLine":
         """Create configuration template with surface properties (b_ini, b_r_ini_angle).
 
         This template defines which properties to save during field line tracing.

@@ -31,6 +31,8 @@ class SaveFlags:
     save_b_ini: bool = False
     save_b_r_ini_angle: bool = False
     save_reversed_error: bool = False
+    save_b_line: bool = False
+    save_curvature_line: bool = False
 
     def __repr__(self) -> str:
         """Return string representation of save flags."""
@@ -50,6 +52,8 @@ class PropertyName(Enum):
     B_INI = "save_b_ini"
     B_R_INI_ANGLE = "save_b_r_ini_angle"
     REVERSED_ERROR = "save_reversed_error"
+    B_LINE = "save_b_line"
+    CURVATURE_LINE = "save_curvature_line"
 
     @property
     def flag_name(self) -> str:
@@ -124,7 +128,7 @@ class PropertyValue(BaseModel):
                     v,
                 )
 
-        elif property_name in [PropertyName.R_LINE, PropertyName.PA_LINE]:
+        elif property_name in [PropertyName.R_LINE, PropertyName.PA_LINE, PropertyName.B_LINE, PropertyName.CURVATURE_LINE]:
             # These should be numpy arrays or lists of coordinates
             if not hasattr(v, "__len__"):
                 raise PropertyValidationError(
@@ -365,17 +369,19 @@ class PropertySystem:
         return {
             "enabled_properties": [prop.key_name for prop in self.enabled_properties],
             "total_properties": len(PropertyName),
-            "validation_rules": {
-                "footpoint_id": "non-negative integer",
-                "r_line": "array-like object",
-                "pa_line": "array-like object",
-                "r_max": "positive number",
-                "r_cyl_max": "positive number",
-                "z_abs_max": "positive number",
-                "b_ini": "number",
-                "b_r_ini_angle": "number",
-                "reversed_error": "non-negative number",
-            },
+                    "validation_rules": {
+            "footpoint_id": "non-negative integer",
+            "r_line": "array-like object",
+            "pa_line": "array-like object",
+            "r_max": "positive number",
+            "r_cyl_max": "positive number",
+            "z_abs_max": "positive number",
+            "b_ini": "number",
+            "b_r_ini_angle": "number",
+            "reversed_error": "non-negative number",
+            "b_line": "array-like object",
+            "curvature_line": "array-like object",
+        },
         }
 
     def _validate_property_name(self, prop: Union[PropertyName, str]) -> PropertyName:

@@ -353,7 +353,7 @@ class TestTracingConfig:
         # Performance parameters
         assert config.max_memory_mb == 100.0
         assert config.safety_factor == 0.9
-        assert config.max_batch_size == 1000
+        assert config.max_batch_size == 10000
         assert config.check_interval_sec == 1.0
         assert config.n_cores is None
         assert config.n_trial == 10
@@ -426,7 +426,7 @@ class TestExperimentConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_coordinates_and_PA()
+        template = FieldLine.template_properties_along_line()
         
         config = ExperimentConfig(
             name="test_experiment",
@@ -451,7 +451,7 @@ class TestExperimentConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_coordinates_and_PA()
+        template = FieldLine.template_properties_along_line()
         
         config = ExperimentConfig(
             name="test_experiment",
@@ -531,7 +531,7 @@ class TestExperimentConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_coordinates_and_PA()
+        template = FieldLine.template_properties_along_line()
         
         config = ExperimentConfig(
             name="yaml_print_test",
@@ -611,7 +611,7 @@ class TestTemplateFactoryConfig:
     
     def test_basic_initialization(self):
         """Test basic initialization."""
-        template1 = FieldLine.template_coordinates_and_PA()
+        template1 = FieldLine.template_properties_along_line()
         template2 = FieldLine.template_all()
         
         config = TemplateFactoryConfig(templates=[template1, template2])
@@ -631,7 +631,7 @@ class TestExperimentSeriesConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_coordinates_and_PA()
+        template = FieldLine.template_properties_along_line()
         
         config = ExperimentSeriesConfig(
             name="test_series",
@@ -658,7 +658,7 @@ class TestExperimentSeriesConfig:
             SphericalGridConfig(nlon=5, nlat=10)
         ])
         template_factory = TemplateFactoryConfig(templates=[
-            FieldLine.template_coordinates_and_PA()
+            FieldLine.template_properties_along_line()
         ])
         
         config = ExperimentSeriesConfig(
@@ -681,7 +681,7 @@ class TestExperimentSeriesConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_coordinates_and_PA()
+        template = FieldLine.template_properties_along_line()
         
         config = ExperimentSeriesConfig(
             name="simple_series",
@@ -710,7 +710,7 @@ class TestExperimentSeriesConfig:
             RandomGridConfig(nline_ori=100)
         ])
         template_factory = TemplateFactoryConfig(templates=[
-            FieldLine.template_coordinates_and_PA(),
+            FieldLine.template_properties_along_line(),
             FieldLine.template_all()
         ])
         
@@ -759,7 +759,7 @@ class TestIntegration:
             skip_memory_estimation=True,
             save_results_to_disk=False
         )
-        template = FieldLine.template_coordinates_and_PA()
+        template = FieldLine.template_properties_along_line()
         
         config = ExperimentConfig(
             name="integration_test",

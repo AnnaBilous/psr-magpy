@@ -59,7 +59,7 @@ class FieldLineTracer:
         )
         
         # Initialize property calculator
-        self.property_calculator = PropertyCalculator(params.threshold_line_distance)
+        self.property_calculator = PropertyCalculator(params.threshold_line_distance, field=field)
         
         logger.debug(f"Field object: {field}")
         logger.debug(f"Tracing parameters: {params}")
@@ -177,7 +177,7 @@ class FieldLineTracer:
        
         # Use property calculator
         props = self.property_calculator.calculate_line_properties(
-            footpoint_id, r, B_initial, dotprod, K, template
+            footpoint_id, r, B_initial, dotprod, K, dt, template
         )
       
         output.set_property(**props)

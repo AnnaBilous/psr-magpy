@@ -52,7 +52,8 @@ def test_run_specific_experiments(tmp_path):
         experiment_numbers=[0]
     )
     
-    assert result.total_experiments == 1
+    assert result.total_experiments == 1  # Total experiments in series
+    assert result.experiments_in_this_session == 1  # Experiments run in this session
     assert len(result.experiment_results) == 1
     assert result.experiment_results[0].experiment_name.endswith("000")
 
@@ -73,7 +74,8 @@ def test_run_remaining_experiments(tmp_path):
         run_remaining=True
     )
     
-    assert result.total_experiments == 0  # No experiments left
+    assert result.total_experiments == 1  # Total experiments in series
+    assert result.experiments_in_this_session == 0  # No experiments left to run
 
 def test_overwrite_everything(tmp_path):
     """Test overwrite_everything option."""
