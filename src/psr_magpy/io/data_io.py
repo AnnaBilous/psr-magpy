@@ -181,22 +181,45 @@ class FieldLineSetIO(FitsIO):
             raise ValueError(error_msg)
 
         hdu = hdul["FIELD_LINES"]
-
-        # Create template based on column names
-        template = FieldLine()
         column_names = [col.name.upper() for col in hdu.columns]
-        for prop in PropertyName:
-            flag_enabled = prop.name in column_names
-            setattr(template.save_flags, prop.flag_name, flag_enabled)
-            logger.debug(f"Template: setting {prop.flag_name} to {flag_enabled}")
+
+        # Check if template is provided in kwargs
+        template = kwargs.get('template')
+        if template is not None:
+            # Validate that all required columns from template exist in FITS file
+            missing_columns = []
+            for prop in PropertyName:
+                if getattr(template.save_flags, prop.flag_name):
+                    if prop.name not in column_names:
+                        missing_columns.append(prop.name)
+            
+            if missing_columns:
+                error_msg = f"Template requires columns that are missing from FITS file: {missing_columns}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            logger.debug(f"Using provided template with enabled properties: {template.property_system.get_enabled_property_names()}")
+        else:
+            # Create template based on column names (original behavior)
+            template = FieldLine()
+            for prop in PropertyName:
+                flag_enabled = prop.name in column_names
+                setattr(template.save_flags, prop.flag_name, flag_enabled)
+                logger.debug(f"Template: setting {prop.flag_name} to {flag_enabled}")
 
         # Create empty FieldLineSet with template
         field_line_set = FieldLineSet(template, copy_data=False)
 
-        # Load data from HDU
+        # Load data from HDU (only for enabled properties in template)
         for col in hdu.columns:
             try:
                 prop = PropertyName[col.name.upper()]
+                
+                # Only load properties that are enabled in the template
+                if not getattr(template.save_flags, prop.flag_name):
+                    logger.debug(f"Skipping property {prop.key_name} (not enabled in template)")
+                    continue
+                
                 data = hdu.data[col.name]
 
                 # Special handling for array list properties
@@ -206,7 +229,7 @@ class FieldLineSetIO(FitsIO):
                     else:
                         data = [np.array(d, dtype=object) for d in data]
 
-                field_line_set.property_system.set_property(prop, data)
+                field_line_set.property_system._properties[prop] = data
                 logger.debug(f"Loaded property {prop.key_name}")
 
             except KeyError:

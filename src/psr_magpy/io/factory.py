@@ -55,11 +55,14 @@ class IOFactory:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
+        # Filter out template parameter from kwargs (it's passed to load method, not constructor)
+        io_kwargs = {k: v for k, v in kwargs.items() if k != 'template'}
+
         # Create validator with specified configuration
         validator = DataIOValidator(
             validation_level=validation_level,
             recovery_strategy=recovery_strategy,
-            **kwargs,
+            **io_kwargs,
         )
 
         # Create memory monitor with specified configuration
@@ -77,11 +80,11 @@ class IOFactory:
                 validator=validator,
                 memory_monitor=memory_monitor,
                 progress_tracker=progress_tracker,
-                **kwargs,
+                **io_kwargs,
             )
         except TypeError:
             # Fallback: create without validator/memory_monitor if constructor doesn't support it
-            return io_class(**kwargs)
+            return io_class(**io_kwargs)
 
     @classmethod
     def create_data_io_with_data(
