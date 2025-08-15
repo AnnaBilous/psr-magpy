@@ -186,6 +186,14 @@ class TemplateFactoryConfig(BaseModel):
                     # Reconstruct FieldLine from property system flags
                     flags = template_data["property_system"]
                     template = FieldLine()
+                    
+                    # Define default values for new properties (backwards compatibility)
+                    default_flags = {
+                        "save_b_line": False,
+                        "save_curvature_line": False,
+                    }
+                    
+                    # Apply flags from YAML, with defaults for missing properties
                     for prop_name, enabled in flags.items():
                         if hasattr(template.property_system.save_flags, prop_name):
                             setattr(
@@ -195,6 +203,17 @@ class TemplateFactoryConfig(BaseModel):
                             logger.warning(
                                 f"Property {prop_name} not found in FieldLine property_system.save_flags"
                             )
+                    
+                    # Apply defaults for missing new properties
+                    for prop_name, default_value in default_flags.items():
+                        if prop_name not in flags:
+                            if hasattr(template.property_system.save_flags, prop_name):
+                                setattr(
+                                    template.property_system.save_flags, prop_name, default_value
+                                )
+                                logger.debug(f"Applied default {default_value} for missing property {prop_name}")
+                            else:
+                                logger.warning(f"Default property {prop_name} not found in FieldLine property_system.save_flags")
                     templates.append(template)
                 else:
                     # Assume it's already a FieldLine object

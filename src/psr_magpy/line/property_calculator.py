@@ -131,7 +131,7 @@ class PropertyCalculator:
 
     def prep_curvature_line(
         self, r: np.ndarray, dt: float, line_R_max: float, template: FieldLine
-    ) -> Optional[list]:
+    ) -> Optional[np.ndarray]:
         """
         Curvature for a 3D parametric curve r[k] = (x,y,z) sampled at uniform steps dt.
         Returns:
@@ -143,8 +143,10 @@ class PropertyCalculator:
                 R = r.T
         
                 # First and second derivatives wrt t (uniform spacing)
-                R1 = np.gradient(R, dt, axis=0, edge_order=2)   # r'(t)
-                R2 = np.gradient(R1, dt, axis=0, edge_order=2)  # r''(t)
+                # Use edge_order=1 for small arrays to avoid requiring 3+ points
+                edge_order = 1 if R.shape[0] < 3 else 2
+                R1 = np.gradient(R, dt, axis=0, edge_order=edge_order)   # r'(t)
+                R2 = np.gradient(R1, dt, axis=0, edge_order=edge_order)  # r''(t)
 
                 # Speed and unit tangent
                 v = np.linalg.norm(R1, axis=1)
@@ -162,16 +164,18 @@ class PropertyCalculator:
 
                 # Return as a list containing a single 1D array
                 logger.debug(f"Calculated curvature line with {len(curvature_radius)} points")
+                return curvature_radius.astype(np.float32)
                 
             else:
                 curvature_radius = np.array([], dtype=np.float32)
                 logger.debug(
                     "Line did not reach threshold_line_distance, saving empty curvature array"
                 )
+                return curvature_radius
         else:
             curvature_radius = None
             logger.debug("curvature line saving disabled")
-        return curvature_radius
+            return curvature_radius
 
 
     def prep_pa_line(

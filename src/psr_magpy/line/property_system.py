@@ -130,7 +130,7 @@ class PropertyValue(BaseModel):
 
         elif property_name in [PropertyName.R_LINE, PropertyName.PA_LINE, PropertyName.B_LINE, PropertyName.CURVATURE_LINE]:
             # These should be numpy arrays or lists of coordinates
-            if not hasattr(v, "__len__"):
+            if not hasattr(v, "__len__") or isinstance(v, str):
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be an array-like object, got {type(v)}",
                     property_name.key_name,

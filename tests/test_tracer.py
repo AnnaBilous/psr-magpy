@@ -155,7 +155,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_save_dr(self):
         """Test field line tracing with save_dR option."""
-        template = FieldLine.template_coordinates_only()
+        template = FieldLine.template_line_coordinates_only()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -169,7 +169,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_invalid_inputs(self):
         """Test field line tracing with invalid inputs."""
-        template = FieldLine.template_coordinates_only()
+        template = FieldLine.template_line_coordinates_only()
         
         # Test with None position - should raise AttributeError, not ValueError
         with pytest.raises(AttributeError):  # type: ignore
@@ -271,7 +271,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_magnetic_field_consistency(self):
         """Test that magnetic field calculations are consistent."""
-        template = FieldLine.template_surface_properties()
+        template = FieldLine.template_surface_field_properties()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -433,9 +433,9 @@ class TestFieldLineTracer:
             ("all", FieldLine.template_all()),
             ("all_except_along_line", FieldLine.template_all_except_along_line()),
             ("OFL_calc", FieldLine.template_OFL_calc()),
-            ("coordinates_only", FieldLine.template_coordinates_only()),
+            ("line_coordinates_only", FieldLine.template_line_coordinates_only()),
             ("properties_along_line", FieldLine.template_properties_along_line()),
-            ("surface_properties", FieldLine.template_surface_properties()),
+            ("surface_field_properties", FieldLine.template_surface_field_properties()),
         ]
         
         for name, template in templates:
@@ -579,9 +579,9 @@ class TestFieldLineTracerIntegration:
         # Mock field to raise an error
         mock_field = Mock()
         mock_field.get_total_field.side_effect = ValueError("Field calculation error")
-        
+
         tracer = FieldLineTracer(mock_field, self.params)
-        template = FieldLine.template_coordinates_only()
+        template = FieldLine.template_line_coordinates_only()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         

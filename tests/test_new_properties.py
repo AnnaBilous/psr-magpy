@@ -32,41 +32,25 @@ class TestNewProperties:
         """Test validation of B_line property values."""
         ps = PropertySystem(save_b_line=True)
         
-        # Valid: list of 1D arrays
-        valid_b_line = [np.array([1.0, 2.0, 3.0], dtype=np.float32)]
+        # Valid: array-like object
+        valid_b_line = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         ps.set_property(b_line=valid_b_line)
         
-        # Invalid: not a list
-        with pytest.raises(Exception):
-            ps.set_property(b_line=np.array([1.0, 2.0, 3.0]))
-        
-        # Invalid: list contains non-array
-        with pytest.raises(Exception):
-            ps.set_property(b_line=[1.0, 2.0, 3.0])
-        
-        # Invalid: 2D array in list
-        with pytest.raises(Exception):
-            ps.set_property(b_line=[np.array([[1.0, 2.0], [3.0, 4.0]])])
+        # Invalid: not array-like
+        with pytest.raises(ValueError):
+            ps.set_property(b_line="invalid")
 
     def test_property_validation_curvature_line(self):
         """Test validation of curvature_line property values."""
         ps = PropertySystem(save_curvature_line=True)
         
-        # Valid: list of 1D arrays
-        valid_curvature = [np.array([0.1, 0.2, 0.3], dtype=np.float32)]
+        # Valid: array-like object
+        valid_curvature = np.array([0.1, 0.2, 0.3], dtype=np.float32)
         ps.set_property(curvature_line=valid_curvature)
         
-        # Invalid: not a list
-        with pytest.raises(Exception):
-            ps.set_property(curvature_line=np.array([0.1, 0.2, 0.3]))
-        
-        # Invalid: list contains non-array
-        with pytest.raises(Exception):
-            ps.set_property(curvature_line=[0.1, 0.2, 0.3])
-        
-        # Invalid: 2D array in list
-        with pytest.raises(Exception):
-            ps.set_property(curvature_line=[np.array([[0.1, 0.2], [0.3, 0.4]])])
+        # Invalid: not array-like
+        with pytest.raises(ValueError):
+            ps.set_property(curvature_line="invalid")
 
     def test_property_calculator_b_line(self):
         """Test B_line calculation in PropertyCalculator."""
@@ -96,11 +80,9 @@ class TestNewProperties:
         
         # Check that B_line was calculated
         assert "b_line" in props
-        assert isinstance(props["b_line"], list)
-        assert len(props["b_line"]) == 1
-        assert isinstance(props["b_line"][0], np.ndarray)
-        assert props["b_line"][0].dtype == np.float32
-        assert len(props["b_line"][0]) == 3  # 3 points
+        assert isinstance(props["b_line"], np.ndarray)
+        assert props["b_line"].dtype == np.float32
+        assert len(props["b_line"]) == 3  # 3 points
         
         # Check that field.get_total_field was called for each point
         assert mock_field.get_total_field.call_count == 3
@@ -134,11 +116,9 @@ class TestNewProperties:
         
         # Check that curvature_line was calculated
         assert "curvature_line" in props
-        assert isinstance(props["curvature_line"], list)
-        assert len(props["curvature_line"]) == 1
-        assert isinstance(props["curvature_line"][0], np.ndarray)
-        assert props["curvature_line"][0].dtype == np.float32
-        assert len(props["curvature_line"][0]) == 10  # 10 points
+        assert isinstance(props["curvature_line"], np.ndarray)
+        assert props["curvature_line"].dtype == np.float32
+        assert len(props["curvature_line"]) == 10  # 10 points
 
     def test_property_calculator_no_field(self):
         """Test that properties are None when field is not provided."""
@@ -168,7 +148,7 @@ class TestNewProperties:
         
         # Curvature_line should still be calculated (doesn't need field)
         assert "curvature_line" in props
-        assert isinstance(props["curvature_line"], list)
+        assert isinstance(props["curvature_line"], np.ndarray)
 
     def test_property_calculator_disabled_properties(self):
         """Test that properties are not calculated when disabled."""
@@ -212,5 +192,5 @@ class TestNewProperties:
         # Check that new properties are in validation rules
         assert "b_line" in summary["validation_rules"]
         assert "curvature_line" in summary["validation_rules"]
-        assert summary["validation_rules"]["b_line"] == "list of 1D arrays"
-        assert summary["validation_rules"]["curvature_line"] == "list of 1D arrays"
+        assert summary["validation_rules"]["b_line"] == "array-like object"
+        assert summary["validation_rules"]["curvature_line"] == "array-like object"

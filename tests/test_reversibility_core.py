@@ -85,7 +85,7 @@ class TestFieldLineReversibilityCore:
         
         # Create new calculator for each tracing operation
         calculator = FieldLineCalculator(field, grid, params)
-        template = FieldLine.template_coordinates_only()
+        template = FieldLine.template_line_coordinates_only()
         
         return calculator.get_field_lines(template)
 
@@ -467,7 +467,7 @@ class TestReversedErrorFunctionality:
         )
         
         calculator = FieldLineCalculator(self.field, self.grid, params)
-        template = FieldLine.template_coordinates_only()
+        template = FieldLine.template_line_coordinates_only()
         
         results = calculator.get_field_lines(template)
         
@@ -503,7 +503,7 @@ class TestReversedErrorFunctionality:
         )
         
         calculator = FieldLineCalculator(self.field, self.grid, params)
-        template = FieldLine.template_coordinates_only()
+        template = FieldLine.template_line_coordinates_only()
         
         results = calculator.get_field_lines(template)
         
@@ -538,7 +538,7 @@ class TestReversedErrorFunctionality:
         )
         
         calculator = FieldLineCalculator(self.field, self.grid, params)
-        template = FieldLine.template_coordinates_only()
+        template = FieldLine.template_line_coordinates_only()
         
         results = calculator.get_field_lines(template)
         reversed_error = results.get_property('reversed_error') if results is not None else None
@@ -578,7 +578,7 @@ class TestReversedErrorFunctionality:
             )
             
             calculator = FieldLineCalculator(self.field, self.grid, params)
-            template = FieldLine.template_coordinates_only()
+            template = FieldLine.template_line_coordinates_only()
             
             results = calculator.get_field_lines(template)
             reversed_error = results.get_property('reversed_error') if results is not None else None
@@ -614,7 +614,7 @@ class TestReversedErrorFunctionality:
         )
         
         calculator = FieldLineCalculator(self.field, self.grid, params)
-        template = FieldLine.template_coordinates_only()
+        template = FieldLine.template_line_coordinates_only()
         
         results = calculator.get_field_lines(template)
         reversed_error = results.get_property('reversed_error') if results is not None else None
