@@ -91,10 +91,7 @@ class MemoryManager:
 
         # Process trial batch with verification disabled
         # Use random indices for better representation of the grid
-        if grid.indices is not None:
-            trial_indices = np.random.choice(grid.indices, size=n_trial, replace=False)
-        else:
-            trial_indices = np.random.choice(grid.nline, size=n_trial, replace=False)
+        trial_indices = np.random.choice(grid.nline, size=n_trial, replace=False)
         trial_grid = grid.subset_grid(trial_indices)
         trial_results = self._process_trial_batch(trial_grid, template, temp_tracer)
  

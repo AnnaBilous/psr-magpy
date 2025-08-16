@@ -117,7 +117,7 @@ class ExperimentSeriesRunner:
             # Run the experiment
             exp_start_time = time.time()
             try:
-                result = cast(ExperimentResult, run_experiment(experiment))
+                result = cast(ExperimentResult, run_experiment(experiment, save_grids=self.save_grids))
                 duration = time.time() - exp_start_time
                 if result.success:
                     logger.info(

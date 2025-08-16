@@ -15,9 +15,10 @@ logger = get_logger(__name__, console_format_brief=True)
 class ExperimentRunner:
     """Runner for executing individual experiments."""
 
-    def __init__(self, config: ExperimentConfig) -> None:
+    def __init__(self, config: ExperimentConfig, save_grids: bool = True) -> None:
         """Initialize experiment runner."""
         self.config = config
+        self.save_grids = save_grids
         logger.debug(f"Initialized runner for experiment: {config.name}")
 
     def run(self) -> ExperimentResult:
@@ -42,8 +43,8 @@ class ExperimentRunner:
                 )
             logger.info(f"Grid created with {grid.nline} points")
 
-            # Auto-save grids if saving results to disk
-            if self.config.tracing.save_results_to_disk:
+            # Auto-save grids if saving results to disk and grids should be saved
+            if self.config.tracing.save_results_to_disk and self.save_grids:
                 # Save RandomGrid and CustomGrid (always saved when results saved)
                 if (self.config.grid.random is not None or self.config.grid.custom is not None):
                     self._save_grid(grid)
@@ -108,8 +109,22 @@ class ExperimentRunner:
         """Automatically save subset grid to the grids directory."""
         from pathlib import Path
         
-        # Create grids directory in current working directory
-        grids_dir = Path.cwd() / "grids"
+        # Try to determine the proper grids directory from the config
+        # If the config has a grid file path, use its directory
+        grids_dir = None
+        if (self.config.grid.healpix is not None and 
+            hasattr(self.config.grid.healpix, 'grid_file_path') and 
+            self.config.grid.healpix.grid_file_path):
+            grids_dir = Path(self.config.grid.healpix.grid_file_path).parent
+        elif (self.config.grid.spherical is not None and 
+              hasattr(self.config.grid.spherical, 'grid_file_path') and 
+              self.config.grid.spherical.grid_file_path):
+            grids_dir = Path(self.config.grid.spherical.grid_file_path).parent
+        
+        # Fallback to current working directory if no grid file path found
+        if grids_dir is None:
+            grids_dir = Path.cwd() / "grids"
+        
         grids_dir.mkdir(parents=True, exist_ok=True)
         
         # Generate grid filename
@@ -129,8 +144,22 @@ class ExperimentRunner:
         """Automatically save grid to the grids directory."""
         from pathlib import Path
         
-        # Create grids directory in current working directory
-        grids_dir = Path.cwd() / "grids"
+        # Try to determine the proper grids directory from the config
+        # If the config has a grid file path, use its directory
+        grids_dir = None
+        if (self.config.grid.healpix is not None and 
+            hasattr(self.config.grid.healpix, 'grid_file_path') and 
+            self.config.grid.healpix.grid_file_path):
+            grids_dir = Path(self.config.grid.healpix.grid_file_path).parent
+        elif (self.config.grid.spherical is not None and 
+              hasattr(self.config.grid.spherical, 'grid_file_path') and 
+              self.config.grid.spherical.grid_file_path):
+            grids_dir = Path(self.config.grid.spherical.grid_file_path).parent
+        
+        # Fallback to current working directory if no grid file path found
+        if grids_dir is None:
+            grids_dir = Path.cwd() / "grids"
+        
         grids_dir.mkdir(parents=True, exist_ok=True)
         
         # Generate grid filename
@@ -161,9 +190,9 @@ class ExperimentRunner:
             self.config.grid.custom.grid_file_path = grid_path
 
 
-def run_experiment(config: ExperimentConfig) -> Optional[object]:
+def run_experiment(config: ExperimentConfig, save_grids: bool = True) -> Optional[object]:
     """Convenience function to run an experiment."""
-    runner = ExperimentRunner(config)
+    runner = ExperimentRunner(config, save_grids=save_grids)
     return runner.run()
 
 

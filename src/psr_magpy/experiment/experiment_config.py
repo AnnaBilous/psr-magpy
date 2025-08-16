@@ -520,6 +520,19 @@ class ExperimentConfig:
             combined_field_line_set.append(field_line_set)
         
         logger.info(f"Combined field line set: {combined_field_line_set.n_field_lines} field lines")
+        
+        # Check for duplicate footpoint indices
+        if hasattr(combined_field_line_set, 'footpoint_id') and combined_field_line_set.footpoint_id is not None:
+            footpoint_ids = combined_field_line_set.footpoint_id
+            unique_ids = set(footpoint_ids)
+            if len(unique_ids) != len(footpoint_ids):
+                duplicates = [id for id in unique_ids if footpoint_ids.count(id) > 1]
+                error_msg = f"Duplicate footpoint indices found: {duplicates[:10]}{'...' if len(duplicates) > 10 else ''}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            else:
+                logger.info(f"Verified {len(footpoint_ids)} unique footpoint indices")
+        
         return combined_field_line_set
 
     @classmethod

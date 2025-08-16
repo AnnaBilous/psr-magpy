@@ -191,6 +191,31 @@ class ExperimentSeriesConfig(BaseModel):
     def get_cleanup_directories(self) -> List[str]:
         """Get list of directories to clean up (only configs)."""
         return [self.CONFIGS_DIR]
+    
+    def get_experiment_config_path(self, experiment_number: int) -> Path:
+        """Get the full path to a specific experiment config file.
+        
+        Args:
+            experiment_number: The experiment number (0-based)
+            
+        Returns:
+            Path to the experiment config file
+        """
+        return self.get_configs_dir() / f"{self.name}_{experiment_number:03d}.yaml"
+    
+    def load_experiment_config(self, experiment_number: int) -> "ExperimentConfig":
+        """Load a specific experiment config by number.
+        
+        Args:
+            experiment_number: The experiment number (0-based)
+            
+        Returns:
+            Loaded experiment configuration
+        """
+        from psr_magpy.experiment.experiment_config import ExperimentConfig
+        
+        config_path = self.get_experiment_config_path(experiment_number)
+        return ExperimentConfig.load(config_path)
 
     def save(self, filename: Optional[str] = None) -> None:
         """Save configuration to YAML file in the configs directory.
