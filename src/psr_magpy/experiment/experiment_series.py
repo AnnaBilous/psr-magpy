@@ -55,16 +55,26 @@ class ExperimentSeriesConfig(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    def model_dump(self, **kwargs):
+        """Custom model_dump to ensure grid type information is preserved."""
+        data = super().model_dump(**kwargs)
+        
+        # Ensure grid type information is preserved
+        if "grid" in data and hasattr(self.grid, 'model_dump'):
+            data["grid"] = self.grid.model_dump(**kwargs)
+        
+        return data
+
     def create_experiment_series(
         self,
         save_configs: bool = True,
-        overwrite: bool = False,
+        delete_existing_configs: bool = False,
     ) -> List[ExperimentConfig]:
         """Create experiment series from configuration.
 
         Args:
             save_configs: Whether to save individual experiment configs
-            overwrite: Whether to overwrite existing configs
+            delete_existing_configs: Whether to delete existing configs
 
         Returns:
             List of experiment configurations
@@ -72,7 +82,7 @@ class ExperimentSeriesConfig(BaseModel):
         logger.info("Creating experiment series: %s", self.name)
 
         # Create output directory structure
-        self.create_directory_structure(overwrite)
+        self.create_directory_structure(delete_existing_configs)
 
         # Create experiments
         experiments = self._create_experiments()
@@ -81,7 +91,7 @@ class ExperimentSeriesConfig(BaseModel):
         # Save series config
         if save_configs:
             config_file = self.get_configs_dir() / f"{self.name}_config.yaml"
-            if overwrite or not config_file.exists():
+            if delete_existing_configs or not config_file.exists():
                 self.save(str(config_file))
                 logger.debug("Saved series config: %s", config_file)
 
@@ -90,7 +100,7 @@ class ExperimentSeriesConfig(BaseModel):
             configs_dir = self.get_configs_dir()
             for experiment in experiments:
                 config_file = configs_dir / f"{experiment.name}.yaml"
-                if overwrite or not config_file.exists():
+                if delete_existing_configs or not config_file.exists():
                     experiment.save(str(config_file))
                     logger.debug("Saved experiment config: %s", config_file)
 
@@ -150,9 +160,8 @@ class ExperimentSeriesConfig(BaseModel):
         Returns:
             Path to configs directory
         """
-        if self.output_dir is None:
-            return Path(self.name) / "configs"
-        return Path(self.output_dir) / self.name / "configs"
+        output_dir = self.output_dir or "."
+        return Path(output_dir) / self.name / self.CONFIGS_DIR
 
     def get_grids_dir(self) -> Path:
         """Get the full path to the grids directory."""
@@ -174,6 +183,14 @@ class ExperimentSeriesConfig(BaseModel):
 
         output_dir = self.output_dir or "."
         return Path(output_dir) / self.name / self.LOGS_DIR
+    
+    def get_subdirectories(self) -> List[str]:
+        """Get list of all subdirectory names."""
+        return [self.LINES_DIR, self.GRIDS_DIR, self.CONFIGS_DIR, self.LOGS_DIR]
+    
+    def get_cleanup_directories(self) -> List[str]:
+        """Get list of directories to clean up (only configs)."""
+        return [self.CONFIGS_DIR]
 
     def save(self, filename: Optional[str] = None) -> None:
         """Save configuration to YAML file in the configs directory.
@@ -397,11 +414,11 @@ class ExperimentSeriesConfig(BaseModel):
         logger.info(f"Loaded {len(experiments)} experiments from {configs_dir}")
         return experiments
 
-    def create_directory_structure(self, overwrite: bool = False) -> None:
+    def create_directory_structure(self, delete_existing_configs: bool = False) -> None:
         """Create output directory structure.
         
         Args:
-            overwrite: Whether to overwrite existing directories (configs, grids, lines)
+            delete_existing_configs: Whether to delete existing configs directory
         """
         if self.output_dir is None:
             # Create series directory
@@ -411,20 +428,20 @@ class ExperimentSeriesConfig(BaseModel):
                 logger.info("Created output directory structure under: %s", series_dir)
 
                 # Create subdirectories
-                for subdir in ["lines", "grids", "configs", "logs"]:
+                for subdir in self.get_subdirectories():
                     subdir_path = series_dir / subdir
                     subdir_path.mkdir(parents=True, exist_ok=True)
             else:
-                # Clean up directories if overwrite is True
-                if overwrite:
-                    for subdir in ["configs", "grids", "lines"]:
+                # Clean up directories if delete_existing_configs is True
+                if delete_existing_configs:
+                    for subdir in self.get_cleanup_directories():
                         subdir_path = series_dir / subdir
                         if subdir_path.exists():
                             shutil.rmtree(subdir_path)
                             logger.info("Removed existing %s directory: %s", subdir, subdir_path)
                     
                     # Recreate cleaned directories
-                    for subdir in ["lines", "grids", "configs", "logs"]:
+                    for subdir in self.get_subdirectories():
                         subdir_path = series_dir / subdir
                         subdir_path.mkdir(parents=True, exist_ok=True)
                     logger.info("Recreated output directories for: %s", series_dir)
@@ -438,20 +455,20 @@ class ExperimentSeriesConfig(BaseModel):
                 logger.info("Created output directory structure under: %s", series_dir)
 
                 # Create subdirectories
-                for subdir in ["lines", "grids", "configs", "logs"]:
+                for subdir in self.get_subdirectories():
                     subdir_path = series_dir / subdir
                     subdir_path.mkdir(parents=True, exist_ok=True)
             else:
-                # Clean up directories if overwrite is True
-                if overwrite:
-                    for subdir in ["configs", "grids", "lines"]:
+                # Clean up directories if delete_existing_configs is True
+                if delete_existing_configs:
+                    for subdir in self.get_cleanup_directories():
                         subdir_path = series_dir / subdir
                         if subdir_path.exists():
                             shutil.rmtree(subdir_path)
                             logger.info("Removed existing %s directory: %s", subdir, subdir_path)
                     
                     # Recreate cleaned directories
-                    for subdir in ["lines", "grids", "configs", "logs"]:
+                    for subdir in self.get_subdirectories():
                         subdir_path = series_dir / subdir
                         subdir_path.mkdir(parents=True, exist_ok=True)
                     logger.info("Recreated output directories for: %s", series_dir)

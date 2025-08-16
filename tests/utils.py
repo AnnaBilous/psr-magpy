@@ -62,3 +62,22 @@ def temp_fits_file():
 def rng():
     """Provide numpy random number generator with fixed seed."""
     return np.random.default_rng(42)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_directories():
+    """Clean up test directories at the end of test session."""
+    yield  # Run all tests
+    
+    # Clean up test directories after all tests complete
+    import shutil
+    
+    test_dirs = ["test_experiment", "test_series"]
+    for dir_name in test_dirs:
+        test_dir = Path(dir_name)
+        if test_dir.exists():
+            try:
+                shutil.rmtree(test_dir)
+                print(f"Cleaned up test directory: {test_dir}")
+            except Exception as e:
+                print(f"Warning: Could not clean up {test_dir}: {e}")

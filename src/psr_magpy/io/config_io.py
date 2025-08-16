@@ -247,8 +247,8 @@ class ExperimentSeriesConfigIO(YamlIO):
             
             reconstructed_data["template"] = FieldLine(**template_data)
 
-        # Create config object
-        config = ExperimentSeriesConfig(**reconstructed_data)
+        # Create config object using model_validate to handle grid type information
+        config = ExperimentSeriesConfig.model_validate(reconstructed_data)
 
         return config
 

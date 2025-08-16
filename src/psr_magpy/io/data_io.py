@@ -126,12 +126,6 @@ class FieldLineSetIO(FitsIO):
         for key, format_str in column_info.items():
             prop = PropertyName[key.upper()]
             value = self.data.property_system.get_property(prop)
-            if prop in self.ARRAY_LIST_PROPERTIES:
-                logger.info(f"Property {prop.name}: type={type(value)}, length={len(value) if value else 0}")
-                if value and len(value) > 0:
-                    logger.info(f"  First element type: {type(value[0])}, shape: {value[0].shape if hasattr(value[0], 'shape') else 'no shape'}")
-                    logger.info(f"  First element dtype: {value[0].dtype if hasattr(value[0], 'dtype') else 'no dtype'}")
-                value = np.array(value, dtype=object)
             columns.append(fits.Column(name=key, format=format_str, array=value))
 
         # Create HDU

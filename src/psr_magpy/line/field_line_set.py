@@ -387,3 +387,32 @@ class FieldLineSet(FieldLine):
         """Return string representation of the field line set."""
         enabled_props = self.property_system.get_enabled_property_names()
         return f"FieldLineSet(n_lines={self.n_field_lines}, enabled_properties={enabled_props})"
+
+    def get_OFL_footpoints(self, R_LC: float, h_LC_coeff: float = 3**1.5 / 2.0) -> np.ndarray:
+        """
+        Get the footpoints of the Open Field Lines (OFL).
+        
+        Args:
+            R_LC: Light cylinder radius
+            h_LC_coeff: Height coefficient for LC (default: 3^1.5 / 2.0)
+        
+        Returns:
+            np.ndarray: Array of OFL footpoint indices
+        """
+        R_cyl_max = self.r_cyl_max
+        z_abs_max = self.z_abs_max
+        footpoint_ids = self.footpoint_id
+        
+        # OFL criteria: either beyond LC or within LC but high enough
+        open_fl_crit = (R_cyl_max > R_LC) | (
+            (R_cyl_max < R_LC) & (np.abs(z_abs_max) > (h_LC_coeff * R_LC))
+        )
+        
+        logger.info(f"R_LC: {R_LC:.2f}")
+        logger.info(f"OFL criteria met: {np.sum(open_fl_crit)} out of {len(open_fl_crit)}")
+        
+        # Return OFL footpoint indices
+        ofl_footpoint_ids = footpoint_ids[open_fl_crit].astype(int)
+        
+  
+        return ofl_footpoint_ids

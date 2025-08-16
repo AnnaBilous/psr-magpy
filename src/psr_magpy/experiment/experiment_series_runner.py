@@ -30,8 +30,8 @@ class ExperimentSeriesRunner:
         save_individual_configs: bool = False,
         continue_on_failure: bool = True,
         experiment_numbers: Optional[List[int]] = None,
-        delete_existing_data: bool = False,
-        delete_existing_lines: bool = False,
+        delete_existing_all_except_configs: bool = False,
+        delete_existing_lines_and_summary: bool = False,
         overwrite_experiments: bool = False,
         run_remaining: bool = False,
         log_rotation_max_bytes: float = 10 * 1024 * 1024,  # 10 MB
@@ -46,8 +46,8 @@ class ExperimentSeriesRunner:
         self.save_individual_configs = save_individual_configs
         self.continue_on_failure = continue_on_failure
         self.experiment_numbers = experiment_numbers
-        self.delete_existing_data = delete_existing_data
-        self.delete_existing_lines = delete_existing_lines
+        self.delete_existing_all_except_configs = delete_existing_all_except_configs
+        self.delete_existing_lines_and_summary = delete_existing_lines_and_summary
         self.overwrite_experiments = overwrite_experiments
         self.run_remaining = run_remaining
         self.log_rotation_max_bytes = log_rotation_max_bytes
@@ -67,7 +67,7 @@ class ExperimentSeriesRunner:
     ) -> List[ExperimentResult]:
         """Run a list of experiments."""
         results: List[ExperimentResult] = []
-        lines_dir = self.output_directory / self.series_config.name / "lines"
+        lines_dir = self.output_directory / self.series_config.name / self.series_config.LINES_DIR
 
         for i, experiment in enumerate(experiments, 1):
             logger.info(
@@ -102,7 +102,7 @@ class ExperimentSeriesRunner:
 
             # Save grid if requested
             if self.save_grids:
-                grids_dir = self.output_directory / self.series_config.name / "grids"
+                grids_dir = self.output_directory / self.series_config.name / self.series_config.GRIDS_DIR
                 grid = experiment.grid.create_grid()
                 if grid is not None:
                     grid_path = grids_dir / f"{experiment.name}.fits"
@@ -168,18 +168,18 @@ class ExperimentSeriesRunner:
         series_dir = self.output_directory / self.series_config.name
 
         # Handle directory cleanup based on parameters
-        if self.delete_existing_data and series_dir.exists():
+        if self.delete_existing_all_except_configs and series_dir.exists():
             # Delete everything except configs
             for item in series_dir.iterdir():
-                if item.name != "configs":
+                if item.name != self.series_config.CONFIGS_DIR:
                     if item.is_dir():
                         shutil.rmtree(item)
                     else:
                         item.unlink()
             logger.info("Deleted all existing data (except configs)")
-        elif self.delete_existing_lines and series_dir.exists():
+        elif self.delete_existing_lines_and_summary and series_dir.exists():
             # Delete only lines directory and summary files
-            lines_dir = series_dir / "lines"
+            lines_dir = series_dir / self.series_config.LINES_DIR
             if lines_dir.exists():
                 shutil.rmtree(lines_dir)
                 logger.info("Deleted existing lines directory")
@@ -195,12 +195,12 @@ class ExperimentSeriesRunner:
             series_dir.mkdir(parents=True, exist_ok=True)
         
         # Create subdirectories
-        for subdir in ["lines", "grids", "configs", "logs"]:
+        for subdir in self.series_config.get_subdirectories():
             subdir_path = series_dir / subdir
             subdir_path.mkdir(parents=True, exist_ok=True)
 
         # Set up logging
-        log_file = series_dir / "logs" / f"{self.series_config.name}.log"
+        log_file = series_dir / self.series_config.LOGS_DIR / f"{self.series_config.name}.log"
         setup_logging(
             log_file=log_file,
             log_level=logging.INFO,
@@ -344,7 +344,7 @@ class ExperimentSeriesRunner:
         # Add new results
         for result in experiment_results:
             # Count batch files
-            batch_pattern = str(self.output_directory / self.series_config.name / "lines" / f"{result.experiment_name}*batch_*_out_of_*.fits")
+            batch_pattern = str(self.output_directory / self.series_config.name / self.series_config.LINES_DIR / f"{result.experiment_name}*batch_*_out_of_*.fits")
             batch_files = glob.glob(batch_pattern)
             logger.debug(f"Batch file pattern: {batch_pattern}")
             logger.debug(f"Found batch files: {batch_files}")
@@ -431,7 +431,7 @@ class ExperimentSeriesRunner:
     def _save_individual_configs(self, experiments: List[ExperimentConfig]) -> None:
         """Save individual experiment configurations."""
         # Use the series-specific configs directory
-        configs_dir = self.output_directory / self.series_config.name / "configs"
+        configs_dir = self.output_directory / self.series_config.name / self.series_config.CONFIGS_DIR
 
         logger.info(f"Saving {len(experiments)} individual configs to {configs_dir}")
 
@@ -453,8 +453,8 @@ def run_experiment_series(
     series_config: ExperimentSeriesConfig,
     experiment_numbers: Optional[List[int]] = None,
     run_remaining: bool = False,
-    delete_existing_data: bool = False,
-    delete_existing_lines: bool = False,
+    delete_existing_all_except_configs: bool = False,
+    delete_existing_lines_and_summary: bool = False,
     overwrite_experiments: bool = False,
     save_individual_configs: bool = True,
     save_grids: bool = True,
@@ -467,8 +467,8 @@ def run_experiment_series(
         save_grids=save_grids,
         continue_on_failure=continue_on_failure,
         experiment_numbers=experiment_numbers,
-        delete_existing_data=delete_existing_data,
-        delete_existing_lines=delete_existing_lines,
+        delete_existing_all_except_configs=delete_existing_all_except_configs,
+        delete_existing_lines_and_summary=delete_existing_lines_and_summary,
         overwrite_experiments=overwrite_experiments,
         run_remaining=run_remaining,
     )
@@ -481,8 +481,8 @@ def run_experiment_series_from_file(
     input_directory: Optional[Union[str, Path]] = None,
     experiment_numbers: Optional[List[int]] = None,
     run_remaining: bool = False,
-    delete_existing_data: bool = False,
-    delete_existing_lines: bool = False,
+    delete_existing_all_except_configs: bool = False,
+    delete_existing_lines_and_summary: bool = False,
     overwrite_experiments: bool = False,
     save_individual_configs: bool = True,
     save_grids: bool = True,
@@ -503,8 +503,8 @@ def run_experiment_series_from_file(
         series_config=series_config,
         experiment_numbers=experiment_numbers,
         run_remaining=run_remaining,
-        delete_existing_data=delete_existing_data,
-        delete_existing_lines=delete_existing_lines,
+        delete_existing_all_except_configs=delete_existing_all_except_configs,
+        delete_existing_lines_and_summary=delete_existing_lines_and_summary,
         overwrite_experiments=overwrite_experiments,
         save_individual_configs=save_individual_configs,
         save_grids=save_grids,

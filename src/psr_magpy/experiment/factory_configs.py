@@ -114,6 +114,64 @@ class GridFactoryConfig(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    def model_dump(self, **kwargs):
+        """Custom model_dump to preserve grid type information."""
+        data = super().model_dump(**kwargs)
+        
+        # Convert grid configs to preserve type information
+        if "grids" in data:
+            grids_data = []
+            for grid in self.grids:
+                if isinstance(grid, SphericalGridConfig):
+                    grids_data.append({"spherical": grid.model_dump(**kwargs)})
+                elif isinstance(grid, RandomGridConfig):
+                    grids_data.append({"random": grid.model_dump(**kwargs)})
+                elif isinstance(grid, HealpixGridConfig):
+                    grids_data.append({"healpix": grid.model_dump(**kwargs)})
+                elif isinstance(grid, CustomGridConfig):
+                    grids_data.append({"custom": grid.model_dump(**kwargs)})
+                elif isinstance(grid, SphericalGridFactoryConfig):
+                    grids_data.append({"spherical": grid.model_dump(**kwargs)})
+                elif isinstance(grid, RandomGridFactoryConfig):
+                    grids_data.append({"random": grid.model_dump(**kwargs)})
+                elif isinstance(grid, HealpixGridFactoryConfig):
+                    grids_data.append({"healpix": grid.model_dump(**kwargs)})
+                elif isinstance(grid, CustomGridFactoryConfig):
+                    grids_data.append({"custom": grid.model_dump(**kwargs)})
+                else:
+                    # Fallback to original serialization
+                    grids_data.append(grid.model_dump(**kwargs))
+            
+            data["grids"] = grids_data
+        
+        return data
+
+    @classmethod
+    def model_validate(cls, obj):
+        """Custom model_validate to handle grid type information in YAML."""
+        if isinstance(obj, dict) and "grids" in obj:
+            # Convert grid type dictionaries back to config objects
+            grids_data = []
+            for grid_dict in obj["grids"]:
+                if isinstance(grid_dict, dict):
+                    if "spherical" in grid_dict:
+                        grids_data.append(SphericalGridConfig(**grid_dict["spherical"]))
+                    elif "random" in grid_dict:
+                        grids_data.append(RandomGridConfig(**grid_dict["random"]))
+                    elif "healpix" in grid_dict:
+                        grids_data.append(HealpixGridConfig(**grid_dict["healpix"]))
+                    elif "custom" in grid_dict:
+                        grids_data.append(CustomGridConfig(**grid_dict["custom"]))
+                    else:
+                        # Fallback to original validation
+                        grids_data.append(grid_dict)
+                else:
+                    grids_data.append(grid_dict)
+            
+            obj["grids"] = grids_data
+        
+        return super().model_validate(obj)
+
 
 class TracingFactoryConfig(BaseModel):
     """Factory configuration for tracing parameters with flexible inputs."""
@@ -499,30 +557,57 @@ def expand_grid_configs(
             grid_configs.extend(_expand_custom_grid_factory_config(grid))
         elif isinstance(grid, dict):
             # Handle dictionary input with flexible parameters
-            grid_type = grid.get("type", "spherical")
-            # Expand parameter combinations
-            param_combinations = get_parameter_combinations(grid)
-
-            for params in param_combinations:
-                # Remove type from params before creating config
-                params.pop("type", None)
-
-                if grid_type == "spherical":
+            # Check if it's the new format with grid type as key
+            if "spherical" in grid:
+                grid_data = grid["spherical"]
+                param_combinations = get_parameter_combinations(grid_data)
+                for params in param_combinations:
                     config = SphericalGridConfig(**params)
                     grid_configs.append(GridConfig(spherical=config))
-                elif grid_type == "random":
+            elif "random" in grid:
+                grid_data = grid["random"]
+                param_combinations = get_parameter_combinations(grid_data)
+                for params in param_combinations:
                     config = RandomGridConfig(**params)
                     grid_configs.append(GridConfig(random=config))
-                elif grid_type == "healpix":
+            elif "healpix" in grid:
+                grid_data = grid["healpix"]
+                param_combinations = get_parameter_combinations(grid_data)
+                for params in param_combinations:
                     config = HealpixGridConfig(**params)
                     grid_configs.append(GridConfig(healpix=config))
-                elif grid_type == "custom":
+            elif "custom" in grid:
+                grid_data = grid["custom"]
+                param_combinations = get_parameter_combinations(grid_data)
+                for params in param_combinations:
                     config = CustomGridConfig(**params)
                     grid_configs.append(GridConfig(custom=config))
-                else:
-                    error_msg = f"Unknown grid type: {grid_type}"
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
+            else:
+                # Handle old format with "type" field
+                grid_type = grid.get("type", "spherical")
+                # Expand parameter combinations
+                param_combinations = get_parameter_combinations(grid)
+
+                for params in param_combinations:
+                    # Remove type from params before creating config
+                    params.pop("type", None)
+
+                    if grid_type == "spherical":
+                        config = SphericalGridConfig(**params)
+                        grid_configs.append(GridConfig(spherical=config))
+                    elif grid_type == "random":
+                        config = RandomGridConfig(**params)
+                        grid_configs.append(GridConfig(random=config))
+                    elif grid_type == "healpix":
+                        config = HealpixGridConfig(**params)
+                        grid_configs.append(GridConfig(healpix=config))
+                    elif grid_type == "custom":
+                        config = CustomGridConfig(**params)
+                        grid_configs.append(GridConfig(custom=config))
+                    else:
+                        error_msg = f"Unknown grid type: {grid_type}"
+                        logger.error(error_msg)
+                        raise ValueError(error_msg)
         else:
             # Handle regular config object
             if isinstance(grid, SphericalGridConfig):

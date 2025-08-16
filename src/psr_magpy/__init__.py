@@ -16,6 +16,7 @@ from .line.field_line import FieldLine
 
 # Utils
 from .utils.logging_config import get_logger
+from .utils.physical_conversions import get_R_LC, get_P_ms
 
 # Experiment system
 from .experiment import ExperimentConfig, ExperimentSeriesConfig, FieldComponentConfig, CustomGridConfig, GridConfig

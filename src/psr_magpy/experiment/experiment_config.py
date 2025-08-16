@@ -40,6 +40,7 @@ from psr_magpy.line.tracing_parameters import (
     PerformanceParameters,
 )
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.line.tracing_parameters import TracingDefaults
 
@@ -146,6 +147,10 @@ class SphericalGridConfig(BaseModel):
     nlon: int
     nlat: int
     pole_lat: float = 0.0
+    subset: bool = Field(default=False, description="Whether this is a subset grid")
+    grid_file_path: Optional[str] = Field(
+        default=None, description="Path to saved grid file (required for subset grids)"
+    )
 
 
 class RandomGridConfig(BaseModel):
@@ -153,7 +158,7 @@ class RandomGridConfig(BaseModel):
 
     nline_ori: int
     grid_file_path: Optional[str] = Field(
-        default=None, description="Path to saved grid file"
+        default=None, description="Path to saved grid file (required when saving results to disk)"
     )
 
 
@@ -161,6 +166,10 @@ class HealpixGridConfig(BaseModel):
     """Configuration for HEALPix grid."""
 
     nside: int
+    subset: bool = Field(default=False, description="Whether this is a subset grid")
+    grid_file_path: Optional[str] = Field(
+        default=None, description="Path to saved grid file (required for subset grids)"
+    )
 
 
 class CustomGridConfig(BaseModel):
@@ -169,7 +178,7 @@ class CustomGridConfig(BaseModel):
     nline_ori: int
     coordinates: Optional[Any] = None  # Accept any type, validate in create_grid
     grid_file_path: Optional[str] = Field(
-        default=None, description="Path to saved grid file"
+        default=None, description="Path to saved grid file (required when saving results to disk)"
     )
 
     model_config = {"arbitrary_types_allowed": True}
@@ -230,45 +239,65 @@ class GridConfig(BaseModel):
     def create_grid(self) -> Optional[FootpointGrid]:
         """Create grid from config."""
         if self.random is not None:
-            logger.info("Creating RandomGrid from scratch")
-            params = self.random.model_dump()
-            params.pop(
-                "grid_file_path", None
-            )  # Remove file path when creating from scratch
-            return RandomGrid(**params)
+            config = self.random
+            if config.grid_file_path:
+                logger.info(f"Loading RandomGrid from {config.grid_file_path}")
+                return RandomGrid.load_from_fits(config.grid_file_path)
+            else:
+                logger.info("Creating RandomGrid from scratch")
+                params = config.model_dump()
+                params.pop("grid_file_path", None)  # Remove file path when creating from scratch
+                return RandomGrid(**params)
         elif self.custom is not None:
-            logger.info("Creating CustomGrid from scratch")
-            params = self.custom.model_dump()
-            params.pop(
-                "grid_file_path", None
-            )  # Remove file path when creating from scratch
-            
-            # Handle different coordinate formats
-            if params["coordinates"] is not None:
-                from astropy.coordinates import CartesianRepresentation
-                import numpy as np
+            config = self.custom
+            if config.grid_file_path:
+                logger.info(f"Loading CustomGrid from {config.grid_file_path}")
+                return CustomGrid.load_from_fits(config.grid_file_path)
+            else:
+                logger.info("Creating CustomGrid from scratch")
+                params = config.model_dump()
+                params.pop("grid_file_path", None)  # Remove file path when creating from scratch
                 
-                if isinstance(params["coordinates"], list):
-                    # Convert list coordinates to CartesianRepresentation
-                    params["coordinates"] = CartesianRepresentation(
-                        x=np.array(params["coordinates"][0]),
-                        y=np.array(params["coordinates"][1]),
-                        z=np.array(params["coordinates"][2]),
-                    )
-                elif not isinstance(params["coordinates"], CartesianRepresentation):
-                    error_msg = f"Coordinates must be list of lists or CartesianRepresentation, got {type(params['coordinates'])}"
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
-            
-            return CustomGrid(**params)
+                # Handle different coordinate formats
+                if params["coordinates"] is not None:
+                    from astropy.coordinates import CartesianRepresentation
+                    import numpy as np
+                    
+                    if isinstance(params["coordinates"], list):
+                        # Convert list coordinates to CartesianRepresentation
+                        params["coordinates"] = CartesianRepresentation(
+                            x=np.array(params["coordinates"][0]),
+                            y=np.array(params["coordinates"][1]),
+                            z=np.array(params["coordinates"][2]),
+                        )
+                    elif not isinstance(params["coordinates"], CartesianRepresentation):
+                        error_msg = f"Coordinates must be list of lists or CartesianRepresentation, got {type(params['coordinates'])}"
+                        logger.error(error_msg)
+                        raise ValueError(error_msg)
+                
+                return CustomGrid(**params)
         elif self.spherical is not None:
-            logger.info("Creating SphericalGrid from scratch")
-            params = self.spherical.model_dump()
-            return SphericalGrid(**params)
+            config = self.spherical
+            if config.subset and config.grid_file_path:
+                logger.info(f"Loading subset SphericalGrid from {config.grid_file_path}")
+                return SphericalGrid.load_from_fits(config.grid_file_path)
+            else:
+                logger.info("Creating SphericalGrid from scratch")
+                params = config.model_dump()
+                params.pop("grid_file_path", None)  # Remove file path when creating from scratch
+                params.pop("subset", None)  # Remove subset flag when creating from scratch
+                return SphericalGrid(**params)
         elif self.healpix is not None:
-            logger.info("Creating HealpixGrid from scratch")
-            params = self.healpix.model_dump()
-            return HealpixGrid(**params)
+            config = self.healpix
+            if config.subset and config.grid_file_path:
+                logger.info(f"Loading subset HealpixGrid from {config.grid_file_path}")
+                return HealpixGrid.load_from_fits(config.grid_file_path)
+            else:
+                logger.info("Creating HealpixGrid from scratch")
+                params = config.model_dump()
+                params.pop("grid_file_path", None)  # Remove file path when creating from scratch
+                params.pop("subset", None)  # Remove subset flag when creating from scratch
+                return HealpixGrid(**params)
         else:
             error_msg = "No grid type specified"
             logger.error(error_msg)
@@ -445,6 +474,53 @@ class ExperimentConfig:
             get_io_factory().register_config_io(cls, ExperimentConfigIO)
 
         return get_io_factory().load_config(cls, filepath)
+
+    def load_combined_batch_data(self, template: FieldLine, lines_dir: Optional[str] = None) -> Optional["FieldLineSet"]:
+        """
+        Load and combine batch files for this experiment.
+        
+        Args:
+            template: FieldLine template specifying which properties to load
+            lines_dir: Optional path to lines directory (defaults to experiment's output dir)
+        
+        Returns:
+            FieldLineSet: Combined field line set with specified properties
+        """
+        import glob
+        from psr_magpy.line.field_line_set import FieldLineSet
+        from psr_magpy.io import get_io_factory
+        
+        # Determine lines directory
+        if lines_dir is None:
+            error_msg = "lines_dir must be specified"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # Find all batch files for this experiment
+        batch_pattern = f"{lines_dir}/{self.name}_batch_*.fits"
+        batch_files = glob.glob(batch_pattern)
+        
+        if not batch_files:
+            logger.warning(f"No batch files found for {self.name}")
+            return None
+        
+        logger.info(f"Found {len(batch_files)} batch files for {self.name}")
+        
+        # Create combined field line set
+        combined_field_line_set = FieldLineSet(template, copy_data=False)
+        
+        # Load data from each batch file
+        for batch_file in sorted(batch_files):
+            logger.debug(f"Loading {batch_file}")
+            
+            # Load the field line set with template
+            field_line_set = get_io_factory().load_data(FieldLineSet, batch_file, template=template)
+            
+            # Append to combined set
+            combined_field_line_set.append(field_line_set)
+        
+        logger.info(f"Combined field line set: {combined_field_line_set.n_field_lines} field lines")
+        return combined_field_line_set
 
     @classmethod
     def create_dipole_example(cls) -> "ExperimentConfig":

@@ -553,3 +553,55 @@ Provides different grid types for sampling points on a sphere:
 - RandomGrid: Random uniform distribution
 - CustomGrid: User-defined coordinates
 """
+
+def create_subset_grid_config(original_grid: FootpointGrid, subset_indices: np.ndarray, 
+                             experiment_name: str, grid_type: str) -> "GridConfig":
+    """
+    Create a grid config for a subset grid that will be automatically saved.
+    
+    Parameters:
+    -----------
+    original_grid : FootpointGrid
+        The original grid to create a subset from
+    subset_indices : np.ndarray
+        Indices to include in the subset
+    experiment_name : str
+        Name of the experiment (used for filename)
+    grid_type : str
+        Type of grid ('spherical' or 'healpix' only)
+        
+    Returns:
+    --------
+    GridConfig
+        Configuration for the subset grid
+    """
+    from psr_magpy.experiment.experiment_config import (
+        GridConfig, SphericalGridConfig, HealpixGridConfig
+    )
+    
+    # Create subset grid
+    subset_grid = original_grid.subset_grid(subset_indices)
+    
+    # Generate filename
+    grid_filename = f"{experiment_name}_subset_grid.fits"
+    grid_path = f"grids/{grid_filename}"
+    
+    # Create appropriate config based on grid type
+    if grid_type.lower() == "spherical":
+        config = SphericalGridConfig(
+            nlon=original_grid.nlon,
+            nlat=original_grid.nlat,
+            pole_lat=original_grid.pole_lat.deg,
+            subset=True,
+            grid_file_path=grid_path
+        )
+    elif grid_type.lower() == "healpix":
+        config = HealpixGridConfig(
+            nside=original_grid.nside,
+            subset=True,
+            grid_file_path=grid_path
+        )
+    else:
+        raise ValueError(f"Subset grids only supported for 'spherical' and 'healpix' types, got: {grid_type}")
+    
+    return GridConfig(**{grid_type: config})

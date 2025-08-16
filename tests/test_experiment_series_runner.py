@@ -92,7 +92,7 @@ def test_overwrite_everything(tmp_path):
     # Run with delete_existing_data
     run_experiment_series(
         series_config=series_config,
-        delete_existing_data=True
+        delete_existing_all_except_configs=True
     )
     
     # Check directories are clean

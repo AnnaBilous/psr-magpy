@@ -593,8 +593,8 @@ class TestIntegration:
             ]
             assert exp.metadata["grid_type"] == "spherical" 
 
-    def test_create_directory_structure_overwrite_cleans_all_directories(self):
-        """Test that overwrite=True cleans up configs, grids, and lines directories."""
+    def test_create_directory_structure_delete_existing_configs_cleans_only_configs(self):
+        """Test that delete_existing_configs=True cleans up only configs directory."""
         import tempfile
         import shutil
         
@@ -610,7 +610,7 @@ class TestIntegration:
             )
             
             # Create initial directory structure
-            config.create_directory_structure(overwrite=False)
+            config.create_directory_structure(delete_existing_configs=False)
             
             # Create some dummy files in each directory
             configs_dir = config.get_configs_dir()
@@ -627,14 +627,14 @@ class TestIntegration:
             assert (lines_dir / "dummy_line.fits").exists()
             
             # Now call with overwrite=True
-            config.create_directory_structure(overwrite=True)
+            config.create_directory_structure(delete_existing_configs=True)
             
-            # Verify all directories were cleaned and recreated
+            # Verify all directories still exist
             assert configs_dir.exists()
             assert grids_dir.exists()
             assert lines_dir.exists()
             
-            # Verify dummy files were removed
+            # Verify only configs directory was cleaned
             assert not (configs_dir / "dummy_config.yaml").exists()
-            assert not (grids_dir / "dummy_grid.fits").exists()
-            assert not (lines_dir / "dummy_line.fits").exists() 
+            assert (grids_dir / "dummy_grid.fits").exists()  # Should still exist
+            assert (lines_dir / "dummy_line.fits").exists()  # Should still exist 
