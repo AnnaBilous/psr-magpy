@@ -612,6 +612,18 @@ def run_experiment_series(
     continue_on_failure: bool = True,
 ) -> SeriesResult:
     """Convenience function to run an experiment series."""
+    
+    # Check if any experiments have save_results_to_disk=False and warn user
+    experiments = series_config.create_experiment_series(save_configs=False)
+    for experiment in experiments:
+        if hasattr(experiment.tracing, 'save_results_to_disk') and not experiment.tracing.save_results_to_disk:
+            logger.warning(
+                "WARNING: run_experiment_series() will override save_results_to_disk=False "
+                "and force results to be saved to disk. Use run_experiment_series_in_memory() "
+                "if you want to keep results in memory only."
+            )
+            break
+    
     runner = ExperimentSeriesRunner(
         series_config=series_config,
         save_individual_configs=save_individual_configs,
