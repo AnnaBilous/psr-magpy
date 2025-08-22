@@ -25,61 +25,14 @@ def create_experiment_metadata(
     tracing_config: Any,
     template_config: Any,
 ) -> Dict[str, Any]:
-    """Create metadata for an experiment."""
+    """Create minimal metadata for an experiment."""
+    # Start with base metadata (which might contain user-defined fields)
     metadata = base_metadata.copy()
-
-    # Add experiment number and series name
-    metadata["experiment_number"] = experiment_number
-    metadata["series_name"] = series_name
-
-    # Add field metadata
-    if hasattr(field_config, "components"):
-        # Sort components by B_magnitude in descending order
-        sorted_components = sorted(
-            field_config.components, key=lambda x: x.B_magnitude, reverse=True
-        )
-        metadata["field_components"] = [
-            {
-                "type": comp.moment_type,
-                "B": comp.B_magnitude,
-                "lat": comp.moment_orientation_latitude_degree,
-                "lon": comp.moment_orientation_longitude_degree,
-            }
-            for comp in sorted_components
-        ]
-
-    # Add grid metadata
-    if hasattr(grid_config, "spherical") and grid_config.spherical is not None:
-        metadata["grid_type"] = "spherical"
-        metadata["grid_params"] = {
-            "nlon": grid_config.spherical.nlon,
-            "nlat": grid_config.spherical.nlat,
-            "pole_lat": grid_config.spherical.pole_lat,
-        }
-    elif hasattr(grid_config, "healpix") and grid_config.healpix is not None:
-        metadata["grid_type"] = "healpix"
-        metadata["grid_params"] = {"nside": grid_config.healpix.nside}
-    elif hasattr(grid_config, "random") and grid_config.random is not None:
-        metadata["grid_type"] = "random"
-        metadata["grid_params"] = {"nline_ori": grid_config.random.nline_ori}
-    elif hasattr(grid_config, "custom") and grid_config.custom is not None:
-        metadata["grid_type"] = "custom"
-        metadata["grid_params"] = {"nline_ori": grid_config.custom.nline_ori}
-
-    # Add tracing metadata
-    if hasattr(tracing_config, "max_integration_radius"):
-        metadata["tracing_params"] = {
-            "max_integration_radius": tracing_config.max_integration_radius,
-            "dt": tracing_config.dt,
-            "n_cores": tracing_config.n_cores,
-        }
-
-    # Add template metadata
-    if hasattr(template_config, "property_system"):
-        metadata["template_properties"] = [
-            prop.key_name for prop in template_config.property_system.enabled_properties
-        ]
-
+    
+    # Only add experiment number if not already present
+    if "experiment_number" not in metadata:
+        metadata["experiment_number"] = experiment_number
+    
     return metadata
 
 

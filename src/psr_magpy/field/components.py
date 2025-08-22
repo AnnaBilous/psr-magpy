@@ -33,7 +33,7 @@ class FieldComponentParams(BaseModel):
     moment_orientation_latitude_degree: float = Field(
         default=0.0,
         ge=0.0,
-        le=90.0,
+        le=180.0,
         description="Colatitude of magnetic axis (degrees)",
     )
     moment_orientation_longitude_degree: float = Field(

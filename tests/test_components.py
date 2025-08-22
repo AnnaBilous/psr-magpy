@@ -104,7 +104,7 @@ class TestFieldComponentParams:
                 moment_type=MultipoleType.DIPOLE
             )
         
-        # Latitude should be between 0 and 90
+        # Latitude should be between 0 and 180
         with pytest.raises(ValueError):
             FieldComponentParams(
                 moment_orientation_latitude_degree=-10.0,
@@ -113,7 +113,7 @@ class TestFieldComponentParams:
         
         with pytest.raises(ValueError):
             FieldComponentParams(
-                moment_orientation_latitude_degree=100.0,
+                moment_orientation_latitude_degree=200.0,
                 moment_type=MultipoleType.DIPOLE
             )
         
