@@ -13,7 +13,11 @@ from .experiment_config import (
 )
 from .experiment_metadata import create_experiment_metadata
 from .experiment_series import ExperimentSeriesConfig
-from .experiment_series_runner import run_experiment_series
+from .experiment_series_runner import (
+    run_experiment_series,
+    run_experiment_series_in_memory,
+    run_experiment_series_in_memory_from_file,
+)
 from .factory_configs import (
     FieldFactoryConfig,
     FieldComponentFactoryConfig,
@@ -34,6 +38,8 @@ __all__ = [
     "create_experiment_metadata",
     "ExperimentSeriesConfig",
     "run_experiment_series",
+    "run_experiment_series_in_memory",
+    "run_experiment_series_in_memory_from_file",
     "FieldFactoryConfig",
     "FieldComponentFactoryConfig",
     "GridFactoryConfig",

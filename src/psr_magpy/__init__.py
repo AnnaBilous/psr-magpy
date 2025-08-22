@@ -29,7 +29,11 @@ from .experiment.factory_configs import (
     TracingFactoryConfig,
     expand_grid_configs,
 )
-from .experiment.experiment_series_runner import run_experiment_series
+from .experiment.experiment_series_runner import (
+    run_experiment_series,
+    run_experiment_series_in_memory,
+    run_experiment_series_in_memory_from_file,
+)
 
 # Common aliases for convenience
 Dipole = DipoleFieldComponent

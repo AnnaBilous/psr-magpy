@@ -236,9 +236,18 @@ class ExperimentSeriesRunner:
                     output_directory=series_dir,
                 )
         else:
-            experiments = self.series_config.load_experiments()
-            # Store total number of experiments in series before filtering
-            total_experiments_in_series = len(experiments)
+            try:
+                experiments = self.series_config.load_experiments()
+                total_experiments_in_series = len(experiments)
+            except ValueError as e:
+                # If no experiments found and we want to save configs, create them
+                if self.save_individual_configs:
+                    logger.info("No existing experiments found, creating new experiment series")
+                    experiments = self.series_config.create_experiment_series(save_configs=True)
+                    total_experiments_in_series = len(experiments)
+                else:
+                    # Re-raise the error if we don't want to save configs
+                    raise e
 
         # Filter experiments by number if specified
         if self.experiment_numbers is not None:
@@ -449,6 +458,148 @@ class ExperimentSeriesRunner:
         logger.info("Individual configs saved")
 
 
+class InMemoryExperimentSeriesRunner:
+    """Lightweight runner for experiment series that keeps results in memory."""
+
+    def __init__(
+        self,
+        series_config: ExperimentSeriesConfig,
+        keep_results: bool = True,
+        max_memory_mb: float = 1000.0,
+        continue_on_failure: bool = True,
+        experiment_numbers: Optional[List[int]] = None,
+        save_individual_configs: bool = False,
+        save_grids: bool = False,
+    ) -> None:
+        """Initialize in-memory runner with configuration."""
+        self.series_config = series_config
+        self.output_directory = (
+            Path(series_config.output_dir) if series_config.output_dir else Path(".")
+        )
+        self.keep_results = keep_results
+        self.max_memory_mb = max_memory_mb
+        self.continue_on_failure = continue_on_failure
+        self.experiment_numbers = experiment_numbers
+        self.save_individual_configs = save_individual_configs
+        self.save_grids = save_grids
+
+        logger.info("Initialized in-memory series runner for: %s", series_config.name)
+        logger.info("Keep results in memory: %s", keep_results)
+        logger.info("Max memory limit: %.1f MB", max_memory_mb)
+        logger.info("Save grids: %s", save_grids)
+
+    def _run_experiments(
+        self, experiments: List[ExperimentConfig]
+    ) -> List[ExperimentResult]:
+        """Run a list of experiments with results kept in memory."""
+        results: List[ExperimentResult] = []
+        total_memory_used = 0.0
+
+        for i, experiment in enumerate(experiments, 1):
+            logger.info(
+                "Running experiment %d/%d: %s", i, len(experiments), experiment.name
+            )
+
+            # Configure experiment for in-memory results
+            experiment.tracing.save_results_to_disk = False
+            experiment.tracing.keep_results_in_memory = True
+            experiment.tracing.filename = None
+
+            # Run the experiment
+            exp_start_time = time.time()
+            try:
+                result = cast(ExperimentResult, run_experiment(experiment, save_grids=self.save_grids))
+                duration = time.time() - exp_start_time
+                
+                if result.success and result.results is not None:
+                    # Estimate memory usage
+                    result_memory_mb = result.results.estimate_size() / (1024 * 1024)
+                    total_memory_used += result_memory_mb
+                    
+                    logger.info(
+                        "✓ Experiment %s completed in %.2fs (%.1f MB)", 
+                        experiment.name, duration, result_memory_mb
+                    )
+                    
+                    # Check memory limit
+                    if total_memory_used > self.max_memory_mb:
+                        warning_msg = f"Memory usage ({total_memory_used:.1f} MB) exceeds limit ({self.max_memory_mb:.1f} MB)"
+                        logger.warning(warning_msg)
+                        if not self.keep_results:
+                            logger.info("Clearing results due to memory limit")
+                            result.results = None
+                else:
+                    error_msg = result.error_message or "Unknown error"
+                    logger.error(
+                        "✗ Experiment %s failed after %.2fs: %s",
+                        experiment.name,
+                        duration,
+                        error_msg,
+                    )
+                    if not self.continue_on_failure:
+                        raise RuntimeError(error_msg)
+            except Exception as e:
+                duration = time.time() - exp_start_time
+                result = ExperimentResult(
+                    experiment_name=experiment.name,
+                    success=False,
+                    duration=duration,
+                    error_message=str(e),
+                )
+                logger.error(
+                    "✗ Experiment %s failed after %.2fs: %s",
+                    experiment.name,
+                    duration,
+                    str(e),
+                )
+                if not self.continue_on_failure:
+                    raise
+
+            # Add result to the list (keep results in memory if requested)
+            if not self.keep_results and result.results is not None:
+                result.results = None
+                
+            results.append(result)
+
+        logger.info("Total memory used: %.1f MB", total_memory_used)
+        return results
+
+    def run(self) -> SeriesResult:
+        """Run the experiment series with results in memory."""
+        # Create experiments
+        experiments = self.series_config.create_experiment_series(
+            save_configs=self.save_individual_configs
+        )
+        total_experiments_in_series = len(experiments)
+
+        # Filter experiments by number if specified
+        if self.experiment_numbers is not None:
+            filtered_experiments = []
+            for i in self.experiment_numbers:
+                if i < 0 or i >= len(experiments):
+                    logger.warning(f"Experiment number {i} out of range, skipping")
+                    continue
+                filtered_experiments.append(experiments[i])
+            experiments = filtered_experiments
+            logger.info(f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total")
+
+        # Run experiments
+        start_time = time.time()
+        results = self._run_experiments(experiments)
+        total_duration = time.time() - start_time
+
+        return SeriesResult(
+            series_name=self.series_config.name,
+            total_experiments=total_experiments_in_series,
+            experiments_in_this_session=len(results),
+            successful_experiments=sum(1 for r in results if r.success),
+            failed_experiments=sum(1 for r in results if not r.success),
+            total_duration=total_duration,
+            experiment_results=results,
+            output_directory=self.output_directory,
+        )
+
+
 def run_experiment_series(
     series_config: ExperimentSeriesConfig,
     experiment_numbers: Optional[List[int]] = None,
@@ -506,6 +657,61 @@ def run_experiment_series_from_file(
         delete_existing_all_except_configs=delete_existing_all_except_configs,
         delete_existing_lines_and_summary=delete_existing_lines_and_summary,
         overwrite_experiments=overwrite_experiments,
+        save_individual_configs=save_individual_configs,
+        save_grids=save_grids,
+        continue_on_failure=continue_on_failure,
+    )
+
+
+def run_experiment_series_in_memory(
+    series_config: ExperimentSeriesConfig,
+    keep_results: bool = True,
+    max_memory_mb: float = 1000.0,
+    experiment_numbers: Optional[List[int]] = None,
+    save_individual_configs: bool = False,
+    save_grids: bool = False,
+    continue_on_failure: bool = True,
+) -> SeriesResult:
+    """Convenience function to run an experiment series with results kept in memory."""
+    runner = InMemoryExperimentSeriesRunner(
+        series_config=series_config,
+        keep_results=keep_results,
+        max_memory_mb=max_memory_mb,
+        continue_on_failure=continue_on_failure,
+        experiment_numbers=experiment_numbers,
+        save_individual_configs=save_individual_configs,
+        save_grids=save_grids,
+    )
+
+    return runner.run()
+
+
+def run_experiment_series_in_memory_from_file(
+    config_file: Union[str, Path],
+    input_directory: Optional[Union[str, Path]] = None,
+    keep_results: bool = True,
+    max_memory_mb: float = 1000.0,
+    experiment_numbers: Optional[List[int]] = None,
+    save_individual_configs: bool = False,
+    save_grids: bool = False,
+    continue_on_failure: bool = True,
+) -> SeriesResult:
+    """Run experiment series from a configuration file with results kept in memory."""
+    # Load series config
+    config_file = Path(config_file)
+    io_instance = get_io_factory().create_config_io(ExperimentSeriesConfig)
+    series_config = io_instance.load(config_file)
+
+    # Set input directory if provided
+    if input_directory is not None:
+        series_config.output_dir = input_directory
+
+    # Run series in memory
+    return run_experiment_series_in_memory(
+        series_config=series_config,
+        keep_results=keep_results,
+        max_memory_mb=max_memory_mb,
+        experiment_numbers=experiment_numbers,
         save_individual_configs=save_individual_configs,
         save_grids=save_grids,
         continue_on_failure=continue_on_failure,
