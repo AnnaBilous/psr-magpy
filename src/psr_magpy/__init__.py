@@ -25,6 +25,7 @@ from .experiment.factory_configs import (
     FieldComponentFactoryConfig,
     FieldFactoryConfig,
     GridFactoryConfig,
+    HealpixGridFactoryConfig,
     SphericalGridFactoryConfig,
     TracingFactoryConfig,
     expand_grid_configs,
