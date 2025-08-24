@@ -98,8 +98,11 @@ class FieldLineCalculator:
 
         # Extract necessary attributes before saving
         n_field_lines = results.n_field_lines if results is not None else 0
+        
+        # Aggregate errors from all batches in memory
         error_msg = None
         if results is not None:
+            # Check for errors in the final results
             if hasattr(results, "reversed_error"):
                 reversed_errors = results.reversed_error
                 max_error = float(np.max(reversed_errors))
@@ -108,6 +111,20 @@ class FieldLineCalculator:
                     logger.warning(error_msg)  # Log as warning since it doesn't affect success
             elif hasattr(results, "dotprod_error"):
                 error_msg = results.dotprod_error
+            
+            # Also check for errors in memory manager if results are aggregated
+            if (self.context.memory_manager.results_in_memory is not None and 
+                self.context.memory_manager.results_in_memory != results):
+                # Check aggregated results in memory manager
+                memory_results = self.context.memory_manager.results_in_memory
+                if hasattr(memory_results, "reversed_error"):
+                    reversed_errors = memory_results.reversed_error
+                    max_error = float(np.max(reversed_errors))
+                    if max_error > self.context.params.integration.reversed_error_threshold:
+                        error_msg = f"Reversed error ({max_error:.3f}) exceeds threshold ({self.context.params.integration.reversed_error_threshold:.3f})"
+                        logger.warning(error_msg)
+                elif hasattr(memory_results, "dotprod_error"):
+                    error_msg = memory_results.dotprod_error
 
         # Save results to disk if requested
         if self.context.params.output.save_results_to_disk and results is not None:
@@ -206,14 +223,35 @@ class FieldLineCalculator:
         # Close progress bar
         progress_bar.close()
         
-        # Rename batch files after all batches are processed
-        if (self.context.params.output.save_results_to_disk and 
-            self.context.memory_manager.batch_files_created):
+        # Handle final batch and rename batch files after all batches are processed
+        if self.context.params.output.save_results_to_disk:
             filename = self.context.params.output.filename
             if filename:
-                self.context.memory_manager.rename_batch_files(
-                    filename, self.context.progress_tracker
-                )
+                # Write final batch to disk if it exists in memory
+                if (self.context.memory_manager.results_in_memory is not None and 
+                    self.context.memory_manager.results_in_memory.n_field_lines > 0):
+                    # Write final batch with proper batch number
+                    filename_path = Path(filename)
+                    final_batch_filename = (
+                        filename_path.parent / f"{filename_path.stem}_batch_{batch_idx:03d}.fits"
+                    )
+                    
+                    # Save final batch
+                    get_io_factory().save_data(
+                        self.context.memory_manager.results_in_memory, 
+                        final_batch_filename, 
+                        overwrite=True
+                    )
+                    logger.info(f"Wrote final batch with {self.context.memory_manager.results_in_memory.n_field_lines} field lines to {final_batch_filename}")
+                    
+                    # Mark that batch files were created
+                    self.context.memory_manager._batch_files_created = True
+                
+                # Rename all batch files
+                if self.context.memory_manager.batch_files_created:
+                    self.context.memory_manager.rename_batch_files(
+                        filename, self.context.progress_tracker
+                    )
 
     def _process_batch(
         self,

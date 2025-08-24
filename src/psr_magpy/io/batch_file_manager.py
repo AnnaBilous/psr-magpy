@@ -66,6 +66,7 @@ class BatchFileManager:
                 # Extract batch index from filename
                 filename = path.name
                 batch_part = filename.split("_batch_")[1].split(".")[0]
+                # Handle both formats: "001" and "001_out_of_004"
                 batch_index = int(batch_part.split("_")[0])
 
                 # Get file info
