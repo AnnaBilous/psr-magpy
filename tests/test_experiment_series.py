@@ -76,15 +76,7 @@ class TestExperimentMetadata:
         )
         
         assert metadata["experiment_number"] == 1
-        assert metadata["series_name"] == "test_series"
-        assert metadata["field_components"] == [
-            {
-                "type": "dipole",
-                "B": 1.0,
-                "lat": 0.0,
-                "lon": 0.0
-            }
-        ]
+        # Metadata is now minimal - only experiment_number and any base metadata
 
 
 class TestFactoryConfigs:
@@ -580,18 +572,9 @@ class TestIntegration:
         for i, exp in enumerate(experiments):
             assert exp.metadata is not None
             assert exp.metadata["experiment_number"] == i
-            assert exp.metadata["series_name"] == "integration_test"
-            assert exp.metadata["test_type"] == "integration"
-            # Components are sorted by B_magnitude in descending order
-            assert exp.metadata["field_components"] == [
-                {
-                    "type": "dipole",
-                    "B": 2.0 if i < 4 else 1.0,  # First 4 experiments have B=2.0, last 4 have B=1.0
-                    "lat": 0.0,
-                    "lon": 0.0
-                }
-            ]
-            assert exp.metadata["grid_type"] == "spherical" 
+            # Metadata is now minimal - only experiment_number and any base metadata
+            # Base metadata from series_config should be preserved
+            assert exp.metadata["test_type"] == "integration" 
 
     def test_create_directory_structure_delete_existing_configs_cleans_only_configs(self):
         """Test that delete_existing_configs=True cleans up only configs directory."""
