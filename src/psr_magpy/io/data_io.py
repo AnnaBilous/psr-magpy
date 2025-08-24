@@ -116,7 +116,7 @@ class FieldLineSetIO(FitsIO):
 
         # Set ARRAY_LIST_PROPERTIES if not already set
         if not self.ARRAY_LIST_PROPERTIES:
-            self.ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.PA_LINE, PropertyName.B_LINE, PropertyName.CURVATURE_LINE]
+            self.ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.PA_LINE, PropertyName.B_LINE, PropertyName.CURVATURE_LINE, PropertyName.TANGENT_THETA, PropertyName.TANGENT_PHI]
 
         # Generate column information
         column_info = self._generate_column_info()

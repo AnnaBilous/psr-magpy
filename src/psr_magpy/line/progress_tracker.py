@@ -264,12 +264,15 @@ class ProgressTracker:
         save_results_to_disk: bool,
         filename: str = "",
         n_field_lines: int = 0,
+        batch_files_created: bool = False,
     ) -> None:
         """Log the completion of field line calculations."""
         logger.info(f"Calculations completed in {elapsed:.1f} seconds")
 
-        if save_results_to_disk:
+        if save_results_to_disk and batch_files_created:
             logger.info(f"Results saved to {filename[:-5]} in batches")
+        elif save_results_to_disk and not batch_files_created:
+            logger.info(f"Results will be saved to {filename[:-5]} in batches")
         else:
             logger.info(f"Returning {n_field_lines} field lines in memory")
 

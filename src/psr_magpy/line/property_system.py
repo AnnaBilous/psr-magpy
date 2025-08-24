@@ -33,6 +33,8 @@ class SaveFlags:
     save_reversed_error: bool = False
     save_b_line: bool = False
     save_curvature_line: bool = False
+    save_tangent_theta: bool = False
+    save_tangent_phi: bool = False
 
     def __repr__(self) -> str:
         """Return string representation of save flags."""
@@ -54,6 +56,8 @@ class PropertyName(Enum):
     REVERSED_ERROR = "save_reversed_error"
     B_LINE = "save_b_line"
     CURVATURE_LINE = "save_curvature_line"
+    TANGENT_THETA = "save_tangent_theta"
+    TANGENT_PHI = "save_tangent_phi"
 
     @property
     def flag_name(self) -> str:

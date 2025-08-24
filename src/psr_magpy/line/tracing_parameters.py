@@ -38,6 +38,7 @@ class TracingDefaults:
     TRACE_OPEN_LINES_BACKWARDS = False
     VERIFY_BY_REVERSING = False
     REVERSED_ERROR_THRESHOLD = 1.e-3  # Maximum allowed reversed error
+    DOTPROD_ERROR_THRESHOLD = 1.e-3   # Maximum allowed dotprod error
 
     # Performance parameters
     MAX_MEMORY_MB = 100.0
@@ -116,6 +117,11 @@ class IntegrationParameters(BaseModel):
         default=TracingDefaults.REVERSED_ERROR_THRESHOLD,
         gt=0,
         description="Maximum allowed reversed error before marking as error",
+    )
+    dotprod_error_threshold: float = Field(
+        default=TracingDefaults.DOTPROD_ERROR_THRESHOLD,
+        gt=0,
+        description="Maximum allowed dotprod error before marking as error",
     )
 
     @model_validator(mode="after")

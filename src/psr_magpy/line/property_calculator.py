@@ -49,6 +49,20 @@ class PropertyCalculator:
             f"Calculating properties for field line {footpoint_id} with R_max={line_R_max}"
         )
 
+        # Pre-calculate tangent vector if needed for any property
+        needs_tangent = any([
+            getattr(template.save_flags, PropertyName.PA_LINE.flag_name),
+            getattr(template.save_flags, PropertyName.TANGENT_THETA.flag_name),
+            getattr(template.save_flags, PropertyName.TANGENT_PHI.flag_name)
+        ])
+        
+        tangent_norm = None
+        if needs_tangent and line_R_max >= self.threshold_line_distance:
+            t = np.gradient(r, axis=1)
+            t_abs = np.linalg.norm(t, axis=0, keepdims=True)
+            safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
+            tangent_norm = t / safe_t_abs
+
         for prop in PropertyName:
             if prop.key_name == "footpoint_id":
                 props[prop.key_name] = footpoint_id
@@ -93,13 +107,17 @@ class PropertyCalculator:
                 else:
                     props[prop.key_name] = None
             elif prop.key_name == "pa_line":
-                props[prop.key_name] = self.prep_pa_line(r, K, line_R_max, template)
+                props[prop.key_name] = self.prep_pa_line(r, K, line_R_max, template, tangent_norm)
             elif prop.key_name == "curvature_line":
                 if getattr(template.save_flags, prop.flag_name):
                     curvature = self.prep_curvature_line(r, dt, line_R_max, template)
                     props[prop.key_name] = curvature
                 else:
                     props[prop.key_name] = None
+            elif prop.key_name == "tangent_theta":
+                props[prop.key_name] = self.prep_tangent_theta(r, line_R_max, template, tangent_norm)
+            elif prop.key_name == "tangent_phi":
+                props[prop.key_name] = self.prep_tangent_phi(r, line_R_max, template, tangent_norm)
                 
 
         # Remove None values from kwargs
@@ -179,7 +197,7 @@ class PropertyCalculator:
 
 
     def prep_pa_line(
-        self, r: np.ndarray, B_dir: float, line_R_max: float, template: FieldLine
+        self, r: np.ndarray, B_dir: float, line_R_max: float, template: FieldLine, tangent_norm: Optional[np.ndarray] = None
     ) -> Optional[np.ndarray]:
         """Calculate position angle along the field line.
 
@@ -190,10 +208,13 @@ class PropertyCalculator:
         if getattr(template.save_flags, PropertyName.PA_LINE.flag_name):
             if line_R_max >= self.threshold_line_distance:
                 Npoints = r.shape[1]
-                t = np.gradient(r, axis=1)
-                t_abs = np.linalg.norm(t, axis=0, keepdims=True)
-                safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
-                t_norm = t / safe_t_abs
+                if tangent_norm is None:
+                    t = np.gradient(r, axis=1)
+                    t_abs = np.linalg.norm(t, axis=0, keepdims=True)
+                    safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
+                    t_norm = t / safe_t_abs
+                else:
+                    t_norm = tangent_norm
 
                 n = np.gradient(t_norm, axis=1)
                 n_abs = np.linalg.norm(n, axis=0, keepdims=True)
@@ -236,6 +257,7 @@ class PropertyCalculator:
                 PA[PA <= -np.pi] += 2 * np.pi
                 PA[PA >= np.pi] -= 2 * np.pi
 
+                PA = np.rad2deg(PA)
                 logger.debug(f"Calculated PA line with {len(PA)} points")
 
             else:
@@ -277,4 +299,73 @@ class PropertyCalculator:
                 return None
         else:
             logger.debug("B_line saving disabled")
+            return None
+
+    def prep_tangent_theta(
+        self, r: np.ndarray, line_R_max: float, template: FieldLine, tangent_norm: Optional[np.ndarray] = None
+    ) -> Optional[np.ndarray]:
+        """Calculate theta (colatitude) of tangent vector along the field line.
+        
+        Returns theta angle in radians for each point along the field line.
+        """
+        if getattr(template.save_flags, PropertyName.TANGENT_THETA.flag_name):
+            if line_R_max >= self.threshold_line_distance:
+                # Use pre-calculated tangent vector or calculate if not provided
+                if tangent_norm is None:
+                    t = np.gradient(r, axis=1)
+                    t_abs = np.linalg.norm(t, axis=0, keepdims=True)
+                    safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
+                    t_norm = t / safe_t_abs
+                else:
+                    t_norm = tangent_norm
+
+                # Convert to spherical coordinates
+                x, y, z = t_norm
+                r_sph = np.sqrt(x**2 + y**2 + z**2)
+                theta = np.rad2deg(np.arccos(z / np.where(r_sph == 0, 1, r_sph)))
+                
+                logger.debug(f"Calculated tangent theta with {len(theta)} points")
+                return theta.astype(np.float32)
+            else:
+                theta = np.array([], dtype=np.float32)
+                logger.debug(
+                    "Line did not reach threshold_line_distance, saving empty tangent theta array"
+                )
+                return theta
+        else:
+            logger.debug("tangent theta saving disabled")
+            return None
+
+    def prep_tangent_phi(
+        self, r: np.ndarray, line_R_max: float, template: FieldLine, tangent_norm: Optional[np.ndarray] = None
+    ) -> Optional[np.ndarray]:
+        """Calculate phi (azimuth) of tangent vector along the field line.
+        
+        Returns phi angle in radians for each point along the field line.
+        """
+        if getattr(template.save_flags, PropertyName.TANGENT_PHI.flag_name):
+            if line_R_max >= self.threshold_line_distance:
+                # Use pre-calculated tangent vector or calculate if not provided
+                if tangent_norm is None:
+                    t = np.gradient(r, axis=1)
+                    t_abs = np.linalg.norm(t, axis=0, keepdims=True)
+                    safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
+                    t_norm = t / safe_t_abs
+                else:
+                    t_norm = tangent_norm
+
+                # Convert to spherical coordinates
+                x, y, z = t_norm
+                phi = np.rad2deg(np.arctan2(y, x))
+                
+                logger.debug(f"Calculated tangent phi with {len(phi)} points")
+                return phi.astype(np.float32)
+            else:
+                phi = np.array([], dtype=np.float32)
+                logger.debug(
+                    "Line did not reach threshold_line_distance, saving empty tangent phi array"
+                )
+                return phi
+        else:
+            logger.debug("tangent phi saving disabled")
             return None

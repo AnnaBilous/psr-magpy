@@ -249,6 +249,8 @@ class TemplateFactoryConfig(BaseModel):
                     default_flags = {
                         "save_b_line": False,
                         "save_curvature_line": False,
+                        "save_tangent_theta": False,
+                        "save_tangent_phi": False,
                     }
                     
                     # Apply flags from YAML, with defaults for missing properties

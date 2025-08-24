@@ -20,6 +20,7 @@ from psr_magpy.field.components import DipoleFieldComponent
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.grid.grid import SphericalGrid
 from psr_magpy.line.calculator import FieldLineCalculator
+from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.tracing_parameters import (
     TracingParameters, 
@@ -51,7 +52,9 @@ class TestFieldLineCalculator:
     
     def test_initialization(self):
         """Test calculator initialization."""
-        calculator = FieldLineCalculator(self.field, self.grid, self.params)
+        from psr_magpy.line.calculation_context import CalculationContext
+        context = CalculationContext(self.field, self.grid, self.params)
+        calculator = FieldLineCalculator(context)
         
         assert calculator.context is not None
         assert calculator.context.field is self.field
@@ -60,7 +63,9 @@ class TestFieldLineCalculator:
     
     def test_get_field_lines_basic(self):
         """Test basic field line calculation."""
-        calculator = FieldLineCalculator(self.field, self.grid, self.params)
+        from psr_magpy.line.calculation_context import CalculationContext
+        context = CalculationContext(self.field, self.grid, self.params)
+        calculator = FieldLineCalculator(context)
         template = FieldLine.template_OFL_calc()
         
         results = calculator.get_field_lines(template)
@@ -83,6 +88,7 @@ class TestMemoryEstimationSkipping:
     
     def test_can_skip_when_user_enables(self):
         """Test skipping when user explicitly enables it."""
+        from psr_magpy.line.calculation_context import CalculationContext
         grid = SphericalGrid(nlon=6, nlat=4, pole_lat=0.0)  # 14 points
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
@@ -90,13 +96,15 @@ class TestMemoryEstimationSkipping:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, grid, params)
+        context = CalculationContext(self.field, grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Should skip: user requested skip_memory_estimation=True
         assert calculator._can_skip_memory_estimation() is True
     
     def test_cannot_skip_when_user_disables(self):
         """Test not skipping when user disables it (default behavior)."""
+        from psr_magpy.line.calculation_context import CalculationContext
         grid = SphericalGrid(nlon=6, nlat=4, pole_lat=0.0)  # 14 points
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=25.0),
@@ -104,13 +112,15 @@ class TestMemoryEstimationSkipping:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, grid, params)
+        context = CalculationContext(self.field, grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Should not skip: user requested skip_memory_estimation=False
         assert calculator._can_skip_memory_estimation() is False
     
     def test_default_behavior_no_skip(self):
         """Test default behavior doesn't skip memory estimation."""
+        from psr_magpy.line.calculation_context import CalculationContext
         grid = SphericalGrid(nlon=40, nlat=40, pole_lat=0.0)  # ~1400 points
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
@@ -118,13 +128,15 @@ class TestMemoryEstimationSkipping:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, grid, params)
+        context = CalculationContext(self.field, grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Should not skip: default behavior is skip_memory_estimation=False
         assert calculator._can_skip_memory_estimation() is False
     
     def test_skip_when_user_enables_even_with_saving(self):
         """Test skipping when user enables it even when saving results."""
+        from psr_magpy.line.calculation_context import CalculationContext
         grid = SphericalGrid(nlon=6, nlat=4, pole_lat=0.0)  # 14 points
         params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=5.0),
@@ -132,13 +144,15 @@ class TestMemoryEstimationSkipping:
             output=OutputParameters(save_results_to_disk=True, filename="test.fits")
         )
         
-        calculator = FieldLineCalculator(self.field, grid, params)
+        context = CalculationContext(self.field, grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Should skip: user requested skip_memory_estimation=True (overrides save_results_to_disk)
         assert calculator._can_skip_memory_estimation() is True
     
     def test_user_control_overrides_all_conditions(self):
         """Test that user control overrides all other conditions."""
+        from psr_magpy.line.calculation_context import CalculationContext
         grid = SphericalGrid(nlon=6, nlat=4, pole_lat=0.0)  # 14 points
         
         # Test skip=True with various conditions
@@ -147,16 +161,22 @@ class TestMemoryEstimationSkipping:
             performance=PerformanceParameters(n_trial=5, skip_memory_estimation=True),
             output=OutputParameters(save_results_to_disk=True, filename="test.fits")  # Saving results
         )
-        calculator_skip = FieldLineCalculator(self.field, grid, params_skip)
-        assert calculator_skip._can_skip_memory_estimation() is True
         
-        # Test skip=False with various conditions  
+        context_skip = CalculationContext(self.field, grid, params_skip)
+        calculator_skip = FieldLineCalculator(context_skip)
+        
+        # Test skip=False with various conditions
         params_no_skip = TracingParameters(
-            integration=IntegrationParameters(max_integration_radius=2.0),  # Small R_max but > threshold_line_distance
+            integration=IntegrationParameters(max_integration_radius=5.0),  # Small R_max
             performance=PerformanceParameters(n_trial=5, skip_memory_estimation=False),
             output=OutputParameters(save_results_to_disk=False)  # Not saving results
         )
-        calculator_no_skip = FieldLineCalculator(self.field, grid, params_no_skip)
+        
+        context_no_skip = CalculationContext(self.field, grid, params_no_skip)
+        calculator_no_skip = FieldLineCalculator(context_no_skip)
+        
+        # User control should override all other conditions
+        assert calculator_skip._can_skip_memory_estimation() is True
         assert calculator_no_skip._can_skip_memory_estimation() is False
     
     def test_different_grid_sizes_user_control(self):
@@ -178,10 +198,12 @@ class TestMemoryEstimationSkipping:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator_small_skip = FieldLineCalculator(self.field, grid_small, params_skip_small)
+        context_small_skip = CalculationContext(self.field, grid_small, params_skip_small)
+        calculator_small_skip = FieldLineCalculator(context_small_skip)
         assert calculator_small_skip._can_skip_memory_estimation() is True
         
-        calculator_large_skip = FieldLineCalculator(self.field, grid_large, params_skip_large)
+        context_large_skip = CalculationContext(self.field, grid_large, params_skip_large)
+        calculator_large_skip = FieldLineCalculator(context_large_skip)
         assert calculator_large_skip._can_skip_memory_estimation() is True
         
         # Test skip=False with both grids
@@ -197,10 +219,12 @@ class TestMemoryEstimationSkipping:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator_small_no_skip = FieldLineCalculator(self.field, grid_small, params_no_skip_small)
+        context_small_no_skip = CalculationContext(self.field, grid_small, params_no_skip_small)
+        calculator_small_no_skip = FieldLineCalculator(context_small_no_skip)
         assert calculator_small_no_skip._can_skip_memory_estimation() is False
         
-        calculator_large_no_skip = FieldLineCalculator(self.field, grid_large, params_no_skip_large)
+        context_large_no_skip = CalculationContext(self.field, grid_large, params_no_skip_large)
+        calculator_large_no_skip = FieldLineCalculator(context_large_no_skip)
         assert calculator_large_no_skip._can_skip_memory_estimation() is False
 
 
@@ -225,7 +249,8 @@ class TestCalculatorBehavior:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, grid, params)
+        context = CalculationContext(self.field, grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Verify it would skip memory estimation
         assert calculator._can_skip_memory_estimation() is True
@@ -244,7 +269,8 @@ class TestCalculatorBehavior:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, grid, params)
+        context = CalculationContext(self.field, grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Verify it would not skip memory estimation
         assert calculator._can_skip_memory_estimation() is False
@@ -272,8 +298,10 @@ class TestCalculatorBehavior:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator_skip = FieldLineCalculator(self.field, grid, params_skip)
-        calculator_no_skip = FieldLineCalculator(self.field, grid, params_no_skip)
+        context_skip = CalculationContext(self.field, grid, params_skip)
+        calculator_skip = FieldLineCalculator(context_skip)
+        context_no_skip = CalculationContext(self.field, grid, params_no_skip)
+        calculator_no_skip = FieldLineCalculator(context_no_skip)
         
         # Verify skip behavior
         assert calculator_skip._can_skip_memory_estimation() is True
@@ -314,7 +342,8 @@ class TestCalculatorEdgeCases:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, grid, params)
+        context = CalculationContext(self.field, grid, params)
+        calculator = FieldLineCalculator(context)
         template = FieldLine.template_OFL_calc()
         
         # Should still work
@@ -334,7 +363,8 @@ class TestCalculatorEdgeCases:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator_skip = FieldLineCalculator(self.field, grid, params_skip)
+        context_skip = CalculationContext(self.field, grid, params_skip)
+        calculator_skip = FieldLineCalculator(context_skip)
         assert calculator_skip._can_skip_memory_estimation() is True
         
         # Test with skip=False (default)
@@ -344,5 +374,6 @@ class TestCalculatorEdgeCases:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator_no_skip = FieldLineCalculator(self.field, grid, params_no_skip)
+        context_no_skip = CalculationContext(self.field, grid, params_no_skip)
+        calculator_no_skip = FieldLineCalculator(context_no_skip)
         assert calculator_no_skip._can_skip_memory_estimation() is False 

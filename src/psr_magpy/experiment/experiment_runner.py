@@ -53,11 +53,9 @@ class ExperimentRunner:
                     self._save_subset_grid(grid)
 
             # Create calculator
-            calculator = FieldLineCalculator(
-                field=field,
-                grid=grid,
-                params=self.config.tracing.create_tracing_parameters(),
-            )
+            from psr_magpy.line.calculation_context import CalculationContext
+            context = CalculationContext(field, grid, self.config.tracing.create_tracing_parameters())
+            calculator = FieldLineCalculator(context)
 
             # Run calculations
             logger.info("Starting field line calculations...")

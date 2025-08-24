@@ -15,6 +15,7 @@ from psr_magpy.field.components import DipoleFieldComponent
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.grid.grid import SphericalGrid
 from psr_magpy.line.calculator import FieldLineCalculator
+from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.tracing_parameters import (
     TracingParameters, 
@@ -47,7 +48,8 @@ class TestDisableDiskWriting:
             )
         )
         
-        calculator = FieldLineCalculator(self.field, self.grid, params)
+        context = CalculationContext(self.field, self.grid, params)
+        calculator = FieldLineCalculator(context)
         results = calculator.get_field_lines(self.template)
         
         # Should return results in memory
@@ -63,7 +65,8 @@ class TestDisableDiskWriting:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, self.grid, params)
+        context = CalculationContext(self.field, self.grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Should skip memory estimation (user requested skip_memory_estimation=True)
         assert calculator._can_skip_memory_estimation() is True
@@ -76,7 +79,8 @@ class TestDisableDiskWriting:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, self.grid, params)
+        context = CalculationContext(self.field, self.grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Should not skip memory estimation (user requested skip_memory_estimation=False)
         assert calculator._can_skip_memory_estimation() is False
@@ -91,7 +95,8 @@ class TestDisableDiskWriting:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, large_grid, params)
+        context = CalculationContext(self.field, large_grid, params)
+        calculator = FieldLineCalculator(context)
         
         # Should not skip memory estimation (default behavior)
         assert calculator._can_skip_memory_estimation() is False
@@ -105,7 +110,8 @@ class TestDisableDiskWriting:
             output=OutputParameters(save_results_to_disk=True, filename="test.fits")
         )
         
-        calculator_skip = FieldLineCalculator(self.field, self.grid, params_skip)
+        context_skip = CalculationContext(self.field, self.grid, params_skip)
+        calculator_skip = FieldLineCalculator(context_skip)
         
         # Should skip memory estimation (user override)
         assert calculator_skip._can_skip_memory_estimation() is True
@@ -117,7 +123,8 @@ class TestDisableDiskWriting:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator_no_skip = FieldLineCalculator(self.field, self.grid, params_no_skip)
+        context_no_skip = CalculationContext(self.field, self.grid, params_no_skip)
+        calculator_no_skip = FieldLineCalculator(context_no_skip)
         
         # Should not skip memory estimation (user override)
         assert calculator_no_skip._can_skip_memory_estimation() is False
@@ -136,7 +143,8 @@ class TestDisableDiskWriting:
                 )
             )
             
-            calculator = FieldLineCalculator(self.field, self.grid, params)
+            context = CalculationContext(self.field, self.grid, params)
+            calculator = FieldLineCalculator(context)
             results = calculator.get_field_lines(self.template)
             
             # Should return results in memory
@@ -154,7 +162,8 @@ class TestDisableDiskWriting:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator_no_save = FieldLineCalculator(self.field, self.grid, params_no_save)
+        context_no_save = CalculationContext(self.field, self.grid, params_no_save)
+        calculator_no_save = FieldLineCalculator(context_no_save)
         results_no_save = calculator_no_save.get_field_lines(self.template)
         
         # Test with save_results_to_disk=True
@@ -167,7 +176,8 @@ class TestDisableDiskWriting:
                 output=OutputParameters(save_results_to_disk=True, filename=filename)
             )
             
-            calculator_save = FieldLineCalculator(self.field, self.grid, params_save)
+            context_save = CalculationContext(self.field, self.grid, params_save)
+            calculator_save = FieldLineCalculator(context_save)
             results_save = calculator_save.get_field_lines(self.template)
             
             # Both should return results
@@ -186,7 +196,8 @@ class TestDisableDiskWriting:
             output=OutputParameters(save_results_to_disk=False)
         )
         
-        calculator = FieldLineCalculator(self.field, self.grid, params)
+        calculator = context = CalculationContext(self.field, self.grid, params)
+        calculator = FieldLineCalculator(context)
         results = calculator.get_field_lines(self.template)
         
         # Should still return a valid object

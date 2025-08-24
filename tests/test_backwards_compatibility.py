@@ -84,6 +84,8 @@ class TestBackwardsCompatibility:
             # Check that new properties have default values
             assert config.template.property_system.save_flags.save_b_line is False
             assert config.template.property_system.save_flags.save_curvature_line is False
+            assert config.template.property_system.save_flags.save_tangent_theta is False
+            assert config.template.property_system.save_flags.save_tangent_phi is False
             
             # Check that old properties are preserved
             assert config.template.property_system.save_flags.save_r_line is True
@@ -161,6 +163,8 @@ class TestBackwardsCompatibility:
             # Check that new properties have default values
             assert config.template.property_system.save_flags.save_b_line is False
             assert config.template.property_system.save_flags.save_curvature_line is False
+            assert config.template.property_system.save_flags.save_tangent_theta is False
+            assert config.template.property_system.save_flags.save_tangent_phi is False
             
             # Check that old properties are preserved
             assert config.template.property_system.save_flags.save_r_line is True
@@ -196,6 +200,8 @@ class TestBackwardsCompatibility:
         template = factory_config.templates[0]
         assert template.property_system.save_flags.save_b_line is False
         assert template.property_system.save_flags.save_curvature_line is False
+        assert template.property_system.save_flags.save_tangent_theta is False
+        assert template.property_system.save_flags.save_tangent_phi is False
         
         # Check that old properties are preserved
         assert template.property_system.save_flags.save_r_line is True
@@ -271,6 +277,8 @@ class TestBackwardsCompatibility:
             # Check that new properties have correct values
             assert config.template.property_system.save_flags.save_b_line is True
             assert config.template.property_system.save_flags.save_curvature_line is False
+            assert config.template.property_system.save_flags.save_tangent_theta is False
+            assert config.template.property_system.save_flags.save_tangent_phi is False
             
             # Check that old properties are preserved
             assert config.template.property_system.save_flags.save_r_line is True

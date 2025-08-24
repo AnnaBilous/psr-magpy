@@ -124,6 +124,8 @@ class FieldLine:
             save_b_r_ini_angle=True,
             save_b_line=True,
             save_curvature_line=True,
+            save_tangent_theta=True,
+            save_tangent_phi=True,
         )
 
     @classmethod
@@ -166,7 +168,7 @@ class FieldLine:
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.
         """
-        return cls(save_r_line=True, save_pa_line=True, save_b_line=True, save_curvature_line=True)
+        return cls(save_r_line=True, save_pa_line=True, save_b_line=True, save_curvature_line=True, save_tangent_theta=True, save_tangent_phi=True)
 
     @classmethod
     def template_surface_field_properties(cls) -> "FieldLine":
