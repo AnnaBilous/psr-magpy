@@ -433,6 +433,11 @@ class ExperimentConfig:
         logger.debug(f"Initializing experiment: {self.name}")
         if self.description:
             logger.debug(f"Description: {self.description}")
+        
+        # Automatically enable save_reversed_error if verify_by_reversing is enabled
+        if self.tracing.verify_by_reversing and not self.template.save_flags.save_reversed_error:
+            logger.debug("Enabling save_reversed_error because verify_by_reversing=True")
+            self.template.save_flags.save_reversed_error = True
 
     def save(self, filepath: Union[str, Path]) -> None:
         """Save configuration to YAML file."""
