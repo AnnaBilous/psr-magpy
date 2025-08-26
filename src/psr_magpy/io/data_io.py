@@ -2,7 +2,7 @@
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Union, Optional
 import numpy as np
 from astropy.io import fits
 
@@ -22,6 +22,9 @@ class FitsIO(DataIO):
 
     def save(self, data: Any, path: Union[str, Path], **kwargs) -> None:
         """Save data to FITS file with validation and recovery."""
+        # Set overwrite=True by default
+        kwargs.setdefault('overwrite', True)
+        
         # Validate with recovery options
         if not self.validate_with_recovery(data, path, "save", **kwargs):
             error_msg = f"Validation failed for save operation: {path}"
@@ -74,6 +77,7 @@ class FieldLineSetIO(FitsIO):
     def __init__(self, field_line_set=None, validator=None, memory_monitor=None):
         super().__init__(validator=validator, memory_monitor=memory_monitor)
         self.data = field_line_set
+        self.header_keywords = {}
 
     def validate(self, data: Any) -> bool:
         """Validate field line set data."""
@@ -130,6 +134,18 @@ class FieldLineSetIO(FitsIO):
 
         # Create HDU
         hdu = fits.BinTableHDU.from_columns(columns, name="FIELD_LINES")
+        
+        # Add user-specified keywords to header if provided
+        if hasattr(self, 'header_keywords') and self.header_keywords:
+            for keyword, value in self.header_keywords.items():
+                if isinstance(value, tuple) and len(value) == 2:
+                    # Value is (value, comment) tuple
+                    hdu.header[keyword] = value
+                else:
+                    # Value is just the value
+                    hdu.header[keyword] = value
+                logger.debug(f"Added keyword to header: {keyword} = {value}")
+        
         return fits.HDUList([fits.PrimaryHDU(), hdu])
 
     def _generate_column_info(self) -> dict:
@@ -160,6 +176,21 @@ class FieldLineSetIO(FitsIO):
             )
 
         return result
+
+    def add_header_keyword(self, keyword: str, value, comment: Optional[str] = None):
+        """
+        Add a keyword to the FITS header.
+        
+        Args:
+            keyword: Header keyword name
+            value: Header keyword value
+            comment: Optional comment for the keyword
+        """
+        if comment:
+            self.header_keywords[keyword] = (value, comment)
+        else:
+            self.header_keywords[keyword] = value
+        logger.debug(f"Added header keyword: {keyword} = {value}")
 
     def _load_from_hdul(self, hdul: fits.HDUList, **kwargs) -> Any:
         """Load field line set from FITS HDU list."""

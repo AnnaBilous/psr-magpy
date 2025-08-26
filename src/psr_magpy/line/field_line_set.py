@@ -68,11 +68,6 @@ class FieldLineSet(FieldLine):
             logger.debug("Skipping data copy (copy_data=False)")
 
     @property
-    def n_lines(self) -> int:
-        """Get the number of field lines in the set."""
-        return self._n_field_lines
-
-    @property
     def n_field_lines(self) -> int:
         """Get the number of field lines in the set."""
         return self._n_field_lines
@@ -416,5 +411,83 @@ class FieldLineSet(FieldLine):
         
   
         return ofl_footpoint_ids
+    
+    def subset_by_footpoint_ids(self, footpoint_ids: List[int]) -> "FieldLineSet":
+        """
+        Create a subset of the FieldLineSet containing only field lines with the specified footpoint IDs.
+        
+        Args:
+            footpoint_ids: List of footpoint IDs to include in the subset
+            
+        Returns:
+            FieldLineSet: New FieldLineSet containing only the specified field lines
+            
+        Raises:
+            ValueError: If footpoint_id property is not enabled or footpoint_ids is empty
+        """
+        if not footpoint_ids:
+            error_msg = "footpoint_ids list cannot be empty"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        # Check if footpoint_id property is enabled
+        if PropertyName.FOOTPOINT_ID not in self.property_system.get_enabled_properties():
+            error_msg = "footpoint_id property must be enabled to subset by footpoint IDs"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        # Get current footpoint IDs
+        current_footpoint_ids = self.property_system.get_property(PropertyName.FOOTPOINT_ID)
+        if current_footpoint_ids is None:
+            error_msg = "footpoint_id property is None"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        # Convert footpoint_ids to set for efficient lookup
+        target_footpoint_set = set(footpoint_ids)
+        
+        # Find indices of field lines with matching footpoint IDs
+        matching_indices = []
+        for i, fp_id in enumerate(current_footpoint_ids):
+            if fp_id in target_footpoint_set:
+                matching_indices.append(i)
+                
+        if not matching_indices:
+            logger.warning(f"No field lines found with the specified footpoint IDs: {footpoint_ids}")
+            # Return empty FieldLineSet with same template
+            empty_set = FieldLineSet(self, copy_data=False)
+            empty_set.n_field_lines = 0
+            return empty_set
+            
+        logger.info(f"Found {len(matching_indices)} field lines matching {len(footpoint_ids)} footpoint IDs")
+        
+        # Create new FieldLineSet with same template
+        subset = FieldLineSet(self, copy_data=False)
+        
+        # Copy data for matching indices
+        for prop in self.property_system.get_enabled_properties():
+            source_data = self.property_system.get_property(prop)
+            if source_data is None:
+                continue
+                
+            # Special handling for properties that are lists of arrays
+            if prop in self.ARRAY_LIST_PROPERTIES:
+                subset_data = [source_data[i] for i in matching_indices if i < len(source_data)]
+                subset.property_system._properties[prop] = subset_data
+            else:
+                # For numpy arrays, use advanced indexing
+                if isinstance(source_data, np.ndarray):
+                    subset_data = source_data[matching_indices]
+                    subset.property_system._properties[prop] = subset_data
+                else:
+                    # For other types, use list comprehension
+                    subset_data = [source_data[i] for i in matching_indices if i < len(source_data)]
+                    subset.property_system._properties[prop] = np.array(subset_data)
+                    
+        # Update field line count
+        subset.n_field_lines = len(matching_indices)
+        
+        logger.debug(f"Created subset with {subset.n_field_lines} field lines")
+        return subset
     
     
