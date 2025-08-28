@@ -602,7 +602,7 @@ class FieldLineSet(FieldLine):
                 
             # Find first point outside LC
             outside_indices = np.where(outside_LC)[0]
-            print("Outside indices: ", outside_indices)
+            
             
             if len(outside_indices) > 0:
                 first_LC_penetration_point = outside_indices[0]

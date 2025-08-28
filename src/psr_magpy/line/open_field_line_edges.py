@@ -352,6 +352,8 @@ def calculate_and_save_OFL_edges(
                             combined_edge_data = batch_subset
                         else:
                             combined_edge_data.append(batch_subset)
+                    else:
+                        logger.debug(f"    No edge field lines found in this batch (this is normal)")
                     
                 except Exception as e:
                     logger.warning(f"    Error processing batch file {batch_file}: {e}")
@@ -379,7 +381,8 @@ def calculate_and_save_OFL_edges(
                 
                 logger.info(f"  Successfully saved edge data for R_LC = {r_lc:.2f}")
             else:
-                logger.warning(f"  No edge field lines found for R_LC = {r_lc:.2f}")
+                logger.warning(f"  No edge field lines found for R_LC = {r_lc:.2f} across all batch files")
+                logger.warning(f"  Expected {len(edge_footpoint_set)} footpoint IDs but found none")
         
         logger.info("Phase 2: Edge data extraction completed")
         
