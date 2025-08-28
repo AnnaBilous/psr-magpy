@@ -738,4 +738,146 @@ class TestFieldLineSetIntegration:
         if template.property_system.is_property_enabled('curvature_line'):
             field_line.set_property(curvature_line=[np.random.rand(10).astype(np.float32)])
         
-        return field_line 
+        return field_line
+
+
+class TestFieldLineSetCopy:
+    """Test FieldLineSet copy functionality."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.logger = setup_test_logger("test_field_line_set_copy")
+        
+        # Create template and sample data
+        self.template = FieldLine.template_all()
+        self.field_line_set = FieldLineSet(
+            self._create_complex_field_line(self.template, 1),
+            copy_data=True
+        )
+        
+        # Add more field lines
+        for i in range(2, 4):
+            field_line = self._create_complex_field_line(self.template, i)
+            self.field_line_set.append(field_line)
+    
+    def _create_complex_field_line(self, template: FieldLine, footpoint_id: int) -> FieldLine:
+        """Create a complex field line with all properties."""
+        field_line = template.copy_structure()
+        field_line.set_property(footpoint_id=footpoint_id)
+        
+        if template.property_system.is_property_enabled('r_line'):
+            field_line.set_property(r_line=np.random.rand(10, 3))
+        
+        if template.property_system.is_property_enabled('pa_line'):
+            field_line.set_property(pa_line=np.random.rand(10))
+        
+        if template.property_system.is_property_enabled('r_max'):
+            field_line.set_property(r_max=float(np.random.rand()))
+        
+        if template.property_system.is_property_enabled('r_cyl_max'):
+            field_line.set_property(r_cyl_max=float(np.random.rand()))
+        
+        if template.property_system.is_property_enabled('z_abs_max'):
+            field_line.set_property(z_abs_max=float(np.random.rand()))
+        
+        if template.property_system.is_property_enabled('b_ini'):
+            field_line.set_property(b_ini=float(np.random.rand()))
+        
+        if template.property_system.is_property_enabled('b_r_ini_angle'):
+            field_line.set_property(b_r_ini_angle=float(np.random.rand()))
+        
+        if template.property_system.is_property_enabled('b_line'):
+            field_line.set_property(b_line=[np.random.rand(10).astype(np.float32)])
+        
+        if template.property_system.is_property_enabled('curvature_line'):
+            field_line.set_property(curvature_line=[np.random.rand(10).astype(np.float32)])
+        
+        return field_line
+    
+    def test_copy_basic_functionality(self):
+        """Test basic copy functionality."""
+        original = self.field_line_set
+        copy = original.copy()
+        
+        # Check that copy is a new instance
+        assert copy is not original
+        assert isinstance(copy, FieldLineSet)
+        
+        # Check that field line count is preserved
+        assert copy.n_field_lines == original.n_field_lines
+        assert copy.n_field_lines == 3
+        
+        # Check that all properties are copied
+        for prop in original.property_system.get_enabled_properties():
+            original_data = original.property_system.get_property(prop)
+            copy_data = copy.property_system.get_property(prop)
+            
+            assert copy_data is not None
+            if prop in FieldLineSet.ARRAY_LIST_PROPERTIES:
+                assert len(copy_data) == len(original_data)
+                for i, (orig_item, copy_item) in enumerate(zip(original_data, copy_data)):
+                    if orig_item is not None:
+                        assert copy_item is not None
+                        assert np.array_equal(orig_item, copy_item)
+                        # Check that arrays are different objects (deep copy)
+                        assert copy_item is not orig_item
+                    else:
+                        assert copy_item is None
+            else:
+                assert np.array_equal(copy_data, original_data)
+                # Check that arrays are different objects (deep copy)
+                assert copy_data is not original_data
+    
+    def test_copy_independence(self):
+        """Test that copy is independent of original."""
+        original = self.field_line_set
+        copy = original.copy()
+        
+        # Modify original data
+        original_r_line = original.property_system.get_property('r_line')
+        if original_r_line is not None and len(original_r_line) > 0:
+            original_r_line[0][0, 0] = 999.0  # Modify first point of first line
+        
+        # Check that copy is not affected
+        copy_r_line = copy.property_system.get_property('r_line')
+        if copy_r_line is not None and len(copy_r_line) > 0:
+            assert copy_r_line[0][0, 0] != 999.0
+            assert original_r_line[0][0, 0] == 999.0
+    
+    def test_copy_with_none_values(self):
+        """Test copy with None values in properties."""
+        # Create field line set with some None values
+        template = FieldLine(save_r_line=True, save_r_max=True)
+        field_line1 = template.copy_structure()
+        field_line1.set_property(footpoint_id=1, r_line=np.array([[1.0, 0.0, 0.0]]), r_max=2.0)
+        
+        field_line2 = template.copy_structure()
+        field_line2.set_property(footpoint_id=2, r_line=None, r_max=3.0)  # r_line is None
+        
+        field_line_set = FieldLineSet(field_line1, copy_data=True)
+        field_line_set.append(field_line2)
+        
+        copy = field_line_set.copy()
+        
+        # Check that None values are preserved
+        r_line_data = copy.property_system.get_property('r_line')
+        assert r_line_data is not None
+        assert len(r_line_data) == 2
+        assert r_line_data[0] is not None
+        assert r_line_data[1] is None
+        
+        r_max_data = copy.property_system.get_property('r_max')
+        assert r_max_data is not None
+        assert len(r_max_data) == 2
+        assert r_max_data[0] == 2.0
+        assert r_max_data[1] == 3.0
+    
+    def test_copy_empty_field_line_set(self):
+        """Test copy of empty field line set."""
+        template = FieldLine(save_r_line=True)
+        empty_set = FieldLineSet(template, copy_data=False)
+        
+        copy = empty_set.copy()
+        
+        assert copy.n_field_lines == 0
+        assert copy.property_system.get_flags_dict() == empty_set.property_system.get_flags_dict() 

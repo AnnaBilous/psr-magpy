@@ -170,7 +170,10 @@ def calculate_and_save_OFL_edges(
     template: FieldLine,
     R_LC_values: np.ndarray,
     output_path: Union[str, Path],
-    h_LC_coeff: float = 3**1.5 / 2.0
+    h_LC_coeff: float = 3**1.5 / 2.0,
+    trim_lines: bool = False,
+    trim_type: str = "sphere",
+    trim_radius: float = 5.0
 ) -> OFLEdgeResult:
     """
     Calculate OFL edges, filter edge lines according to template, and save as FITS file.
@@ -178,7 +181,8 @@ def calculate_and_save_OFL_edges(
     This function performs the complete workflow:
     A) Calculate OFL edges for given R_LC values
     B) Filter edge lines according to the provided template
-    C) Save filtered edge lines as FITS file
+    C) Optionally trim field lines to light cylinder
+    D) Save filtered edge lines as FITS file
     
     Args:
         experiment_config_path: Path to experiment configuration file
@@ -187,6 +191,9 @@ def calculate_and_save_OFL_edges(
         R_LC_values: Array of light cylinder radii for edge calculation
         output_path: Path where to save the filtered edge lines FITS file
         h_LC_coeff: Height coefficient for OFL calculation
+        trim_lines: Whether to trim field lines to light cylinder before saving
+        trim_type: Trimming method ("sphere" or "cylinder")
+        trim_radius: Radius for trimming (light cylinder radius)
         
     Returns:
         OFLEdgeResult: Result from edge calculation
@@ -275,6 +282,13 @@ def calculate_and_save_OFL_edges(
                 
                 if subset.n_field_lines > 0:
                     logger.info(f"  Created subset with {subset.n_field_lines} field lines")
+                    
+                    # Trim field lines if requested
+                    if trim_lines:
+                        logger.info(f"  Trimming field lines to R_LC = {trim_radius} using {trim_type} method")
+                        subset.trim_to_light_cylinder(R_LC=trim_radius, trim_type=trim_type)
+                        logger.info(f"  Trimmed subset now has {subset.n_field_lines} field lines")
+                    
                     all_filtered_lines.append(subset)
                 else:
                     logger.warning(f"  No field lines found for R_LC = {r_lc:.2f}")

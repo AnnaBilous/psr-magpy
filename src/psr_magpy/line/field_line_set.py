@@ -77,6 +77,40 @@ class FieldLineSet(FieldLine):
         """Set the number of field lines in the set."""
         self._n_field_lines = value
 
+    def copy(self) -> "FieldLineSet":
+        """Create a deep copy of the FieldLineSet.
+        
+        Returns:
+            FieldLineSet: A new FieldLineSet with copied data
+        """
+        logger.debug(f"Creating copy of FieldLineSet with {self.n_field_lines} lines")
+        
+        # Create new instance with same structure
+        copy_instance = FieldLineSet(self, copy_data=False)
+        
+        # Copy all properties
+        for prop in self.property_system.get_enabled_properties():
+            source_data = self.property_system.get_property(prop)
+            if source_data is not None:
+                if prop in self.ARRAY_LIST_PROPERTIES:
+                    # Deep copy list of arrays
+                    copied_data = []
+                    for item in source_data:
+                        if item is not None:
+                            copied_data.append(item.copy())
+                        else:
+                            copied_data.append(None)
+                    copy_instance.property_system._properties[prop] = copied_data
+                else:
+                    # Deep copy numpy arrays
+                    copy_instance.property_system._properties[prop] = source_data.copy()
+        
+        # Set the field line count
+        copy_instance._n_field_lines = self._n_field_lines
+        
+        logger.debug(f"Created copy with {copy_instance.n_field_lines} lines")
+        return copy_instance
+
     def _get_template(
         self, field_lines: Union[List[FieldLine], FieldLine]
     ) -> FieldLine:
@@ -490,4 +524,130 @@ class FieldLineSet(FieldLine):
         logger.debug(f"Created subset with {subset.n_field_lines} field lines")
         return subset
     
-    
+        
+    def trim_to_light_cylinder(self, R_LC, h_LC_coeff=3**1.5 / 2.0, trim_type="cylinder"):
+        """
+        Trim field lines to points before light cylinder penetration.
+        
+        Args:
+            R_LC: Light cylinder radius
+            h_LC_coeff: Height coefficient for cylinder trimming
+            trim_type: "cylinder" or "sphere" trimming method
+            
+        Returns:
+            None (modifies self in-place)
+        """
+        assert trim_type in ["cylinder", "sphere"], "trim_type should be cylinder or sphere"
+        print("Trimming to light cylinder")
+        # Check if r_line property is enabled
+        if PropertyName.R_LINE not in self.property_system.get_enabled_properties():
+            error_msg = "r_line property must be enabled to trim field lines"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        r_line_data = self.property_system.get_property(PropertyName.R_LINE)
+        if r_line_data is None:
+            error_msg = "r_line property is None"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+            
+        # Properties that should be trimmed along with r_line
+        line_properties = [
+            PropertyName.R_LINE,
+            PropertyName.PA_LINE,
+            PropertyName.B_LINE,
+            PropertyName.CURVATURE_LINE,
+            PropertyName.TANGENT_THETA,
+            PropertyName.TANGENT_PHI
+        ]
+        
+        # Calculate trim indices for each field line
+        trim_indices = []
+        for i, r_line in enumerate(r_line_data):
+            if r_line is None or len(r_line) == 0:
+                trim_indices.append(0)  # No points to keep
+                continue
+                
+            # r_line is numpy array with shape (n_points, 3) where each row is [x, y, z]
+            # Handle both 1D and 2D arrays
+            if r_line.ndim == 1:
+                # If 1D, assume it's a flattened array that needs reshaping
+                if len(r_line) % 3 == 0:
+                    r_line = r_line.reshape(-1, 3)
+                else:
+                    logger.warning(f"Field line {i} has invalid shape {r_line.shape}, skipping")
+                    trim_indices.append(0)
+                    continue
+            elif r_line.ndim != 2 or r_line.shape[1] != 3:
+                logger.warning(f"Field line {i} has unexpected shape {r_line.shape}, skipping")
+                trim_indices.append(0)
+                continue
+                
+            x, y, z = r_line[:, 0], r_line[:, 1], r_line[:, 2]
+                
+            # Calculate which points are outside light cylinder
+            if trim_type == "cylinder":
+                z_abs = np.abs(z)
+                R_cyl = np.sqrt(x**2 + y**2)
+                outside_LC = (R_cyl > R_LC) | ((R_cyl < R_LC) & (z_abs > (h_LC_coeff * R_LC)))
+                
+            elif trim_type == "sphere":
+                R_sph = np.sqrt(x**2 + y**2 + z**2)
+                outside_LC = R_sph > R_LC
+                
+            # Find first point outside LC
+            outside_indices = np.where(outside_LC)[0]
+            
+            if len(outside_indices) > 0:
+                first_LC_penetration_point = outside_indices[0]
+                trim_indices.append(first_LC_penetration_point)
+            else:
+                # Keep all points if no LC penetration
+                trim_indices.append(len(x))
+                
+        # Trim each line property
+        for prop in line_properties:
+            # Check if property is enabled and has data
+            if prop in self.property_system.get_enabled_properties():
+                prop_data = self.property_system.get_property(prop)
+                if prop_data is None:
+                    logger.debug(f"Property {prop} is enabled but has no data, skipping")
+                    continue
+                    
+                # Trim each field line's data
+                trimmed_data = []
+                for i, (line_data, trim_idx) in enumerate(zip(prop_data, trim_indices)):
+                    if line_data is None or len(line_data) == 0:
+                        trimmed_data.append(line_data)
+                    else:
+                        print("Trim index: ", trim_idx)
+                        # Trim to points before LC
+                        if trim_idx > 0:
+                            # Special handling for r_line (2D array)
+                            if prop == PropertyName.R_LINE:
+                                if line_data.ndim == 1:
+                                    trimmed_data.append(line_data[:trim_idx*3])
+                                else:
+                                    trimmed_data.append(line_data[:trim_idx,:])
+                            else:
+                                # For other properties, use 1D slice
+                                trimmed_data.append(line_data[:trim_idx])
+                        else:
+                            # No points to keep, use empty array
+                            if isinstance(line_data, np.ndarray):
+                                if prop == PropertyName.R_LINE:
+                                    # For r_line, return empty 2D array
+                                    trimmed_data.append(np.array([]).reshape(0, 3))
+                                else:
+                                    # For other properties, return empty 1D array
+                                    trimmed_data.append(np.array([]))
+                            else:
+                                trimmed_data.append([])
+                                
+                # Update the property
+                self.property_system._properties[prop] = trimmed_data
+                print("Trimmed property: ", prop, "to length: ", len(trimmed_data))
+            else:
+                logger.debug(f"Property {prop} is not enabled, skipping")
+                
+        logger.info(f"Trimmed {self.n_field_lines} field lines to light cylinder (R_LC={R_LC})")
