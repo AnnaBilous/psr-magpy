@@ -459,6 +459,10 @@ class FieldLineSet(FieldLine):
         Raises:
             ValueError: If footpoint_id property is not enabled or footpoint_ids is empty
         """
+        # Convert numpy array to list if needed
+        if isinstance(footpoint_ids, np.ndarray):
+            footpoint_ids = footpoint_ids.tolist()
+            
         if not footpoint_ids:
             error_msg = "footpoint_ids list cannot be empty"
             logger.error(error_msg)
@@ -537,6 +541,7 @@ class FieldLineSet(FieldLine):
         Returns:
             None (modifies self in-place)
         """
+        
         assert trim_type in ["cylinder", "sphere"], "trim_type should be cylinder or sphere"
         print("Trimming to light cylinder")
         # Check if r_line property is enabled
@@ -597,6 +602,7 @@ class FieldLineSet(FieldLine):
                 
             # Find first point outside LC
             outside_indices = np.where(outside_LC)[0]
+            print("Outside indices: ", outside_indices)
             
             if len(outside_indices) > 0:
                 first_LC_penetration_point = outside_indices[0]
@@ -625,10 +631,12 @@ class FieldLineSet(FieldLine):
                         if trim_idx > 0:
                             # Special handling for r_line (2D array)
                             if prop == PropertyName.R_LINE:
+                                print("Line data: ", line_data.shape)
                                 if line_data.ndim == 1:
                                     trimmed_data.append(line_data[:trim_idx*3])
                                 else:
                                     trimmed_data.append(line_data[:trim_idx,:])
+                                print("Trimmed line data: ", trimmed_data[-1].shape)
                             else:
                                 # For other properties, use 1D slice
                                 trimmed_data.append(line_data[:trim_idx])
