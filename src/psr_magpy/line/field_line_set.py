@@ -626,17 +626,17 @@ class FieldLineSet(FieldLine):
                     if line_data is None or len(line_data) == 0:
                         trimmed_data.append(line_data)
                     else:
-                        print("Trim index: ", trim_idx)
+                        
                         # Trim to points before LC
                         if trim_idx > 0:
                             # Special handling for r_line (2D array)
                             if prop == PropertyName.R_LINE:
-                                print("Line data: ", line_data.shape)
+                                
                                 if line_data.ndim == 1:
                                     trimmed_data.append(line_data[:trim_idx*3])
                                 else:
                                     trimmed_data.append(line_data[:trim_idx,:])
-                                print("Trimmed line data: ", trimmed_data[-1].shape)
+                                
                             else:
                                 # For other properties, use 1D slice
                                 trimmed_data.append(line_data[:trim_idx])
@@ -654,7 +654,7 @@ class FieldLineSet(FieldLine):
                                 
                 # Update the property
                 self.property_system._properties[prop] = trimmed_data
-                print("Trimmed property: ", prop, "to length: ", len(trimmed_data))
+                
             else:
                 logger.debug(f"Property {prop} is not enabled, skipping")
                 
