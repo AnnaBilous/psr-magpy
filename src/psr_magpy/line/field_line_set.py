@@ -491,7 +491,6 @@ class FieldLineSet(FieldLine):
                 matching_indices.append(i)
                 
         if not matching_indices:
-            logger.warning(f"No field lines found with the specified footpoint IDs: {footpoint_ids}")
             # Return empty FieldLineSet with same template
             empty_set = FieldLineSet(self, copy_data=False)
             empty_set.n_field_lines = 0
