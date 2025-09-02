@@ -85,8 +85,39 @@ def healpix_grid_get_single_OFL_edge(grid, ftp_ids, ftp_ids_inner=None):
     
     # Get all eight nearest neighbours for all footpoints at once
     neighbour_footpoints = hp.pixelfunc.get_all_neighbours(
-        grid.nside, ftp_ids_not_inner
+        grid.nside, ftp_ids_not_inner, nest=False
     )
+    print(ftp_ids_not_inner)
+    lon = grid.longitude
+    colat = grid.colatitude
+
+    import matplotlib.pyplot as plt
+    #plt.figure()
+    #plt.scatter(lon[ftp_ids_not_inner], colat[ftp_ids_not_inner], c=ftp_ids_not_inner)
+    #plt.show()
+    #exit(1)
+
+
+
+    for iii in range(len(ftp_ids_not_inner)):
+     plt.figure()
+     plt.scatter(lon[ftp_ids_not_inner], colat[ftp_ids_not_inner], c=ftp_ids_not_inner)
+     curpoint = ftp_ids_not_inner[iii]
+     theta0, phi0 = hp.pix2ang(grid.nside, curpoint, nest=False)
+     neighbours, w4 = hp.get_interp_weights(grid.nside, theta0, phi0, nest=False)
+     print(curpoint)
+     print(neighbours)
+     plt.scatter(lon[curpoint], colat[curpoint], color='r')
+     plt.scatter(lon[neighbours], colat[neighbours], color='cyan')
+     #plt.scatter(lon[neighbours_astro], colat[neighbours_astro], color='cyan')
+     plt.show()
+
+        
+
+
+
+    print(grid.nside)
+    print(np.shape(neighbour_footpoints))
     
     # Vectorized neighbor checking
     # Mark valid neighbors (remove -1 values)
@@ -95,14 +126,23 @@ def healpix_grid_get_single_OFL_edge(grid, ftp_ids, ftp_ids_inner=None):
     # Count valid neighbors per footpoint
     n_neighbours_per_footpoint = np.sum(neighbour_footpoints_valid, axis=0)
     
+    import matplotlib.pyplot as plt
+    
+    plt.plot(n_neighbours_per_footpoint, 'o')
+    
     # Check which neighbors are in ftp_ids
     neighbours_in_ftp_ids = np.isin(neighbour_footpoints, ftp_ids)
+    print(neighbours_in_ftp_ids)
     
     # Count neighbors that are both valid and in ftp_ids
     n_neighbours_in_ftp_ids = np.sum(
         neighbours_in_ftp_ids & neighbour_footpoints_valid, axis=0
     )
-    
+    n_neighbours_in_ftp_ids = np.sum(
+        neighbours_in_ftp_ids, axis=0
+    )
+    plt.plot(n_neighbours_in_ftp_ids)
+    plt.show()
     # Edge detection: footpoint is edge if it has fewer neighbors in ftp_ids than expected
     is_edge = n_neighbours_in_ftp_ids < n_neighbours_per_footpoint - 1
 
@@ -148,19 +188,34 @@ def healpix_grid_get_OFL_edges(grid: HealpixGrid, lines: FieldLineSet, P_ms=None
     edge_ftp_ids = []
     # Initialize with empty array instead of empty list
     inner_ftp_ids = [np.array([], dtype=int)]
-    
-    for i, r_lc in enumerate(R_LC):
-        cur_ftp_ids = lines.get_OFL_footpoints(
-            r_lc, h_LC_coeff=h_LC_coeff
-        )
-        ftp_ids.append(cur_ftp_ids)
-        inner_ftp_ids.append(cur_ftp_ids)
+   
+    if grid.nside < 512:
+        for i, r_lc in enumerate(R_LC):
+            cur_ftp_ids = lines.get_OFL_footpoints(
+                r_lc, h_LC_coeff=h_LC_coeff
+            )
+            ftp_ids.append(cur_ftp_ids)
+            inner_ftp_ids.append(cur_ftp_ids)
+    else:
+        for i, r_lc in enumerate(R_LC):
+            cur_ftp_ids_outer = lines.get_OFL_footpoints(r_lc, h_LC_coeff=h_LC_coeff)
+            if r_lc < 3:
+                cf = 1.02
+            else:
+                cf = 1.08
+            cur_ftp_ids_inner = lines.get_OFL_footpoints(r_lc*cf, h_LC_coeff=h_LC_coeff)
+            cur_edge_ftp_ids = np.setdiff1d(cur_ftp_ids_outer, cur_ftp_ids_inner) 
+            edge_ftp_ids.append(cur_edge_ftp_ids)
+
+
+    if grid.nside < 512:
         
-    for i in range(n_values):
-        cur_edge_ftp_ids = healpix_grid_get_single_OFL_edge(
-            grid, ftp_ids[i], ftp_ids_inner=inner_ftp_ids[i]
-        )
-        edge_ftp_ids.append(cur_edge_ftp_ids)
+        for i in range(n_values):
+            cur_edge_ftp_ids = healpix_grid_get_single_OFL_edge(
+                grid, ftp_ids[i], ftp_ids_inner=inner_ftp_ids[i]
+            )
+            edge_ftp_ids.append(cur_edge_ftp_ids)
+
     return OFLEdgeResult(R_LC=R_LC, edge_footpoints=edge_ftp_ids)
 
 
@@ -273,7 +328,16 @@ def calculate_and_save_OFL_edges(
             raise ValueError(error_msg)
         
         calculator = OFLEdgeCalculator(grid, h_LC_coeff=h_LC_coeff)
+        import matplotlib.pyplot as plt
+        #plt.scatter(grid.longitude, grid.colatitude, c=OFL_data.r_cyl_max)
+        #plt.show()
+
         edge_result = calculator.calculate_edges(OFL_data, R_LC=R_LC_values)
+        for jj in range(5):
+            ftp_ids = edge_result.edge_footpoints[jj]
+            plt.scatter(grid.longitude[ftp_ids], grid.colatitude[ftp_ids], color='r')
+            plt.show()
+
         logger.info(f"Calculated edges for {len(edge_result.R_LC)} R_LC values")
     except Exception as e:
         error_msg = f"Failed to calculate OFL edges: {e}"

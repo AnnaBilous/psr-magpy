@@ -431,7 +431,7 @@ class FieldLineSet(FieldLine):
         R_cyl_max = self.r_cyl_max
         z_abs_max = self.z_abs_max
         footpoint_ids = self.footpoint_id
-        
+
         # OFL criteria: either beyond LC or within LC but high enough
         open_fl_crit = (R_cyl_max > R_LC) | (
             (R_cyl_max < R_LC) & (np.abs(z_abs_max) > (h_LC_coeff * R_LC))
