@@ -34,6 +34,7 @@ class ExperimentSeriesRunner:
         delete_existing_lines_and_summary: bool = False,
         overwrite_experiments: bool = False,
         run_remaining: bool = False,
+        create_directories: bool = True,
         log_rotation_max_bytes: float = 10 * 1024 * 1024,  # 10 MB
         log_rotation_backup_count: int = 5,
     ) -> None:
@@ -50,6 +51,7 @@ class ExperimentSeriesRunner:
         self.delete_existing_lines_and_summary = delete_existing_lines_and_summary
         self.overwrite_experiments = overwrite_experiments
         self.run_remaining = run_remaining
+        self.create_directories = create_directories
         self.log_rotation_max_bytes = log_rotation_max_bytes
         self.log_rotation_backup_count = log_rotation_backup_count
 
@@ -190,14 +192,17 @@ class ExperimentSeriesRunner:
                 summary_file.unlink()
                 logger.info("Deleted existing summary file: %s", summary_file)
         
-        # Create directories if they don't exist
-        if not series_dir.exists():
-            series_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Create subdirectories
-        for subdir in self.series_config.get_subdirectories():
-            subdir_path = series_dir / subdir
-            subdir_path.mkdir(parents=True, exist_ok=True)
+        # Create directories if requested and they don't exist
+        if self.create_directories:
+            if not series_dir.exists():
+                series_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create subdirectories
+            for subdir in self.series_config.get_subdirectories():
+                subdir_path = series_dir / subdir
+                subdir_path.mkdir(parents=True, exist_ok=True)
+        else:
+            logger.info("Skipping directory creation (create_directories=False)")
 
         # Set up logging
         log_file = series_dir / self.series_config.LOGS_DIR / f"{self.series_config.name}.log"
@@ -243,7 +248,10 @@ class ExperimentSeriesRunner:
                 # If no experiments found and we want to save configs, create them
                 if self.save_individual_configs:
                     logger.info("No existing experiments found, creating new experiment series")
-                    experiments = self.series_config.create_experiment_series(save_configs=True)
+                    experiments = self.series_config.create_experiment_series(
+                        save_configs=True, 
+                        create_directories=self.create_directories
+                    )
                     total_experiments_in_series = len(experiments)
                 else:
                     # Re-raise the error if we don't want to save configs
@@ -302,7 +310,7 @@ class ExperimentSeriesRunner:
                     }
 
         remaining_experiments = []
-        for i, exp in enumerate(self.series_config.create_experiment_series()):
+        for i, exp in enumerate(self.series_config.create_experiment_series(create_directories=False)):
             if exp.name not in completed_experiments or self.overwrite_experiments:
                 remaining_experiments.append(exp)
 
@@ -568,7 +576,8 @@ class InMemoryExperimentSeriesRunner:
         """Run the experiment series with results in memory."""
         # Create experiments
         experiments = self.series_config.create_experiment_series(
-            save_configs=self.save_individual_configs
+            save_configs=self.save_individual_configs,
+            create_directories=False  # In-memory runner doesn't need directories
         )
         total_experiments_in_series = len(experiments)
 
@@ -610,11 +619,12 @@ def run_experiment_series(
     save_individual_configs: bool = True,
     save_grids: bool = True,
     continue_on_failure: bool = True,
+    create_directories: bool = True,
 ) -> SeriesResult:
     """Convenience function to run an experiment series."""
     
     # Check if any experiments have save_results_to_disk=False and warn user
-    experiments = series_config.create_experiment_series(save_configs=False)
+    experiments = series_config.create_experiment_series(save_configs=False, create_directories=False)
     for experiment in experiments:
         if hasattr(experiment.tracing, 'save_results_to_disk') and not experiment.tracing.save_results_to_disk:
             logger.warning(
@@ -634,6 +644,7 @@ def run_experiment_series(
         delete_existing_lines_and_summary=delete_existing_lines_and_summary,
         overwrite_experiments=overwrite_experiments,
         run_remaining=run_remaining,
+        create_directories=create_directories,
     )
 
     return runner.run()

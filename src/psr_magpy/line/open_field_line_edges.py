@@ -335,7 +335,7 @@ def calculate_and_save_OFL_edges(
                     edge_footpoint_ids_in_batch = []
                     for j, fp_id in enumerate(batch_footpoint_ids):
                         if fp_id in edge_footpoint_set:
-                            edge_footpoint_ids_in_batch.append(j)
+                            edge_footpoint_ids_in_batch.append(fp_id)
                     
                     if not edge_footpoint_ids_in_batch:
                         logger.debug(f"    No edge footpoints in this batch, skipping")

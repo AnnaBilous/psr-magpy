@@ -69,6 +69,7 @@ class ExperimentSeriesConfig(BaseModel):
         self,
         save_configs: bool = True,
         delete_existing_configs: bool = False,
+        create_directories: bool = True,
     ) -> List[ExperimentConfig]:
         """Create experiment series from configuration.
 
@@ -81,8 +82,11 @@ class ExperimentSeriesConfig(BaseModel):
         """
         logger.info("Creating experiment series: %s", self.name)
 
-        # Create output directory structure
-        self.create_directory_structure(delete_existing_configs)
+        # Create output directory structure if requested
+        if create_directories:
+            self.create_directory_structure(delete_existing_configs)
+        else:
+            logger.info("Skipping directory creation (create_directories=False)")
 
         # Create experiments
         experiments = self._create_experiments()
