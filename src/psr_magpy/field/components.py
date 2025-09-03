@@ -231,7 +231,7 @@ class DipoleFieldComponent(FieldComponent):
                         1.5 * z * y,
                         z**2 - 0.5 * r_cyl**2,
                     ],
-                    dtype=np.float64
+                    dtype=np.float64,
                 )
             )
 
@@ -289,7 +289,7 @@ class QuadrupoleFieldComponent(FieldComponent):
                         y / denom,
                         z / denom - z / r,
                     ],
-                    dtype=np.float64
+                    dtype=np.float64,
                 )
             )
 

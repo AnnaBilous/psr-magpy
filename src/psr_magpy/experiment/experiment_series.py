@@ -58,11 +58,11 @@ class ExperimentSeriesConfig(BaseModel):
     def model_dump(self, **kwargs):
         """Custom model_dump to ensure grid type information is preserved."""
         data = super().model_dump(**kwargs)
-        
+
         # Ensure grid type information is preserved
-        if "grid" in data and hasattr(self.grid, 'model_dump'):
+        if "grid" in data and hasattr(self.grid, "model_dump"):
             data["grid"] = self.grid.model_dump(**kwargs)
-        
+
         return data
 
     def create_experiment_series(
@@ -134,10 +134,14 @@ class ExperimentSeriesConfig(BaseModel):
                 # Update the experiment config with the grid file path
                 if grid_type == "random" and experiment.grid.random:
                     experiment.grid.random.grid_file_path = str(grid_path)
-                    logger.debug(f"Updated RandomGrid config with file path: {grid_path}")
+                    logger.debug(
+                        f"Updated RandomGrid config with file path: {grid_path}"
+                    )
                 elif grid_type == "custom" and experiment.grid.custom:
                     experiment.grid.custom.grid_file_path = str(grid_path)
-                    logger.debug(f"Updated CustomGrid config with file path: {grid_path}")
+                    logger.debug(
+                        f"Updated CustomGrid config with file path: {grid_path}"
+                    )
             else:
                 logger.warning(f"Grid is None for {experiment.name}, skipping save")
 
@@ -187,37 +191,37 @@ class ExperimentSeriesConfig(BaseModel):
 
         output_dir = self.output_dir or "."
         return Path(output_dir) / self.name / self.LOGS_DIR
-    
+
     def get_subdirectories(self) -> List[str]:
         """Get list of all subdirectory names."""
         return [self.LINES_DIR, self.GRIDS_DIR, self.CONFIGS_DIR, self.LOGS_DIR]
-    
+
     def get_cleanup_directories(self) -> List[str]:
         """Get list of directories to clean up (only configs)."""
         return [self.CONFIGS_DIR]
-    
+
     def get_experiment_config_path(self, experiment_number: int) -> Path:
         """Get the full path to a specific experiment config file.
-        
+
         Args:
             experiment_number: The experiment number (0-based)
-            
+
         Returns:
             Path to the experiment config file
         """
         return self.get_configs_dir() / f"{self.name}_{experiment_number:03d}.yaml"
-    
+
     def load_experiment_config(self, experiment_number: int) -> "ExperimentConfig":
         """Load a specific experiment config by number.
-        
+
         Args:
             experiment_number: The experiment number (0-based)
-            
+
         Returns:
             Loaded experiment configuration
         """
         from psr_magpy.experiment.experiment_config import ExperimentConfig
-        
+
         config_path = self.get_experiment_config_path(experiment_number)
         return ExperimentConfig.load(config_path)
 
@@ -445,7 +449,7 @@ class ExperimentSeriesConfig(BaseModel):
 
     def create_directory_structure(self, delete_existing_configs: bool = False) -> None:
         """Create output directory structure.
-        
+
         Args:
             delete_existing_configs: Whether to delete existing configs directory
         """
@@ -467,8 +471,10 @@ class ExperimentSeriesConfig(BaseModel):
                         subdir_path = series_dir / subdir
                         if subdir_path.exists():
                             shutil.rmtree(subdir_path)
-                            logger.info("Removed existing %s directory: %s", subdir, subdir_path)
-                    
+                            logger.info(
+                                "Removed existing %s directory: %s", subdir, subdir_path
+                            )
+
                     # Recreate cleaned directories
                     for subdir in self.get_subdirectories():
                         subdir_path = series_dir / subdir
@@ -494,8 +500,10 @@ class ExperimentSeriesConfig(BaseModel):
                         subdir_path = series_dir / subdir
                         if subdir_path.exists():
                             shutil.rmtree(subdir_path)
-                            logger.info("Removed existing %s directory: %s", subdir, subdir_path)
-                    
+                            logger.info(
+                                "Removed existing %s directory: %s", subdir, subdir_path
+                            )
+
                     # Recreate cleaned directories
                     for subdir in self.get_subdirectories():
                         subdir_path = series_dir / subdir

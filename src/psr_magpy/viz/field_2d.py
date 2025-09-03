@@ -15,7 +15,7 @@ logger = get_logger(__name__, console_format_brief=True)
 
 class Base2DFieldPlotter:
     """Base class for 2D field plotters."""
-    
+
     def __init__(self, **defaults) -> None:
         """Initialize with default configuration."""
         self.config: Dict[str, Any] = {
@@ -45,7 +45,7 @@ class Base2DFieldPlotter:
         assert isinstance(ax, Axes)
         assert isinstance(fig, Figure)
         return fig, ax
-    
+
     def _add_circle(self, ax: Axes, plot_config: Dict[str, Any]) -> None:
         """Add circular patch if radius > 0."""
         if plot_config["circle_radius"] > 0:
@@ -57,7 +57,7 @@ class Base2DFieldPlotter:
                 fill=plot_config["circle_fill"],
             )
             ax.add_patch(circle)
-    
+
     def _setup_layout(self, ax: Axes, plot_config: Dict[str, Any]) -> None:
         """Set labels, title, and grid."""
         ax.set_xlabel(plot_config["xlabel"])
@@ -69,7 +69,7 @@ class Base2DFieldPlotter:
 
 class Quiver2DFieldPlotter(Base2DFieldPlotter):
     """2D quiver plotter for vector fields."""
-    
+
     def __init__(self, **defaults) -> None:
         """Initialize with default configuration."""
         super().__init__(**defaults)
@@ -100,7 +100,7 @@ class Quiver2DFieldPlotter(Base2DFieldPlotter):
         """Plot 2D vector field using quiver."""
         plot_config = {**self.config, **kwargs}
         fig, ax = self._setup_figure_and_axes(ax, plot_config)
-        
+
         quiver_params = {
             k: v
             for k, v in plot_config.items()
@@ -121,13 +121,13 @@ class Quiver2DFieldPlotter(Base2DFieldPlotter):
         ax.quiver(X, Y, U, V, **quiver_params)
         self._add_circle(ax, plot_config)
         self._setup_layout(ax, plot_config)
-        
+
         return fig, ax
 
 
 class Streamline2DFieldPlotter(Base2DFieldPlotter):
     """2D streamline plotter for vector fields."""
-    
+
     def __init__(self, **defaults) -> None:
         """Initialize with default configuration."""
         super().__init__(**defaults)
@@ -160,7 +160,7 @@ class Streamline2DFieldPlotter(Base2DFieldPlotter):
         """Plot 2D vector field using streamplot."""
         plot_config = {**self.config, **kwargs}
         fig, ax = self._setup_figure_and_axes(ax, plot_config)
-        
+
         streamplot_params = {
             k: v
             for k, v in plot_config.items()
@@ -180,120 +180,166 @@ class Streamline2DFieldPlotter(Base2DFieldPlotter):
         ax.streamplot(X, Y, U, V, **streamplot_params)
         self._add_circle(ax, plot_config)
         self._setup_layout(ax, plot_config)
-        
+
         return fig, ax
 
 
 class Grid3DVisualizer:
     """3D grid visualizer with coordinate system, sphere, and plane grid."""
-    
+
     def __init__(self, **defaults) -> None:
         """Initialize with default configuration."""
         self.config: Dict[str, Any] = {
-            'sphere_radius': 1.0,
-            'sphere_alpha': 0.3,
-            'sphere_color': 'lightblue',
-            'grid_color': 'red',
-            'grid_alpha': 0.7,
-            'grid_size': 0.1,
-            'axis_length': 2.0,
-            'axis_width': 2,
-            'title': '3D Grid Visualization',
-            'figsize': (10, 8),
-            'dpi': 100,
-            'elevation': 20,
-            'azimuth': 45,
-            **defaults
+            "sphere_radius": 1.0,
+            "sphere_alpha": 0.3,
+            "sphere_color": "lightblue",
+            "grid_color": "red",
+            "grid_alpha": 0.7,
+            "grid_size": 0.1,
+            "axis_length": 2.0,
+            "axis_width": 2,
+            "title": "3D Grid Visualization",
+            "figsize": (10, 8),
+            "dpi": 100,
+            "elevation": 20,
+            "azimuth": 45,
+            **defaults,
         }
-    
-    def plot_grid_on_plane(self, p1: np.ndarray, p2: np.ndarray, p3: np.ndarray,
-                          limits_u: Tuple[float, float], limits_v: Tuple[float, float],
-                          n_points_u: int, n_points_v: int,
-                          ax: Optional[Axes3D] = None, **kwargs) -> Tuple[Figure, Axes3D]:
+
+    def plot_grid_on_plane(
+        self,
+        p1: np.ndarray,
+        p2: np.ndarray,
+        p3: np.ndarray,
+        limits_u: Tuple[float, float],
+        limits_v: Tuple[float, float],
+        n_points_u: int,
+        n_points_v: int,
+        ax: Optional[Axes3D] = None,
+        **kwargs,
+    ) -> Tuple[Figure, Axes3D]:
         """Plot 3D visualization with coordinate system, sphere, and plane grid."""
         plot_config = {**self.config, **kwargs}
-        
+
         if ax is None:
-            fig = plt.figure(figsize=plot_config['figsize'], dpi=plot_config['dpi'])
-            ax = fig.add_subplot(111, projection='3d')
+            fig = plt.figure(figsize=plot_config["figsize"], dpi=plot_config["dpi"])
+            ax = fig.add_subplot(111, projection="3d")
         else:
             fig = ax.figure
         assert isinstance(ax, Axes3D)
         assert isinstance(fig, Figure)
-        
+
         # Check if points define a valid plane
         if np.allclose(p1, p2) or np.allclose(p1, p3) or np.allclose(p2, p3):
             error_msg = "At least two points coincide. Cannot define a plane."
             raise ValueError(error_msg)
-        
+
         v1 = p2 - p1
         v2 = p3 - p1
         cross_product = np.cross(v1, v2)
         if np.allclose(cross_product, 0):
             error_msg = "Points are collinear. Cannot define a plane."
             raise ValueError(error_msg)
-        
+
         # Calculate plane basis vectors
         v1_norm = v1 / np.linalg.norm(v1)
         v2_norm = v2 / np.linalg.norm(v2)
         v2_perp = v2_norm - np.dot(v2_norm, v1_norm) * v1_norm
         v2_perp = v2_perp / np.linalg.norm(v2_perp)
-        
+
         # Create grid in plane coordinates
         u = np.linspace(limits_u[0], limits_u[1], n_points_u)
         v = np.linspace(limits_v[0], limits_v[1], n_points_v)
         U, V = np.meshgrid(u, v)
-        
+
         # Convert to 3D coordinates
         X_3d = np.zeros((n_points_v, n_points_u, 3))
         for i in range(n_points_v):
             for j in range(n_points_u):
                 X_3d[i, j] = p1 + U[i, j] * v1_norm + V[i, j] * v2_perp
-        
+
         # Plot coordinate axes
-        axis_length = plot_config['axis_length']
-        ax.quiver(0, 0, 0, axis_length, 0, 0, color='red', arrow_length_ratio=0.1, linewidth=plot_config['axis_width'])
-        ax.quiver(0, 0, 0, 0, axis_length, 0, color='green', arrow_length_ratio=0.1, linewidth=plot_config['axis_width'])
-        ax.quiver(0, 0, 0, 0, 0, axis_length, color='blue', arrow_length_ratio=0.1, linewidth=plot_config['axis_width'])
-        
+        axis_length = plot_config["axis_length"]
+        ax.quiver(
+            0,
+            0,
+            0,
+            axis_length,
+            0,
+            0,
+            color="red",
+            arrow_length_ratio=0.1,
+            linewidth=plot_config["axis_width"],
+        )
+        ax.quiver(
+            0,
+            0,
+            0,
+            0,
+            axis_length,
+            0,
+            color="green",
+            arrow_length_ratio=0.1,
+            linewidth=plot_config["axis_width"],
+        )
+        ax.quiver(
+            0,
+            0,
+            0,
+            0,
+            0,
+            axis_length,
+            color="blue",
+            arrow_length_ratio=0.1,
+            linewidth=plot_config["axis_width"],
+        )
+
         # Add axis labels
-        ax.text(axis_length*1.1, 0, 0, 'X', color='red', fontsize=12)
-        ax.text(0, axis_length*1.1, 0, 'Y', color='green', fontsize=12)
-        ax.text(0, 0, axis_length*1.1, 'Z', color='blue', fontsize=12)
-        
+        ax.text(axis_length * 1.1, 0, 0, "X", color="red", fontsize=12)
+        ax.text(0, axis_length * 1.1, 0, "Y", color="green", fontsize=12)
+        ax.text(0, 0, axis_length * 1.1, "Z", color="blue", fontsize=12)
+
         # Plot sphere
-        sphere_radius = plot_config['sphere_radius']
+        sphere_radius = plot_config["sphere_radius"]
         u_sphere = np.linspace(0, 2 * np.pi, 20)
         v_sphere = np.linspace(0, np.pi, 20)
         x_sphere = sphere_radius * np.outer(np.cos(u_sphere), np.sin(v_sphere))
         y_sphere = sphere_radius * np.outer(np.sin(u_sphere), np.sin(v_sphere))
         z_sphere = sphere_radius * np.outer(np.ones_like(u_sphere), np.cos(v_sphere))
-        
-        ax.plot_surface(x_sphere, y_sphere, z_sphere, 
-                       alpha=plot_config['sphere_alpha'], 
-                       color=plot_config['sphere_color'])
-        
+
+        ax.plot_surface(
+            x_sphere,
+            y_sphere,
+            z_sphere,
+            alpha=plot_config["sphere_alpha"],
+            color=plot_config["sphere_color"],
+        )
+
         # Plot grid points on plane
-        grid_size = plot_config['grid_size']
+        grid_size = plot_config["grid_size"]
         for i in range(n_points_v):
             for j in range(n_points_u):
                 point = X_3d[i, j]
-                ax.scatter(point[0], point[1], point[2], 
-                          c=plot_config['grid_color'], 
-                          alpha=plot_config['grid_alpha'],
-                          s=grid_size*1000)
-        
+                ax.scatter(
+                    point[0],
+                    point[1],
+                    point[2],
+                    c=plot_config["grid_color"],
+                    alpha=plot_config["grid_alpha"],
+                    s=grid_size * 1000,
+                )
+
         # Set view and labels
-        ax.view_init(elev=plot_config['elevation'], azim=plot_config['azimuth'])
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-        ax.set_title(plot_config['title'])
-        
+        ax.view_init(elev=plot_config["elevation"], azim=plot_config["azimuth"])
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+        ax.set_title(plot_config["title"])
+
         # Set equal aspect ratio
         ax.set_box_aspect((1, 1, 1))
-        
-        return fig, ax 
+
+        return fig, ax
 
 
 def plot_field_lines_2d(

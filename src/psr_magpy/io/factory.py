@@ -56,7 +56,7 @@ class IOFactory:
             raise ValueError(error_msg)
 
         # Filter out template parameter from kwargs (it's passed to load method, not constructor)
-        io_kwargs = {k: v for k, v in kwargs.items() if k != 'template'}
+        io_kwargs = {k: v for k, v in kwargs.items() if k != "template"}
 
         # Create validator with specified configuration
         validator = DataIOValidator(

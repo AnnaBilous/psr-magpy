@@ -139,19 +139,21 @@ class ExperimentConfigIO(YamlIO):
 
         # Reconstruct template
         template_data = data.get("template", {})
-        
+
         # Ensure backwards compatibility for new properties
         default_flags = {
             "save_b_line": False,
             "save_curvature_line": False,
         }
-        
+
         # Add missing properties with defaults
         for prop_name, default_value in default_flags.items():
             if prop_name not in template_data:
                 template_data[prop_name] = default_value
-                logger.debug(f"Applied default {default_value} for missing property {prop_name} in experiment config")
-        
+                logger.debug(
+                    f"Applied default {default_value} for missing property {prop_name} in experiment config"
+                )
+
         template = FieldLine(**template_data)
 
         # Reconstruct field
@@ -232,19 +234,21 @@ class ExperimentSeriesConfigIO(YamlIO):
             reconstructed_data["template"], dict
         ):
             template_data = reconstructed_data["template"]
-            
+
             # Ensure backwards compatibility for new properties
             default_flags = {
                 "save_b_line": False,
                 "save_curvature_line": False,
             }
-            
+
             # Add missing properties with defaults
             for prop_name, default_value in default_flags.items():
                 if prop_name not in template_data:
                     template_data[prop_name] = default_value
-                    logger.debug(f"Applied default {default_value} for missing property {prop_name} in series config")
-            
+                    logger.debug(
+                        f"Applied default {default_value} for missing property {prop_name} in series config"
+                    )
+
             reconstructed_data["template"] = FieldLine(**template_data)
 
         # Create config object using model_validate to handle grid type information

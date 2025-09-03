@@ -158,7 +158,8 @@ class RandomGridConfig(BaseModel):
 
     nline_ori: int
     grid_file_path: Optional[str] = Field(
-        default=None, description="Path to saved grid file (required when saving results to disk)"
+        default=None,
+        description="Path to saved grid file (required when saving results to disk)",
     )
 
 
@@ -178,7 +179,8 @@ class CustomGridConfig(BaseModel):
     nline_ori: int
     coordinates: Optional[Any] = None  # Accept any type, validate in create_grid
     grid_file_path: Optional[str] = Field(
-        default=None, description="Path to saved grid file (required when saving results to disk)"
+        default=None,
+        description="Path to saved grid file (required when saving results to disk)",
     )
 
     model_config = {"arbitrary_types_allowed": True}
@@ -246,7 +248,9 @@ class GridConfig(BaseModel):
             else:
                 logger.info("Creating RandomGrid from scratch")
                 params = config.model_dump()
-                params.pop("grid_file_path", None)  # Remove file path when creating from scratch
+                params.pop(
+                    "grid_file_path", None
+                )  # Remove file path when creating from scratch
                 return RandomGrid(**params)
         elif self.custom is not None:
             config = self.custom
@@ -256,13 +260,15 @@ class GridConfig(BaseModel):
             else:
                 logger.info("Creating CustomGrid from scratch")
                 params = config.model_dump()
-                params.pop("grid_file_path", None)  # Remove file path when creating from scratch
-                
+                params.pop(
+                    "grid_file_path", None
+                )  # Remove file path when creating from scratch
+
                 # Handle different coordinate formats
                 if params["coordinates"] is not None:
                     from astropy.coordinates import CartesianRepresentation
                     import numpy as np
-                    
+
                     if isinstance(params["coordinates"], list):
                         # Convert list coordinates to CartesianRepresentation
                         params["coordinates"] = CartesianRepresentation(
@@ -274,18 +280,24 @@ class GridConfig(BaseModel):
                         error_msg = f"Coordinates must be list of lists or CartesianRepresentation, got {type(params['coordinates'])}"
                         logger.error(error_msg)
                         raise ValueError(error_msg)
-                
+
                 return CustomGrid(**params)
         elif self.spherical is not None:
             config = self.spherical
             if config.subset and config.grid_file_path:
-                logger.info(f"Loading subset SphericalGrid from {config.grid_file_path}")
+                logger.info(
+                    f"Loading subset SphericalGrid from {config.grid_file_path}"
+                )
                 return SphericalGrid.load_from_fits(config.grid_file_path)
             else:
                 logger.info("Creating SphericalGrid from scratch")
                 params = config.model_dump()
-                params.pop("grid_file_path", None)  # Remove file path when creating from scratch
-                params.pop("subset", None)  # Remove subset flag when creating from scratch
+                params.pop(
+                    "grid_file_path", None
+                )  # Remove file path when creating from scratch
+                params.pop(
+                    "subset", None
+                )  # Remove subset flag when creating from scratch
                 return SphericalGrid(**params)
         elif self.healpix is not None:
             config = self.healpix
@@ -295,8 +307,12 @@ class GridConfig(BaseModel):
             else:
                 logger.info("Creating HealpixGrid from scratch")
                 params = config.model_dump()
-                params.pop("grid_file_path", None)  # Remove file path when creating from scratch
-                params.pop("subset", None)  # Remove subset flag when creating from scratch
+                params.pop(
+                    "grid_file_path", None
+                )  # Remove file path when creating from scratch
+                params.pop(
+                    "subset", None
+                )  # Remove subset flag when creating from scratch
                 return HealpixGrid(**params)
         else:
             error_msg = "No grid type specified"
@@ -433,10 +449,16 @@ class ExperimentConfig:
         logger.debug(f"Initializing experiment: {self.name}")
         if self.description:
             logger.debug(f"Description: {self.description}")
-        
+
         # Automatically enable save_reversed_error if verify_by_reversing is enabled
-        if self.tracing is not None and self.tracing.verify_by_reversing and not self.template.save_flags.save_reversed_error:
-            logger.debug("Enabling save_reversed_error because verify_by_reversing=True")
+        if (
+            self.tracing is not None
+            and self.tracing.verify_by_reversing
+            and not self.template.save_flags.save_reversed_error
+        ):
+            logger.debug(
+                "Enabling save_reversed_error because verify_by_reversing=True"
+            )
             self.template.save_flags.save_reversed_error = True
 
     def save(self, filepath: Union[str, Path]) -> None:
@@ -480,54 +502,63 @@ class ExperimentConfig:
 
         return get_io_factory().load_config(cls, filepath)
 
-    def load_combined_batch_data(self, template: FieldLine, lines_dir: Optional[str] = None) -> Optional["FieldLineSet"]:
+    def load_combined_batch_data(
+        self, template: FieldLine, lines_dir: Optional[str] = None
+    ) -> Optional["FieldLineSet"]:
         """
         Load and combine batch files for this experiment.
-        
+
         Args:
             template: FieldLine template specifying which properties to load
             lines_dir: Optional path to lines directory (defaults to experiment's output dir)
-        
+
         Returns:
             FieldLineSet: Combined field line set with specified properties
         """
         import glob
         from psr_magpy.line.field_line_set import FieldLineSet
         from psr_magpy.io import get_io_factory
-        
+
         # Determine lines directory
         if lines_dir is None:
             error_msg = "lines_dir must be specified"
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         # Find all batch files for this experiment
         batch_pattern = f"{lines_dir}/{self.name}_batch_*.fits"
         batch_files = glob.glob(batch_pattern)
-        
+
         if not batch_files:
             logger.warning(f"No batch files found for {self.name}")
             return None
-        
+
         logger.info(f"Found {len(batch_files)} batch files for {self.name}")
-        
+
         # Create combined field line set
         combined_field_line_set = FieldLineSet(template, copy_data=False)
-        
+
         # Load data from each batch file
         for batch_file in sorted(batch_files):
             logger.debug(f"Loading {batch_file}")
-            
+
             # Load the field line set with template
-            field_line_set = get_io_factory().load_data(FieldLineSet, batch_file, template=template)
-            
+            field_line_set = get_io_factory().load_data(
+                FieldLineSet, batch_file, template=template
+            )
+
             # Append to combined set
             combined_field_line_set.append(field_line_set)
-        
-        logger.info(f"Combined field line set: {combined_field_line_set.n_field_lines} field lines")
-        
+
+        logger.info(
+            f"Combined field line set: {combined_field_line_set.n_field_lines} field lines"
+        )
+
         # Check for duplicate footpoint indices
-        if hasattr(combined_field_line_set, 'footpoint_id') and combined_field_line_set.footpoint_id is not None:
+        if (
+            hasattr(combined_field_line_set, "footpoint_id")
+            and combined_field_line_set.footpoint_id is not None
+        ):
             footpoint_ids = combined_field_line_set.footpoint_id
             unique_ids = set(footpoint_ids)
             if len(unique_ids) != len(footpoint_ids):
@@ -537,7 +568,7 @@ class ExperimentConfig:
                 raise ValueError(error_msg)
             else:
                 logger.info(f"Verified {len(footpoint_ids)} unique footpoint indices")
-        
+
         return combined_field_line_set
 
     @classmethod

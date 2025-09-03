@@ -39,7 +39,11 @@ from .progress_tracker import ProgressTracker
 from .memory_manager import MemoryManager
 from .calculation_context import CalculationContext
 from .calculator import FieldLineCalculator
-from .open_field_line_edges import healpix_grid_get_single_OFL_edge, healpix_grid_get_OFL_edges, OFLEdgeCalculator, OFLEdgeResult, calculate_and_save_OFL_edges
+from .open_field_line_edges import (
+    OFLEdgeCalculator,
+    OFLEdgeResult,
+    calculate_and_save_OFL_edges,
+)
 
 
 __all__ = [
@@ -57,8 +61,6 @@ __all__ = [
     "ProgressTracker",
     "CalculationContext",
     "FieldLineCalculator",
-    "healpix_grid_get_single_OFL_edge",
-    "healpix_grid_get_OFL_edges",
     "OFLEdgeCalculator",
     "OFLEdgeResult",
     "calculate_and_save_OFL_edges",

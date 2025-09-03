@@ -17,6 +17,7 @@ logger = get_logger(__name__, console_format_brief=True)
 @dataclass
 class LightFieldLineSet:
     """Lightweight version of FieldLineSet containing only necessary attributes."""
+
     n_field_lines: int
     reversed_error_warning: Optional[str] = None
     dotprod_error: Optional[str] = None
@@ -44,7 +45,14 @@ class FieldLineSet(FieldLine):
     """
 
     # List of properties that are stored as lists of arrays
-    ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.PA_LINE, PropertyName.B_LINE, PropertyName.CURVATURE_LINE, PropertyName.TANGENT_THETA, PropertyName.TANGENT_PHI]
+    ARRAY_LIST_PROPERTIES = [
+        PropertyName.R_LINE,
+        PropertyName.PA_LINE,
+        PropertyName.B_LINE,
+        PropertyName.CURVATURE_LINE,
+        PropertyName.TANGENT_THETA,
+        PropertyName.TANGENT_PHI,
+    ]
 
     def __init__(
         self, field_lines: Union[List[FieldLine], FieldLine], copy_data: bool = True
@@ -79,15 +87,15 @@ class FieldLineSet(FieldLine):
 
     def copy(self) -> "FieldLineSet":
         """Create a deep copy of the FieldLineSet.
-        
+
         Returns:
             FieldLineSet: A new FieldLineSet with copied data
         """
         logger.debug(f"Creating copy of FieldLineSet with {self.n_field_lines} lines")
-        
+
         # Create new instance with same structure
         copy_instance = FieldLineSet(self, copy_data=False)
-        
+
         # Copy all properties
         for prop in self.property_system.get_enabled_properties():
             source_data = self.property_system.get_property(prop)
@@ -104,10 +112,10 @@ class FieldLineSet(FieldLine):
                 else:
                     # Deep copy numpy arrays
                     copy_instance.property_system._properties[prop] = source_data.copy()
-        
+
         # Set the field line count
         copy_instance._n_field_lines = self._n_field_lines
-        
+
         logger.debug(f"Created copy with {copy_instance.n_field_lines} lines")
         return copy_instance
 
@@ -417,14 +425,16 @@ class FieldLineSet(FieldLine):
         enabled_props = self.property_system.get_enabled_property_names()
         return f"FieldLineSet(n_lines={self.n_field_lines}, enabled_properties={enabled_props})"
 
-    def get_OFL_footpoints(self, R_LC: float, h_LC_coeff: float = 3**1.5 / 2.0) -> np.ndarray:
+    def get_OFL_footpoints(
+        self, R_LC: float, h_LC_coeff: float = 3**1.5 / 2.0
+    ) -> np.ndarray:
         """
         Get the footpoints of the Open Field Lines (OFL).
-        
+
         Args:
             R_LC: Light cylinder radius
             h_LC_coeff: Height coefficient for LC (default: 3^1.5 / 2.0)
-        
+
         Returns:
             np.ndarray: Array of OFL footpoint indices
         """
@@ -436,80 +446,92 @@ class FieldLineSet(FieldLine):
         open_fl_crit = (R_cyl_max > R_LC) | (
             (R_cyl_max < R_LC) & (np.abs(z_abs_max) > (h_LC_coeff * R_LC))
         )
-        
+
         logger.info(f"R_LC: {R_LC:.2f}")
-        logger.info(f"OFL criteria met: {np.sum(open_fl_crit)} out of {len(open_fl_crit)}")
-        
+        logger.info(
+            f"OFL criteria met: {np.sum(open_fl_crit)} out of {len(open_fl_crit)}"
+        )
+
         # Return OFL footpoint indices
         ofl_footpoint_ids = footpoint_ids[open_fl_crit].astype(int)
-        
-  
+
         return ofl_footpoint_ids
-    
+
     def subset_by_footpoint_ids(self, footpoint_ids: List[int]) -> "FieldLineSet":
         """
         Create a subset of the FieldLineSet containing only field lines with the specified footpoint IDs.
-        
+
         Args:
             footpoint_ids: List of footpoint IDs to include in the subset
-            
+
         Returns:
             FieldLineSet: New FieldLineSet containing only the specified field lines
-            
+
         Raises:
             ValueError: If footpoint_id property is not enabled or footpoint_ids is empty
         """
         # Convert numpy array to list if needed
         if isinstance(footpoint_ids, np.ndarray):
             footpoint_ids = footpoint_ids.tolist()
-            
+
         if not footpoint_ids:
             error_msg = "footpoint_ids list cannot be empty"
             logger.error(error_msg)
             raise ValueError(error_msg)
-            
+
         # Check if footpoint_id property is enabled
-        if PropertyName.FOOTPOINT_ID not in self.property_system.get_enabled_properties():
-            error_msg = "footpoint_id property must be enabled to subset by footpoint IDs"
+        if (
+            PropertyName.FOOTPOINT_ID
+            not in self.property_system.get_enabled_properties()
+        ):
+            error_msg = (
+                "footpoint_id property must be enabled to subset by footpoint IDs"
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
-            
+
         # Get current footpoint IDs
-        current_footpoint_ids = self.property_system.get_property(PropertyName.FOOTPOINT_ID)
+        current_footpoint_ids = self.property_system.get_property(
+            PropertyName.FOOTPOINT_ID
+        )
         if current_footpoint_ids is None:
             error_msg = "footpoint_id property is None"
             logger.error(error_msg)
             raise ValueError(error_msg)
-            
+
         # Convert footpoint_ids to set for efficient lookup
         target_footpoint_set = set(footpoint_ids)
-        
+
         # Find indices of field lines with matching footpoint IDs
         matching_indices = []
         for i, fp_id in enumerate(current_footpoint_ids):
             if fp_id in target_footpoint_set:
                 matching_indices.append(i)
-                
+
         if not matching_indices:
             # Return empty FieldLineSet with same template
             empty_set = FieldLineSet(self, copy_data=False)
             empty_set.n_field_lines = 0
             return empty_set
-            
-        logger.info(f"Found {len(matching_indices)} field lines matching {len(footpoint_ids)} footpoint IDs")
-        
+
+        logger.info(
+            f"Found {len(matching_indices)} field lines matching {len(footpoint_ids)} footpoint IDs"
+        )
+
         # Create new FieldLineSet with same template
         subset = FieldLineSet(self, copy_data=False)
-        
+
         # Copy data for matching indices
         for prop in self.property_system.get_enabled_properties():
             source_data = self.property_system.get_property(prop)
             if source_data is None:
                 continue
-                
+
             # Special handling for properties that are lists of arrays
             if prop in self.ARRAY_LIST_PROPERTIES:
-                subset_data = [source_data[i] for i in matching_indices if i < len(source_data)]
+                subset_data = [
+                    source_data[i] for i in matching_indices if i < len(source_data)
+                ]
                 subset.property_system._properties[prop] = subset_data
             else:
                 # For numpy arrays, use advanced indexing
@@ -518,43 +540,49 @@ class FieldLineSet(FieldLine):
                     subset.property_system._properties[prop] = subset_data
                 else:
                     # For other types, use list comprehension
-                    subset_data = [source_data[i] for i in matching_indices if i < len(source_data)]
+                    subset_data = [
+                        source_data[i] for i in matching_indices if i < len(source_data)
+                    ]
                     subset.property_system._properties[prop] = np.array(subset_data)
-                    
+
         # Update field line count
         subset.n_field_lines = len(matching_indices)
-        
+
         logger.debug(f"Created subset with {subset.n_field_lines} field lines")
         return subset
-    
-        
-    def trim_to_light_cylinder(self, R_LC, h_LC_coeff=3**1.5 / 2.0, trim_type="cylinder"):
+
+    def trim_to_light_cylinder(
+        self, R_LC, h_LC_coeff=3**1.5 / 2.0, trim_type="cylinder"
+    ):
         """
         Trim field lines to points before light cylinder penetration.
-        
+
         Args:
             R_LC: Light cylinder radius
             h_LC_coeff: Height coefficient for cylinder trimming
             trim_type: "cylinder" or "sphere" trimming method
-            
+
         Returns:
             None (modifies self in-place)
         """
-        
-        assert trim_type in ["cylinder", "sphere"], "trim_type should be cylinder or sphere"
+
+        assert trim_type in [
+            "cylinder",
+            "sphere",
+        ], "trim_type should be cylinder or sphere"
         print("Trimming to light cylinder")
         # Check if r_line property is enabled
         if PropertyName.R_LINE not in self.property_system.get_enabled_properties():
             error_msg = "r_line property must be enabled to trim field lines"
             logger.error(error_msg)
             raise ValueError(error_msg)
-            
+
         r_line_data = self.property_system.get_property(PropertyName.R_LINE)
         if r_line_data is None:
             error_msg = "r_line property is None"
             logger.error(error_msg)
             raise ValueError(error_msg)
-            
+
         # Properties that should be trimmed along with r_line
         line_properties = [
             PropertyName.R_LINE,
@@ -562,16 +590,16 @@ class FieldLineSet(FieldLine):
             PropertyName.B_LINE,
             PropertyName.CURVATURE_LINE,
             PropertyName.TANGENT_THETA,
-            PropertyName.TANGENT_PHI
+            PropertyName.TANGENT_PHI,
         ]
-        
+
         # Calculate trim indices for each field line
         trim_indices = []
         for i, r_line in enumerate(r_line_data):
             if r_line is None or len(r_line) == 0:
                 trim_indices.append(0)  # No points to keep
                 continue
-                
+
             # r_line is numpy array with shape (n_points, 3) where each row is [x, y, z]
             # Handle both 1D and 2D arrays
             if r_line.ndim == 1:
@@ -579,63 +607,70 @@ class FieldLineSet(FieldLine):
                 if len(r_line) % 3 == 0:
                     r_line = r_line.reshape(-1, 3)
                 else:
-                    logger.warning(f"Field line {i} has invalid shape {r_line.shape}, skipping")
+                    logger.warning(
+                        f"Field line {i} has invalid shape {r_line.shape}, skipping"
+                    )
                     trim_indices.append(0)
                     continue
             elif r_line.ndim != 2 or r_line.shape[1] != 3:
-                logger.warning(f"Field line {i} has unexpected shape {r_line.shape}, skipping")
+                logger.warning(
+                    f"Field line {i} has unexpected shape {r_line.shape}, skipping"
+                )
                 trim_indices.append(0)
                 continue
-                
+
             x, y, z = r_line[:, 0], r_line[:, 1], r_line[:, 2]
-                
+
             # Calculate which points are outside light cylinder
             if trim_type == "cylinder":
                 z_abs = np.abs(z)
                 R_cyl = np.sqrt(x**2 + y**2)
-                outside_LC = (R_cyl > R_LC) | ((R_cyl < R_LC) & (z_abs > (h_LC_coeff * R_LC)))
-                
+                outside_LC = (R_cyl > R_LC) | (
+                    (R_cyl < R_LC) & (z_abs > (h_LC_coeff * R_LC))
+                )
+
             elif trim_type == "sphere":
                 R_sph = np.sqrt(x**2 + y**2 + z**2)
                 outside_LC = R_sph > R_LC
-                
+
             # Find first point outside LC
             outside_indices = np.where(outside_LC)[0]
-            
-            
+
             if len(outside_indices) > 0:
                 first_LC_penetration_point = outside_indices[0]
                 trim_indices.append(first_LC_penetration_point)
             else:
                 # Keep all points if no LC penetration
                 trim_indices.append(len(x))
-                
+
         # Trim each line property
         for prop in line_properties:
             # Check if property is enabled and has data
             if prop in self.property_system.get_enabled_properties():
                 prop_data = self.property_system.get_property(prop)
                 if prop_data is None:
-                    logger.debug(f"Property {prop} is enabled but has no data, skipping")
+                    logger.debug(
+                        f"Property {prop} is enabled but has no data, skipping"
+                    )
                     continue
-                    
+
                 # Trim each field line's data
                 trimmed_data = []
                 for i, (line_data, trim_idx) in enumerate(zip(prop_data, trim_indices)):
                     if line_data is None or len(line_data) == 0:
                         trimmed_data.append(line_data)
                     else:
-                        
+
                         # Trim to points before LC
                         if trim_idx > 0:
                             # Special handling for r_line (2D array)
                             if prop == PropertyName.R_LINE:
-                                
+
                                 if line_data.ndim == 1:
-                                    trimmed_data.append(line_data[:trim_idx*3])
+                                    trimmed_data.append(line_data[: trim_idx * 3])
                                 else:
-                                    trimmed_data.append(line_data[:trim_idx,:])
-                                
+                                    trimmed_data.append(line_data[:trim_idx, :])
+
                             else:
                                 # For other properties, use 1D slice
                                 trimmed_data.append(line_data[:trim_idx])
@@ -650,11 +685,13 @@ class FieldLineSet(FieldLine):
                                     trimmed_data.append(np.array([]))
                             else:
                                 trimmed_data.append([])
-                                
+
                 # Update the property
                 self.property_system._properties[prop] = trimmed_data
-                
+
             else:
                 logger.debug(f"Property {prop} is not enabled, skipping")
-                
-        logger.info(f"Trimmed {self.n_field_lines} field lines to light cylinder (R_LC={R_LC})")
+
+        logger.info(
+            f"Trimmed {self.n_field_lines} field lines to light cylinder (R_LC={R_LC})"
+        )

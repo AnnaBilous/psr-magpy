@@ -45,7 +45,9 @@ class CalculationContext:
         self._tracer = FieldLineTracer(self.field, self.params)
 
         # Initialize memory manager (consolidated)
-        logger.info(f"DEBUG: CalculationContext - params.performance.max_memory_mb = {self.params.performance.max_memory_mb}")
+        logger.info(
+            f"DEBUG: CalculationContext - params.performance.max_memory_mb = {self.params.performance.max_memory_mb}"
+        )
         self._memory_manager = MemoryManager(
             self.params.performance,
             self._tracer,

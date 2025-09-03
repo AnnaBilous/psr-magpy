@@ -28,11 +28,11 @@ def create_experiment_metadata(
     """Create minimal metadata for an experiment."""
     # Start with base metadata (which might contain user-defined fields)
     metadata = base_metadata.copy()
-    
+
     # Only add experiment number if not already present
     if "experiment_number" not in metadata:
         metadata["experiment_number"] = experiment_number
-    
+
     return metadata
 
 

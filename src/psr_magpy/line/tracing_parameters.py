@@ -37,8 +37,8 @@ class TracingDefaults:
     METHOD = "RK45"  # Integration method for ODE solver
     TRACE_OPEN_LINES_BACKWARDS = False
     VERIFY_BY_REVERSING = False
-    REVERSED_ERROR_THRESHOLD = 1.e-3  # Maximum allowed reversed error
-    DOTPROD_ERROR_THRESHOLD = 1.e-3   # Maximum allowed dotprod error
+    REVERSED_ERROR_THRESHOLD = 1.0e-3  # Maximum allowed reversed error
+    DOTPROD_ERROR_THRESHOLD = 1.0e-3  # Maximum allowed dotprod error
 
     # Performance parameters
     MAX_MEMORY_MB = 100.0
@@ -282,11 +282,15 @@ class OutputParameters(BaseModel):
             raise ValueError(
                 "filename should not be specified when save_results_to_disk is False"
             )
-        
+
         if self.keep_results_in_memory:
-            logger.warning("keep_results_in_memory=True: Use at your own risk - this may consume significant memory")
+            logger.warning(
+                "keep_results_in_memory=True: Use at your own risk - this may consume significant memory"
+            )
             if not self.save_results_to_disk:
-                logger.warning("keep_results_in_memory=True with save_results_to_disk=False: Results will be kept in memory but not saved to disk")
+                logger.warning(
+                    "keep_results_in_memory=True with save_results_to_disk=False: Results will be kept in memory but not saved to disk"
+                )
 
         if self.filename:
             directory = os.path.dirname(self.filename)

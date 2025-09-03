@@ -117,7 +117,7 @@ class GridFactoryConfig(BaseModel):
     def model_dump(self, **kwargs):
         """Custom model_dump to preserve grid type information."""
         data = super().model_dump(**kwargs)
-        
+
         # Convert grid configs to preserve type information
         if "grids" in data:
             grids_data = []
@@ -141,9 +141,9 @@ class GridFactoryConfig(BaseModel):
                 else:
                     # Fallback to original serialization
                     grids_data.append(grid.model_dump(**kwargs))
-            
+
             data["grids"] = grids_data
-        
+
         return data
 
     @classmethod
@@ -167,9 +167,9 @@ class GridFactoryConfig(BaseModel):
                         grids_data.append(grid_dict)
                 else:
                     grids_data.append(grid_dict)
-            
+
             obj["grids"] = grids_data
-        
+
         return super().model_validate(obj)
 
 
@@ -204,7 +204,9 @@ class TracingFactoryConfig(BaseModel):
     max_memory_mb: Union[float, List[float]] = TracingDefaults.MAX_MEMORY_MB
     safety_factor: Union[float, List[float]] = TracingDefaults.SAFETY_FACTOR
     max_batch_size: Union[int, List[int]] = TracingDefaults.MAX_BATCH_SIZE
-    batch_size_safety_factor: Union[int, List[int]] = TracingDefaults.BATCH_SIZE_SAFETY_FACTOR
+    batch_size_safety_factor: Union[int, List[int]] = (
+        TracingDefaults.BATCH_SIZE_SAFETY_FACTOR
+    )
     check_interval_sec: Union[float, List[float]] = TracingDefaults.CHECK_INTERVAL_SEC
     n_cores: Union[Optional[int], List[Optional[int]]] = TracingDefaults.N_CORES
     n_trial: Union[int, List[int]] = TracingDefaults.N_TRIAL
@@ -216,7 +218,9 @@ class TracingFactoryConfig(BaseModel):
 
     # Output parameters
     save_results_to_disk: Union[bool, List[bool]] = TracingDefaults.SAVE_RESULTS_TO_DISK
-    keep_results_in_memory: Union[bool, List[bool]] = TracingDefaults.KEEP_RESULTS_IN_MEMORY
+    keep_results_in_memory: Union[bool, List[bool]] = (
+        TracingDefaults.KEEP_RESULTS_IN_MEMORY
+    )
     filename: Union[Optional[str], List[Optional[str]]] = TracingDefaults.FILENAME
     output_format: Union[str, List[str]] = TracingDefaults.OUTPUT_FORMAT
     overwrite: Union[bool, List[bool]] = TracingDefaults.OVERWRITE
@@ -244,7 +248,7 @@ class TemplateFactoryConfig(BaseModel):
                     # Reconstruct FieldLine from property system flags
                     flags = template_data["property_system"]
                     template = FieldLine()
-                    
+
                     # Define default values for new properties (backwards compatibility)
                     default_flags = {
                         "save_b_line": False,
@@ -252,7 +256,7 @@ class TemplateFactoryConfig(BaseModel):
                         "save_tangent_theta": False,
                         "save_tangent_phi": False,
                     }
-                    
+
                     # Apply flags from YAML, with defaults for missing properties
                     for prop_name, enabled in flags.items():
                         if hasattr(template.property_system.save_flags, prop_name):
@@ -263,17 +267,23 @@ class TemplateFactoryConfig(BaseModel):
                             logger.warning(
                                 f"Property {prop_name} not found in FieldLine property_system.save_flags"
                             )
-                    
+
                     # Apply defaults for missing new properties
                     for prop_name, default_value in default_flags.items():
                         if prop_name not in flags:
                             if hasattr(template.property_system.save_flags, prop_name):
                                 setattr(
-                                    template.property_system.save_flags, prop_name, default_value
+                                    template.property_system.save_flags,
+                                    prop_name,
+                                    default_value,
                                 )
-                                logger.debug(f"Applied default {default_value} for missing property {prop_name}")
+                                logger.debug(
+                                    f"Applied default {default_value} for missing property {prop_name}"
+                                )
                             else:
-                                logger.warning(f"Default property {prop_name} not found in FieldLine property_system.save_flags")
+                                logger.warning(
+                                    f"Default property {prop_name} not found in FieldLine property_system.save_flags"
+                                )
                     templates.append(template)
                 else:
                     # Assume it's already a FieldLine object

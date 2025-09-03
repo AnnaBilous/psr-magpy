@@ -52,7 +52,9 @@ class BatchFileManager:
 
     def find_batch_files(self) -> List[BatchFileInfo]:
         """Find all batch files for the base filename."""
-        pattern = str(self.output_directory / f"{self.base_filename.stem}*_batch_*.fits")
+        pattern = str(
+            self.output_directory / f"{self.base_filename.stem}*_batch_*.fits"
+        )
         batch_files = glob.glob(pattern)
 
         if not batch_files:
@@ -96,18 +98,18 @@ class BatchFileManager:
             if not directory.exists():
                 logger.error(f"Directory does not exist: {directory}")
                 return False
-                
+
             if not os.access(directory, os.W_OK):
                 logger.error(f"Directory is not writable: {directory}")
                 return False
-            
+
             # Check available disk space (require at least 100MB free)
             disk_usage = shutil.disk_usage(directory)
             free_gb = disk_usage.free / (1024**3)
             if free_gb < 0.1:  # Less than 100MB
                 logger.error(f"Insufficient disk space: {free_gb:.2f} GB free")
                 return False
-                
+
             # Try to create a test file
             test_file = directory / f".test_write_{int(time.time())}"
             try:
@@ -116,10 +118,10 @@ class BatchFileManager:
             except Exception as e:
                 logger.error(f"Cannot write to directory: {e}")
                 return False
-                
+
             logger.debug(f"Filesystem health check passed for {directory}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Filesystem health check failed: {e}")
             return False
@@ -159,33 +161,39 @@ class BatchFileManager:
                 # Rename to organized format: experiment_name_batch_001_out_of_004.fits
                 new_filename = f"{experiment_name}_batch_{i+1:03d}_out_of_{len(batch_files):03d}.fits"
                 new_path = output_dir / new_filename
-                
+
                 # Retry logic for file operations
                 max_retries = 3
                 retry_delay = 0.5  # seconds
-                
+
                 for attempt in range(max_retries):
                     try:
                         # Check if source file still exists
                         if not batch_info.path.exists():
-                            logger.warning(f"Source file {batch_info.path} no longer exists, skipping")
+                            logger.warning(
+                                f"Source file {batch_info.path} no longer exists, skipping"
+                            )
                             break
-                            
+
                         # Check if destination already exists
                         if new_path.exists():
-                            logger.warning(f"Destination {new_path} already exists, removing old file")
+                            logger.warning(
+                                f"Destination {new_path} already exists, removing old file"
+                            )
                             new_path.unlink()
-                        
+
                         # Perform the move operation
                         shutil.move(str(batch_info.path), str(new_path))
                         logger.debug(
                             f"Moved and renamed {batch_info.path.name} to {new_filename}"
                         )
                         break  # Success, exit retry loop
-                        
+
                     except (OSError, IOError) as e:
                         if attempt < max_retries - 1:
-                            logger.warning(f"Move attempt {attempt + 1} failed for {batch_info.path}: {e}")
+                            logger.warning(
+                                f"Move attempt {attempt + 1} failed for {batch_info.path}: {e}"
+                            )
                             logger.warning(f"Retrying in {retry_delay} seconds...")
                             time.sleep(retry_delay)
                             retry_delay *= 2  # Exponential backoff
@@ -211,11 +219,17 @@ class BatchFileManager:
             # Log additional diagnostic information
             logger.error(f"Output directory: {output_dir}")
             logger.error(f"Directory exists: {output_dir.exists()}")
-            logger.error(f"Directory writable: {os.access(output_dir, os.W_OK) if output_dir.exists() else 'N/A'}")
-            logger.error(f"Available disk space: {shutil.disk_usage(output_dir).free / (1024**3):.2f} GB")
-            
+            logger.error(
+                f"Directory writable: {os.access(output_dir, os.W_OK) if output_dir.exists() else 'N/A'}"
+            )
+            logger.error(
+                f"Available disk space: {shutil.disk_usage(output_dir).free / (1024**3):.2f} GB"
+            )
+
             # Fallback: log warning but don't fail the entire operation
-            logger.warning("Batch file organization failed, but batch files remain available")
+            logger.warning(
+                "Batch file organization failed, but batch files remain available"
+            )
             logger.warning("You may need to manually organize the batch files later")
             return None
 
@@ -239,9 +253,7 @@ class BatchFileManager:
                     f"  {batch.path.name}: {batch.file_size_mb:.2f} MB (batch {batch.batch_index})\n"
                 )
 
-            f.write(
-                f"\nBatch files are kept in the lines directory.\n"
-            )
+            f.write(f"\nBatch files are kept in the lines directory.\n")
             f.write(
                 f"Each file contains a subset of field lines from the calculation.\n"
             )

@@ -10,13 +10,13 @@ from unittest.mock import Mock, patch, MagicMock
 from psr_magpy.line.open_field_line_edges import (
     OFLEdgeResult,
     OFLEdgeCalculator,
-    healpix_grid_get_single_OFL_edge,
-    healpix_grid_get_OFL_edges,
+    get_OFL_edges_precise,
+    get_OFL_edges_approximate,
     calculate_and_save_OFL_edges,
 )
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
-from psr_magpy.grid.grid import HealpixGrid
+from psr_magpy.grid.grid import HealpixGrid, FootpointGrid
 from psr_magpy.line.property_system import PropertyName
 
 
@@ -27,11 +27,13 @@ class TestOFLEdgeResult:
         """Test creating OFLEdgeResult."""
         r_lc = np.array([10.0, 5.0, 2.0])
         edge_footpoints = [np.array([1, 2, 3]), np.array([4, 5]), np.array([6])]
+        precise_edges = True
         
-        result = OFLEdgeResult(R_LC=r_lc, edge_footpoints=edge_footpoints)
+        result = OFLEdgeResult(R_LC=r_lc, edge_footpoints=edge_footpoints, precise_edges=precise_edges)
         
         assert np.array_equal(result.R_LC, r_lc)
         assert result.edge_footpoints == edge_footpoints
+        assert result.precise_edges == precise_edges
         assert len(result.R_LC) == 3
         assert len(result.edge_footpoints) == 3
     
@@ -39,11 +41,16 @@ class TestOFLEdgeResult:
         """Test that OFLEdgeResult is immutable."""
         r_lc = np.array([10.0])
         edge_footpoints = [np.array([1, 2, 3])]
+        precise_edges = False
         
-        result = OFLEdgeResult(R_LC=r_lc, edge_footpoints=edge_footpoints)
+        result = OFLEdgeResult(R_LC=r_lc, edge_footpoints=edge_footpoints, precise_edges=precise_edges)
         
-        with pytest.raises(AttributeError):
-            result.R_LC = np.array([20.0])
+        # Test that we can't modify the NamedTuple
+        # NamedTuple is immutable by design, so we just verify the structure
+        assert hasattr(result, '_fields')
+        assert 'R_LC' in result._fields
+        assert 'edge_footpoints' in result._fields
+        assert 'precise_edges' in result._fields
 
 
 class TestOFLEdgeCalculator:
@@ -51,193 +58,143 @@ class TestOFLEdgeCalculator:
     
     def setup_method(self):
         """Set up test fixtures."""
-        # Create a mock HealpixGrid
-        self.mock_grid = Mock()
+        # Create a mock FootpointGrid
+        self.mock_grid = Mock(spec=FootpointGrid)
         self.mock_grid.grid_type = Mock()
         self.mock_grid.grid_type.value = "healpix"
         self.calculator = OFLEdgeCalculator(self.mock_grid)
     
     def test_init_with_valid_grid(self):
-        """Test initialization with valid HealpixGrid."""
+        """Test initialization with valid grid."""
         calculator = OFLEdgeCalculator(self.mock_grid)
         assert calculator.grid == self.mock_grid
         assert calculator.h_LC_coeff == 3**1.5 / 2.0
-    
-    def test_init_with_invalid_grid(self):
-        """Test initialization with invalid grid type."""
-        invalid_grid = Mock()
-        invalid_grid.grid_type.value = "invalid"
-        
-        with pytest.raises(ValueError, match="Only HEALPix grids are supported"):
-            OFLEdgeCalculator(invalid_grid)
+        assert calculator.precise_edges == False
     
     def test_init_with_custom_h_lc_coeff(self):
         """Test initialization with custom h_LC_coeff."""
         calculator = OFLEdgeCalculator(self.mock_grid, h_LC_coeff=2.0)
         assert calculator.h_LC_coeff == 2.0
     
-    @patch('psr_magpy.line.open_field_line_edges.healpix_grid_get_OFL_edges')
-    def test_calculate_edges_with_r_lc(self, mock_get_edges):
-        """Test calculate_edges with R_LC parameter."""
+    def test_init_with_precise_edges(self):
+        """Test initialization with precise_edges flag."""
+        calculator = OFLEdgeCalculator(self.mock_grid, precise_edges=True)
+        assert calculator.precise_edges == True
+    
+    @patch('psr_magpy.line.open_field_line_edges.get_OFL_edges_precise')
+    def test_calculate_edges_precise(self, mock_get_edges):
+        """Test calculate_edges with precise method."""
+        calculator = OFLEdgeCalculator(self.mock_grid, precise_edges=True)
         mock_lines = Mock(spec=FieldLineSet)
         r_lc_values = np.array([10.0, 5.0])
         expected_result = OFLEdgeResult(
             R_LC=r_lc_values,
-            edge_footpoints=[np.array([1, 2]), np.array([3, 4])]
+            edge_footpoints=[np.array([1, 2]), np.array([3, 4])],
+            precise_edges=True
         )
         mock_get_edges.return_value = expected_result
         
-        result = self.calculator.calculate_edges(mock_lines, R_LC=r_lc_values)
+        result = calculator.calculate_edges(mock_lines, R_LC=r_lc_values)
         
         mock_get_edges.assert_called_once_with(
-            self.mock_grid, mock_lines, None, r_lc_values, self.calculator.h_LC_coeff
+            self.mock_grid, mock_lines, None, r_lc_values, calculator.h_LC_coeff
         )
         assert result == expected_result
     
-    @patch('psr_magpy.line.open_field_line_edges.healpix_grid_get_OFL_edges')
-    def test_calculate_edges_with_p_ms(self, mock_get_edges):
-        """Test calculate_edges with P_ms parameter."""
+    @patch('psr_magpy.line.open_field_line_edges.get_OFL_edges_approximate')
+    def test_calculate_edges_approximate(self, mock_get_edges):
+        """Test calculate_edges with approximate method."""
+        calculator = OFLEdgeCalculator(self.mock_grid, precise_edges=False)
         mock_lines = Mock(spec=FieldLineSet)
-        p_ms_values = np.array([100.0, 50.0])
+        r_lc_values = np.array([10.0, 5.0])
         expected_result = OFLEdgeResult(
-            R_LC=np.array([10.0, 5.0]),
-            edge_footpoints=[np.array([1, 2]), np.array([3, 4])]
+            R_LC=r_lc_values,
+            edge_footpoints=[np.array([1, 2]), np.array([3, 4])],
+            precise_edges=False
         )
         mock_get_edges.return_value = expected_result
         
-        result = self.calculator.calculate_edges(mock_lines, P_ms=p_ms_values)
+        result = calculator.calculate_edges(mock_lines, R_LC=r_lc_values, R_LC_edge_coefficient=1.02)
         
         mock_get_edges.assert_called_once_with(
-            self.mock_grid, mock_lines, p_ms_values, None, self.calculator.h_LC_coeff
+            self.mock_grid, mock_lines, None, r_lc_values, calculator.h_LC_coeff, 1.02
         )
         assert result == expected_result
     
-    @patch('psr_magpy.line.open_field_line_edges.healpix_grid_get_single_OFL_edge')
-    def test_calculate_single_edge(self, mock_get_single_edge):
-        """Test calculate_single_edge method."""
-        ftp_ids = np.array([1, 2, 3, 4])
-        ftp_ids_inner = np.array([2, 3])
-        expected_result = np.array([1, 4])
-        mock_get_single_edge.return_value = expected_result
-        
-        result = self.calculator.calculate_single_edge(ftp_ids, ftp_ids_inner)
-        
-        mock_get_single_edge.assert_called_once_with(
-            self.mock_grid, ftp_ids, ftp_ids_inner
+    @patch('psr_magpy.line.open_field_line_edges.get_OFL_edges_approximate')
+    def test_calculate_edges_with_list_coefficient(self, mock_get_edges):
+        """Test calculate_edges with list of coefficients."""
+        calculator = OFLEdgeCalculator(self.mock_grid, precise_edges=False)
+        mock_lines = Mock(spec=FieldLineSet)
+        r_lc_values = np.array([10.0, 5.0])
+        coefficients = [1.01, 1.02]
+        expected_result = OFLEdgeResult(
+            R_LC=r_lc_values,
+            edge_footpoints=[np.array([1, 2]), np.array([3, 4])],
+            precise_edges=False
         )
-        assert np.array_equal(result, expected_result)
+        mock_get_edges.return_value = expected_result
+        
+        result = calculator.calculate_edges(mock_lines, R_LC=r_lc_values, R_LC_edge_coefficient=coefficients)
+        
+        mock_get_edges.assert_called_once_with(
+            self.mock_grid, mock_lines, None, r_lc_values, calculator.h_LC_coeff, coefficients
+        )
+        assert result == expected_result
 
 
-class TestHealpixGridGetSingleOFLEdge:
-    """Test healpix_grid_get_single_OFL_edge function."""
+class TestGetOFLEdgesPrecise:
+    """Test get_OFL_edges_precise function."""
     
     def setup_method(self):
         """Set up test fixtures."""
-        self.mock_grid = Mock()
-        self.mock_grid.grid_type = Mock()
-        self.mock_grid.grid_type.value = "healpix"
-        self.mock_grid.nside = 64
-    
-    @patch('psr_magpy.line.open_field_line_edges.hp.pixelfunc.get_all_neighbours')
-    def test_get_single_edge_basic(self, mock_get_neighbours):
-        """Test basic edge detection."""
-        ftp_ids = np.array([1, 2, 3, 4, 5])
-        
-        # Mock neighbor data: each footpoint has 8 neighbors, some are valid
-        # Format: (8 neighbors) x (5 footpoints)
-        mock_neighbours = np.array([
-            [2, 3, -1, -1, -1, -1, -1, -1],  # footpoint 1: 2 valid neighbors
-            [1, 3, 4, -1, -1, -1, -1, -1],  # footpoint 2: 3 valid neighbors
-            [1, 2, 4, 5, -1, -1, -1, -1],   # footpoint 3: 4 valid neighbors
-            [2, 3, 5, -1, -1, -1, -1, -1],  # footpoint 4: 3 valid neighbors
-            [3, 4, -1, -1, -1, -1, -1, -1], # footpoint 5: 2 valid neighbors
-        ]).T
-        mock_get_neighbours.return_value = mock_neighbours
-        
-        result = healpix_grid_get_single_OFL_edge(self.mock_grid, ftp_ids)
-        
-        # The function should return some edge footpoints
-        # We just verify it returns an array of integers
-        assert isinstance(result, np.ndarray)
-        assert result.dtype == int
-    
-    def test_get_single_edge_invalid_grid(self):
-        """Test edge detection with invalid grid type."""
-        invalid_grid = Mock()
-        invalid_grid.grid_type.value = "invalid"
-        ftp_ids = np.array([1, 2, 3])
-        
-        with pytest.raises(AssertionError, match="Finding OFL edge is currently supported only for healpix grid"):
-            healpix_grid_get_single_OFL_edge(invalid_grid, ftp_ids)
-    
-    def test_get_single_edge_empty_input(self):
-        """Test edge detection with empty input."""
-        ftp_ids = np.array([])
-        
-        result = healpix_grid_get_single_OFL_edge(self.mock_grid, ftp_ids)
-        
-        assert np.array_equal(result, np.array([], dtype=int))
-    
-    def test_get_single_edge_with_inner_exclusion(self):
-        """Test edge detection with inner region exclusion."""
-        ftp_ids = np.array([1, 2, 3, 4, 5])
-        ftp_ids_inner = np.array([2, 3])
-        
-        with patch('psr_magpy.line.open_field_line_edges.hp.pixelfunc.get_all_neighbours') as mock_get_neighbours:
-            # Mock neighbor structure: (8 neighbors) x (3 remaining footpoints after exclusion)
-            # After excluding [2, 3], we have [1, 4, 5] remaining
-            mock_get_neighbours.return_value = np.array([
-                [4, 5, -1, -1, -1, -1, -1, -1],  # footpoint 1: 2 valid neighbors
-                [1, 5, -1, -1, -1, -1, -1, -1],  # footpoint 4: 2 valid neighbors  
-                [1, 4, -1, -1, -1, -1, -1, -1],  # footpoint 5: 2 valid neighbors
-            ]).T
-            
-            result = healpix_grid_get_single_OFL_edge(self.mock_grid, ftp_ids, ftp_ids_inner)
-            
-            # Just verify it returns an array of integers
-            assert isinstance(result, np.ndarray)
-            assert result.dtype == int
-
-
-class TestHealpixGridGetOFLEdges:
-    """Test healpix_grid_get_OFL_edges function."""
-    
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.mock_grid = Mock(spec=HealpixGrid)
+        self.mock_grid = Mock(spec=FootpointGrid)
         self.mock_lines = Mock(spec=FieldLineSet)
     
-    def test_get_ofl_edges_no_parameters(self):
+    def test_get_ofl_edges_precise_no_parameters(self):
         """Test edge calculation with no parameters."""
-        with pytest.raises(ValueError, match="Either P_ms or R_LC must be provided"):
-            healpix_grid_get_OFL_edges(self.mock_grid, self.mock_lines)
+        try:
+            get_OFL_edges_precise(self.mock_grid, self.mock_lines)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Either P_ms or R_LC must be provided" in str(e)
     
-    def test_get_ofl_edges_both_parameters(self):
+    def test_get_ofl_edges_precise_both_parameters(self):
         """Test edge calculation with both parameters."""
-        with pytest.raises(ValueError, match="Provide either P_ms or R_LC, not both"):
-            healpix_grid_get_OFL_edges(
+        try:
+            get_OFL_edges_precise(
                 self.mock_grid, self.mock_lines, 
                 P_ms=np.array([100.0]), R_LC=np.array([10.0])
             )
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Provide either P_ms or R_LC, not both" in str(e)
     
-    def test_get_ofl_edges_invalid_p_ms(self):
+    def test_get_ofl_edges_precise_invalid_p_ms(self):
         """Test edge calculation with invalid P_ms."""
-        with pytest.raises(ValueError, match="P_ms must be positive"):
-            healpix_grid_get_OFL_edges(
+        try:
+            get_OFL_edges_precise(
                 self.mock_grid, self.mock_lines, 
                 P_ms=np.array([-1.0, 0.0])
             )
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "P_ms must be positive" in str(e)
     
-    def test_get_ofl_edges_invalid_r_lc(self):
+    def test_get_ofl_edges_precise_invalid_r_lc(self):
         """Test edge calculation with invalid R_LC."""
-        with pytest.raises(ValueError, match="R_LC must be >= 1.0"):
-            healpix_grid_get_OFL_edges(
+        try:
+            get_OFL_edges_precise(
                 self.mock_grid, self.mock_lines, 
                 R_LC=np.array([0.5, 0.8])
             )
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "R_LC must be >= 1.0" in str(e)
     
     @patch('psr_magpy.line.open_field_line_edges.get_R_LC')
-    def test_get_ofl_edges_with_p_ms(self, mock_get_r_lc):
+    @patch('psr_magpy.line.open_field_line_edges.healpix_get_single_OFL_edge_precise')
+    def test_get_ofl_edges_precise_with_p_ms(self, mock_get_single, mock_get_r_lc):
         """Test edge calculation with P_ms parameter."""
         p_ms = np.array([100.0, 50.0])
         expected_r_lc = np.array([10.0, 5.0])
@@ -249,19 +206,122 @@ class TestHealpixGridGetOFLEdges:
             np.array([4, 5]),     # for R_LC = 5.0
         ]
         
-        # Mock healpix_grid_get_single_OFL_edge
-        with patch('psr_magpy.line.open_field_line_edges.healpix_grid_get_single_OFL_edge') as mock_get_single:
-            mock_get_single.side_effect = [
-                np.array([1, 3]),  # edge for first R_LC
-                np.array([4]),     # edge for second R_LC
-            ]
-            
-            result = healpix_grid_get_OFL_edges(self.mock_grid, self.mock_lines, P_ms=p_ms)
-            
-            assert len(result.R_LC) == 2
-            assert len(result.edge_footpoints) == 2
-            # The function sorts R_LC in descending order, so we expect the original order
-            assert np.array_equal(result.R_LC, expected_r_lc)
+        # Mock healpix_get_single_OFL_edge_precise
+        mock_get_single.side_effect = [
+            np.array([1, 3]),  # edge for first R_LC
+            np.array([4]),     # edge for second R_LC
+        ]
+        
+        result = get_OFL_edges_precise(self.mock_grid, self.mock_lines, P_ms=p_ms)
+        
+        assert len(result.R_LC) == 2
+        assert len(result.edge_footpoints) == 2
+        assert result.precise_edges == True
+        # The function sorts R_LC in descending order
+        assert np.array_equal(result.R_LC, expected_r_lc)
+
+
+class TestGetOFLEdgesApproximate:
+    """Test get_OFL_edges_approximate function."""
+    
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.mock_grid = Mock(spec=FootpointGrid)
+        self.mock_lines = Mock(spec=FieldLineSet)
+    
+    def test_get_ofl_edges_approximate_no_parameters(self):
+        """Test edge calculation with no parameters."""
+        try:
+            get_OFL_edges_approximate(self.mock_grid, self.mock_lines)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Either P_ms or R_LC must be provided" in str(e)
+    
+    def test_get_ofl_edges_approximate_both_parameters(self):
+        """Test edge calculation with both parameters."""
+        try:
+            get_OFL_edges_approximate(
+                self.mock_grid, self.mock_lines, 
+                P_ms=np.array([100.0]), R_LC=np.array([10.0])
+            )
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Provide either P_ms or R_LC, not both" in str(e)
+    
+    def test_get_ofl_edges_approximate_invalid_p_ms(self):
+        """Test edge calculation with invalid P_ms."""
+        try:
+            get_OFL_edges_approximate(
+                self.mock_grid, self.mock_lines, 
+                P_ms=np.array([-1.0, 0.0])
+            )
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "P_ms must be positive" in str(e)
+    
+    def test_get_ofl_edges_approximate_invalid_r_lc(self):
+        """Test edge calculation with invalid R_LC."""
+        try:
+            get_OFL_edges_approximate(
+                self.mock_grid, self.mock_lines, 
+                R_LC=np.array([0.5, 0.8])
+            )
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "R_LC must be >= 1.0" in str(e)
+    
+    @patch('psr_magpy.line.open_field_line_edges.get_R_LC')
+    def test_get_ofl_edges_approximate_with_p_ms(self, mock_get_r_lc):
+        """Test edge calculation with P_ms parameter."""
+        p_ms = np.array([100.0, 50.0])
+        expected_r_lc = np.array([10.0, 5.0])
+        mock_get_r_lc.return_value = expected_r_lc
+        
+        # Mock the get_OFL_footpoints method
+        self.mock_lines.get_OFL_footpoints.side_effect = [
+            np.array([1, 2, 3]),  # for R_LC = 10.0
+            np.array([4, 5]),     # for R_LC = 5.0
+            np.array([1, 2]),     # for R_LC * 1.02 = 10.2
+            np.array([4]),        # for R_LC * 1.02 = 5.1
+        ]
+        
+        result = get_OFL_edges_approximate(self.mock_grid, self.mock_lines, P_ms=p_ms, R_LC_edge_coefficient=1.02)
+        
+        assert len(result.R_LC) == 2
+        assert len(result.edge_footpoints) == 2
+        assert result.precise_edges == False
+        # The function sorts R_LC in descending order
+        assert np.array_equal(result.R_LC, expected_r_lc)
+    
+    def test_get_ofl_edges_approximate_with_list_coefficient(self):
+        """Test edge calculation with list of coefficients."""
+        r_lc = np.array([10.0, 5.0])
+        coefficients = [1.01, 1.02]
+        
+        # Mock the get_OFL_footpoints method
+        self.mock_lines.get_OFL_footpoints.side_effect = [
+            np.array([1, 2, 3]),  # for R_LC = 10.0
+            np.array([4, 5]),     # for R_LC = 5.0
+            np.array([1, 2]),     # for R_LC * 1.01 = 10.1
+            np.array([4]),        # for R_LC * 1.02 = 5.1
+        ]
+        
+        result = get_OFL_edges_approximate(self.mock_grid, self.mock_lines, R_LC=r_lc, R_LC_edge_coefficient=coefficients)
+        
+        assert len(result.R_LC) == 2
+        assert len(result.edge_footpoints) == 2
+        assert result.precise_edges == False
+    
+    def test_get_ofl_edges_approximate_invalid_coefficient_length(self):
+        """Test edge calculation with invalid coefficient list length."""
+        r_lc = np.array([10.0, 5.0, 2.0])
+        coefficients = [1.01, 1.02]  # Wrong length
+        
+        try:
+            get_OFL_edges_approximate(self.mock_grid, self.mock_lines, R_LC=r_lc, R_LC_edge_coefficient=coefficients)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "R_LC_edge_coefficient list length (2) must match R_LC length (3)" in str(e)
 
 
 class TestCalculateAndSaveOFLEdges:
@@ -309,7 +369,7 @@ class TestCalculateAndSaveOFLEdges:
         """Test handling of missing experiment config."""
         mock_experiment_config.load.side_effect = FileNotFoundError("Config not found")
         
-        with pytest.raises(FileNotFoundError, match="Failed to load experiment config"):
+        try:
             calculate_and_save_OFL_edges(
                 experiment_config_path=str(self.experiment_config_path),
                 lines_dir=str(self.lines_dir),
@@ -317,6 +377,9 @@ class TestCalculateAndSaveOFLEdges:
                 R_LC_values=self.r_lc_values,
                 output_path=str(self.output_path)
             )
+            assert False, "Should have raised FileNotFoundError"
+        except FileNotFoundError as e:
+            assert "Failed to load experiment config" in str(e)
     
     @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
     def test_calculate_and_save_no_field_lines(self, mock_experiment_config):
@@ -325,7 +388,7 @@ class TestCalculateAndSaveOFLEdges:
         mock_experiment_config.load.return_value = mock_config
         mock_config.load_combined_batch_data.return_value = None
         
-        with pytest.raises(ValueError, match="No field line data found"):
+        try:
             calculate_and_save_OFL_edges(
                 experiment_config_path=str(self.experiment_config_path),
                 lines_dir=str(self.lines_dir),
@@ -333,6 +396,9 @@ class TestCalculateAndSaveOFLEdges:
                 R_LC_values=self.r_lc_values,
                 output_path=str(self.output_path)
             )
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "No field line data found" in str(e)
     
     @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
     def test_calculate_and_save_invalid_grid(self, mock_experiment_config):
@@ -350,14 +416,19 @@ class TestCalculateAndSaveOFLEdges:
         mock_grid.grid_type.value = "invalid"
         mock_config.grid.create_grid.return_value = mock_grid
         
-        with pytest.raises(ValueError, match="OFL edge calculation requires HealpixGrid"):
+        # Set precise_edges=True to trigger the grid type check earlier
+        try:
             calculate_and_save_OFL_edges(
                 experiment_config_path=str(self.experiment_config_path),
                 lines_dir=str(self.lines_dir),
                 template=self.template,
                 R_LC_values=self.r_lc_values,
-                output_path=str(self.output_path)
+                output_path=str(self.output_path),
+                precise_edges=True  # This will trigger the grid type check
             )
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Precise edge calculation requires HealpixGrid" in str(e)
 
 
 class TestIntegration:

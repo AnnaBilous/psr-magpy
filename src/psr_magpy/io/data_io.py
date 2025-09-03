@@ -23,8 +23,8 @@ class FitsIO(DataIO):
     def save(self, data: Any, path: Union[str, Path], **kwargs) -> None:
         """Save data to FITS file with validation and recovery."""
         # Set overwrite=True by default
-        kwargs.setdefault('overwrite', True)
-        
+        kwargs.setdefault("overwrite", True)
+
         # Validate with recovery options
         if not self.validate_with_recovery(data, path, "save", **kwargs):
             error_msg = f"Validation failed for save operation: {path}"
@@ -120,7 +120,14 @@ class FieldLineSetIO(FitsIO):
 
         # Set ARRAY_LIST_PROPERTIES if not already set
         if not self.ARRAY_LIST_PROPERTIES:
-            self.ARRAY_LIST_PROPERTIES = [PropertyName.R_LINE, PropertyName.PA_LINE, PropertyName.B_LINE, PropertyName.CURVATURE_LINE, PropertyName.TANGENT_THETA, PropertyName.TANGENT_PHI]
+            self.ARRAY_LIST_PROPERTIES = [
+                PropertyName.R_LINE,
+                PropertyName.PA_LINE,
+                PropertyName.B_LINE,
+                PropertyName.CURVATURE_LINE,
+                PropertyName.TANGENT_THETA,
+                PropertyName.TANGENT_PHI,
+            ]
 
         # Generate column information
         column_info = self._generate_column_info()
@@ -134,9 +141,9 @@ class FieldLineSetIO(FitsIO):
 
         # Create HDU
         hdu = fits.BinTableHDU.from_columns(columns, name="FIELD_LINES")
-        
+
         # Add user-specified keywords to header if provided
-        if hasattr(self, 'header_keywords') and self.header_keywords:
+        if hasattr(self, "header_keywords") and self.header_keywords:
             for keyword, value in self.header_keywords.items():
                 if isinstance(value, tuple) and len(value) == 2:
                     # Value is (value, comment) tuple
@@ -145,7 +152,7 @@ class FieldLineSetIO(FitsIO):
                     # Value is just the value
                     hdu.header[keyword] = value
                 logger.debug(f"Added keyword to header: {keyword} = {value}")
-        
+
         return fits.HDUList([fits.PrimaryHDU(), hdu])
 
     def _generate_column_info(self) -> dict:
@@ -180,7 +187,7 @@ class FieldLineSetIO(FitsIO):
     def add_header_keyword(self, keyword: str, value, comment: Optional[str] = None):
         """
         Add a keyword to the FITS header.
-        
+
         Args:
             keyword: Header keyword name
             value: Header keyword value
@@ -209,7 +216,7 @@ class FieldLineSetIO(FitsIO):
         column_names = [col.name.upper() for col in hdu.columns]
 
         # Check if template is provided in kwargs
-        template = kwargs.get('template')
+        template = kwargs.get("template")
         if template is not None:
             # Validate that all required columns from template exist in FITS file
             missing_columns = []
@@ -217,13 +224,15 @@ class FieldLineSetIO(FitsIO):
                 if getattr(template.save_flags, prop.flag_name):
                     if prop.name not in column_names:
                         missing_columns.append(prop.name)
-            
+
             if missing_columns:
                 error_msg = f"Template requires columns that are missing from FITS file: {missing_columns}"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
-            
-            logger.debug(f"Using provided template with enabled properties: {template.property_system.get_enabled_property_names()}")
+
+            logger.debug(
+                f"Using provided template with enabled properties: {template.property_system.get_enabled_property_names()}"
+            )
         else:
             # Create template based on column names (original behavior)
             template = FieldLine()
@@ -239,12 +248,14 @@ class FieldLineSetIO(FitsIO):
         for col in hdu.columns:
             try:
                 prop = PropertyName[col.name.upper()]
-                
+
                 # Only load properties that are enabled in the template
                 if not getattr(template.save_flags, prop.flag_name):
-                    logger.debug(f"Skipping property {prop.key_name} (not enabled in template)")
+                    logger.debug(
+                        f"Skipping property {prop.key_name} (not enabled in template)"
+                    )
                     continue
-                
+
                 data = hdu.data[col.name]
 
                 # Special handling for array list properties

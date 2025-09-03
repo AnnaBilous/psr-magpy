@@ -30,8 +30,12 @@ class FieldLineCalculator:
     def __init__(self, context: CalculationContext):
         """Initialize the calculator with the given context."""
         self.context = context
-        self.global_max_reversed_error = 0.0  # Track maximum reversed error across all batches
-        self.global_max_dotprod_error = 0.0   # Track maximum dotprod error across all batches
+        self.global_max_reversed_error = (
+            0.0  # Track maximum reversed error across all batches
+        )
+        self.global_max_dotprod_error = (
+            0.0  # Track maximum dotprod error across all batches
+        )
         logger.debug("Initialized FieldLineCalculator")
 
     def get_field_lines(
@@ -94,32 +98,42 @@ class FieldLineCalculator:
 
         # Extract necessary attributes before saving
         n_field_lines = results.n_field_lines if results is not None else 0
-        
+
         # Aggregate errors from all batches in memory
         error_msg = None
-        
+
         # Check global maximum reversed error from all batches
-        if self.global_max_reversed_error > self.context.params.integration.reversed_error_threshold:
+        if (
+            self.global_max_reversed_error
+            > self.context.params.integration.reversed_error_threshold
+        ):
             error_msg = f"Reversed error ({self.global_max_reversed_error:.3f}) exceeds threshold ({self.context.params.integration.reversed_error_threshold:.3f})"
             logger.warning(error_msg)
         # Check global maximum dotprod error from all batches
-        elif self.global_max_dotprod_error > self.context.params.integration.dotprod_error_threshold:
+        elif (
+            self.global_max_dotprod_error
+            > self.context.params.integration.dotprod_error_threshold
+        ):
             error_msg = f"Dotprod error ({self.global_max_dotprod_error:.3f}) exceeds threshold ({self.context.params.integration.dotprod_error_threshold:.3f})"
             logger.warning(error_msg)
         elif results is not None:
             # Check for dotprod errors in the final results (fallback)
             if hasattr(results, "dotprod_error"):
                 error_msg = results.dotprod_error
-            
+
             # Also check for dotprod errors in memory manager if results are aggregated
             memory_results = self.context.memory_manager.results_in_memory
-            if (memory_results is not None and memory_results != results and 
-                hasattr(memory_results, "dotprod_error") and memory_results.dotprod_error):
+            if (
+                memory_results is not None
+                and memory_results != results
+                and hasattr(memory_results, "dotprod_error")
+                and memory_results.dotprod_error
+            ):
                 error_msg = memory_results.dotprod_error
 
         # Results are saved in the final batch handling, not here
         # This prevents duplicate saving
-            
+
         self.context.progress_tracker.log_calculation_completion(
             elapsed,
             self.context.params.output.save_results_to_disk,
@@ -129,16 +143,25 @@ class FieldLineCalculator:
         )
 
         # Return results based on configuration
-        if self.context.params.output.keep_results_in_memory and self.context.memory_manager.results_in_memory is not None:
+        if (
+            self.context.params.output.keep_results_in_memory
+            and self.context.memory_manager.results_in_memory is not None
+        ):
             # Return full results in memory
-            logger.info("Returning full results in memory (keep_results_in_memory=True)")
+            logger.info(
+                "Returning full results in memory (keep_results_in_memory=True)"
+            )
             return self.context.memory_manager.results_in_memory
         else:
             # Return lightweight result object
             return LightFieldLineSet(
                 n_field_lines=n_field_lines,
-                reversed_error_warning=error_msg if error_msg and "Reversed error" in error_msg else None,
-                dotprod_error=error_msg if error_msg and "dotprod_error" in error_msg else None
+                reversed_error_warning=(
+                    error_msg if error_msg and "Reversed error" in error_msg else None
+                ),
+                dotprod_error=(
+                    error_msg if error_msg and "dotprod_error" in error_msg else None
+                ),
             )
 
     def _process_in_batches(self, template: FieldLine, batch_size: int) -> None:
@@ -172,18 +195,32 @@ class FieldLineCalculator:
 
             batch_grid = self.context.grid.subset_grid(batch_indices)
             batch_results = self._process_batch(batch_grid, template)
-            
+
             # Track global maximum reversed error from this batch
-            if hasattr(batch_results, "reversed_error") and batch_results.reversed_error is not None:
+            if (
+                hasattr(batch_results, "reversed_error")
+                and batch_results.reversed_error is not None
+            ):
                 batch_max_error = float(np.max(batch_results.reversed_error))
-                self.global_max_reversed_error = max(self.global_max_reversed_error, batch_max_error)
-                logger.debug(f"Batch {batch_idx}: max reversed error = {batch_max_error:.6f}, global max = {self.global_max_reversed_error:.6f}")
-            
+                self.global_max_reversed_error = max(
+                    self.global_max_reversed_error, batch_max_error
+                )
+                logger.debug(
+                    f"Batch {batch_idx}: max reversed error = {batch_max_error:.6f}, global max = {self.global_max_reversed_error:.6f}"
+                )
+
             # Track global maximum dotprod error from this batch
-            if hasattr(batch_results, "dotprod_error") and batch_results.dotprod_error is not None:
+            if (
+                hasattr(batch_results, "dotprod_error")
+                and batch_results.dotprod_error is not None
+            ):
                 batch_max_error = float(np.max(batch_results.dotprod_error))
-                self.global_max_dotprod_error = max(self.global_max_dotprod_error, batch_max_error)
-                logger.debug(f"Batch {batch_idx}: max dotprod error = {batch_max_error:.6f}, global max = {self.global_max_dotprod_error:.6f}")
+                self.global_max_dotprod_error = max(
+                    self.global_max_dotprod_error, batch_max_error
+                )
+                logger.debug(
+                    f"Batch {batch_idx}: max dotprod error = {batch_max_error:.6f}, global max = {self.global_max_dotprod_error:.6f}"
+                )
 
             self.context.add_results(
                 batch_results, self.context.params.output.filename or "", batch_idx
@@ -205,32 +242,37 @@ class FieldLineCalculator:
 
         # Close progress bar
         progress_bar.close()
-        
+
         # Handle final batch and rename batch files after all batches are processed
         if self.context.params.output.save_results_to_disk:
             filename = self.context.params.output.filename
             if filename:
                 # Write final results in memory to disk (if any)
-                if (self.context.memory_manager.results_in_memory is not None and 
-                    self.context.memory_manager.results_in_memory.n_field_lines > 0):
-                    
+                if (
+                    self.context.memory_manager.results_in_memory is not None
+                    and self.context.memory_manager.results_in_memory.n_field_lines > 0
+                ):
+
                     # Write final batch with proper batch number
                     filename_path = Path(filename)
                     final_batch_filename = (
-                        filename_path.parent / f"{filename_path.stem}_batch_{batch_idx:03d}.fits"
+                        filename_path.parent
+                        / f"{filename_path.stem}_batch_{batch_idx:03d}.fits"
                     )
-                    
+
                     # Save final batch
                     get_io_factory().save_data(
-                        self.context.memory_manager.results_in_memory, 
-                        final_batch_filename, 
-                        overwrite=True
+                        self.context.memory_manager.results_in_memory,
+                        final_batch_filename,
+                        overwrite=True,
                     )
-                    logger.info(f"Wrote final batch with {self.context.memory_manager.results_in_memory.n_field_lines} field lines to {final_batch_filename}")
-                    
+                    logger.info(
+                        f"Wrote final batch with {self.context.memory_manager.results_in_memory.n_field_lines} field lines to {final_batch_filename}"
+                    )
+
                     # Mark that batch files were created
                     self.context.memory_manager._batch_files_created = True
-                
+
                 # Then: Rename all batch files (after all batches are written)
                 if self.context.memory_manager.batch_files_created:
                     self.context.memory_manager.rename_batch_files(

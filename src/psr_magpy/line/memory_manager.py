@@ -67,7 +67,9 @@ class MemoryManager:
     ) -> Tuple[float, float]:
         """Estimate memory requirements using simplified heuristics."""
         logger.info(f"Estimating memory requirements with {n_trial} trial lines")
-        logger.info(f"DEBUG: MemoryManager config.max_memory_mb = {self.config.max_memory_mb}")
+        logger.info(
+            f"DEBUG: MemoryManager config.max_memory_mb = {self.config.max_memory_mb}"
+        )
         time_start = time.time()
 
         if grid.nline is None:
@@ -94,7 +96,7 @@ class MemoryManager:
         trial_indices = np.random.choice(grid.nline, size=n_trial, replace=False)
         trial_grid = grid.subset_grid(trial_indices)
         trial_results = self._process_trial_batch(trial_grid, template, temp_tracer)
- 
+
         # Calculate size per line
         trial_size = trial_results.estimate_size() / n_trial
         trial_size_mb = trial_size / (1024 * 1024)
@@ -113,8 +115,12 @@ class MemoryManager:
     ) -> int:
         """Calculate optimal batch size using max_memory_mb / batch_size_safety_factor."""
         # Use max_memory_mb divided by safety factor for batch size calculation
-        logger.info(f"DEBUG: calculate_batch_size - config.max_memory_mb = {self.config.max_memory_mb}")
-        batch_memory_mb = self.config.max_memory_mb / self.config.batch_size_safety_factor
+        logger.info(
+            f"DEBUG: calculate_batch_size - config.max_memory_mb = {self.config.max_memory_mb}"
+        )
+        batch_memory_mb = (
+            self.config.max_memory_mb / self.config.batch_size_safety_factor
+        )
         estimated_line_size_mb = estimated_line_size / (1024 * 1024)
         batch_size = int(batch_memory_mb / estimated_line_size_mb)
         batch_size = min(batch_size, self.config.max_batch_size)
@@ -130,7 +136,7 @@ class MemoryManager:
             f"estimated_line_size_mb={estimated_line_size_mb:.6f}, "
             f"batch_size={batch_size} lines ({batch_size * estimated_line_size_mb:.1f} MB)"
         )
-        
+
         return batch_size
 
     def add_results(
@@ -148,7 +154,11 @@ class MemoryManager:
         memory_mb = self._results_in_memory_size / (1024 * 1024)
 
         # Check against the configured max_memory_mb threshold
-        if self.save_results_to_disk and memory_mb > self.config.max_memory_mb and not self.keep_results_in_memory:
+        if (
+            self.save_results_to_disk
+            and memory_mb > self.config.max_memory_mb
+            and not self.keep_results_in_memory
+        ):
             logger.info(
                 f"Memory threshold reached ({memory_mb:.1f} MB > {self.config.max_memory_mb:.1f} MB), writing to disk"
             )
@@ -220,7 +230,9 @@ class MemoryManager:
         )
 
         # Write to FITS using new I/O system
-        get_io_factory().save_data(self._results_in_memory, batch_filename, overwrite=True)
+        get_io_factory().save_data(
+            self._results_in_memory, batch_filename, overwrite=True
+        )
 
         logger.info(
             f"Wrote {self._results_in_memory.n_field_lines} field lines to {batch_filename}"
@@ -262,8 +274,12 @@ class MemoryManager:
             # Check if organization failed or no files were found
             batch_files = batch_manager.find_batch_files()
             if batch_files:
-                logger.warning("Batch file organization failed, but batch files are still available")
-                logger.warning("Batch files remain in their original location with temporary names")
+                logger.warning(
+                    "Batch file organization failed, but batch files are still available"
+                )
+                logger.warning(
+                    "Batch files remain in their original location with temporary names"
+                )
                 # Still provide summary of available files
                 summary = batch_manager.get_batch_summary()
                 logger.info(

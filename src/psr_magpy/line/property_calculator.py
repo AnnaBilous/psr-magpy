@@ -20,7 +20,7 @@ class PropertyCalculator:
 
     def __init__(self, threshold_line_distance: float, field=None):
         """Initialize property calculator.
-        
+
         Args:
             threshold_line_distance: Distance threshold for line tracing
             field: Magnetic field object for calculating B_line and curvature_line
@@ -50,12 +50,14 @@ class PropertyCalculator:
         )
 
         # Pre-calculate tangent vector if needed for any property
-        needs_tangent = any([
-            getattr(template.save_flags, PropertyName.PA_LINE.flag_name),
-            getattr(template.save_flags, PropertyName.TANGENT_THETA.flag_name),
-            getattr(template.save_flags, PropertyName.TANGENT_PHI.flag_name)
-        ])
-        
+        needs_tangent = any(
+            [
+                getattr(template.save_flags, PropertyName.PA_LINE.flag_name),
+                getattr(template.save_flags, PropertyName.TANGENT_THETA.flag_name),
+                getattr(template.save_flags, PropertyName.TANGENT_PHI.flag_name),
+            ]
+        )
+
         tangent_norm = None
         if needs_tangent and line_R_max >= self.threshold_line_distance:
             t = np.gradient(r, axis=1)
@@ -107,7 +109,9 @@ class PropertyCalculator:
                 else:
                     props[prop.key_name] = None
             elif prop.key_name == "pa_line":
-                props[prop.key_name] = self.prep_pa_line(r, K, line_R_max, template, tangent_norm)
+                props[prop.key_name] = self.prep_pa_line(
+                    r, K, line_R_max, template, tangent_norm
+                )
             elif prop.key_name == "curvature_line":
                 if getattr(template.save_flags, prop.flag_name):
                     curvature = self.prep_curvature_line(r, dt, line_R_max, template)
@@ -115,10 +119,13 @@ class PropertyCalculator:
                 else:
                     props[prop.key_name] = None
             elif prop.key_name == "tangent_theta":
-                props[prop.key_name] = self.prep_tangent_theta(r, line_R_max, template, tangent_norm)
+                props[prop.key_name] = self.prep_tangent_theta(
+                    r, line_R_max, template, tangent_norm
+                )
             elif prop.key_name == "tangent_phi":
-                props[prop.key_name] = self.prep_tangent_phi(r, line_R_max, template, tangent_norm)
-                
+                props[prop.key_name] = self.prep_tangent_phi(
+                    r, line_R_max, template, tangent_norm
+                )
 
         # Remove None values from kwargs
         props = {k: v for k, v in props.items() if v is not None}
@@ -157,13 +164,13 @@ class PropertyCalculator:
         """
         if getattr(template.save_flags, PropertyName.CURVATURE_LINE.flag_name):
             if line_R_max >= self.threshold_line_distance:
-                eps=1e-12
+                eps = 1e-12
                 R = r.T
-        
+
                 # First and second derivatives wrt t (uniform spacing)
                 # Use edge_order=1 for small arrays to avoid requiring 3+ points
                 edge_order = 1 if R.shape[0] < 3 else 2
-                R1 = np.gradient(R, dt, axis=0, edge_order=edge_order)   # r'(t)
+                R1 = np.gradient(R, dt, axis=0, edge_order=edge_order)  # r'(t)
                 R2 = np.gradient(R1, dt, axis=0, edge_order=edge_order)  # r''(t)
 
                 # Speed and unit tangent
@@ -174,16 +181,18 @@ class PropertyCalculator:
                 cross12 = np.cross(R1, R2)
                 cross12_norm = np.linalg.norm(cross12, axis=1)
                 kappa = np.full(R.shape[0], np.nan)
-                kappa[good_v] = cross12_norm[good_v] / (v[good_v]**3 + eps)
+                kappa[good_v] = cross12_norm[good_v] / (v[good_v] ** 3 + eps)
 
                 curvature_radius = np.full_like(kappa, np.nan)
-                good_k = (kappa > eps)
+                good_k = kappa > eps
                 curvature_radius[good_k] = 1.0 / kappa[good_k]
 
                 # Return as a list containing a single 1D array
-                logger.debug(f"Calculated curvature line with {len(curvature_radius)} points")
+                logger.debug(
+                    f"Calculated curvature line with {len(curvature_radius)} points"
+                )
                 return curvature_radius.astype(np.float32)
-                
+
             else:
                 curvature_radius = np.array([], dtype=np.float32)
                 logger.debug(
@@ -195,9 +204,13 @@ class PropertyCalculator:
             logger.debug("curvature line saving disabled")
             return curvature_radius
 
-
     def prep_pa_line(
-        self, r: np.ndarray, B_dir: float, line_R_max: float, template: FieldLine, tangent_norm: Optional[np.ndarray] = None
+        self,
+        r: np.ndarray,
+        B_dir: float,
+        line_R_max: float,
+        template: FieldLine,
+        tangent_norm: Optional[np.ndarray] = None,
     ) -> Optional[np.ndarray]:
         """Calculate position angle along the field line.
 
@@ -287,12 +300,14 @@ class PropertyCalculator:
                     for i in range(num_points):
                         point = r[:, i]  # Extract single 3D point
                         b = self.field.get_total_field(point, K=1, normalize=False)
-                        b_values[i] = np.linalg.norm(b)                 
+                        b_values[i] = np.linalg.norm(b)
                     logger.debug(f"Calculated B_line with {len(b_values)} points")
-                 
+
                 else:
                     b_values = np.array([], dtype=np.float32)
-                    logger.debug("Line did not reach threshold_line_distance, saving empty B array")
+                    logger.debug(
+                        "Line did not reach threshold_line_distance, saving empty B array"
+                    )
                 return b_values
             else:
                 logger.warning("Field object not provided, cannot calculate b_line")
@@ -302,10 +317,14 @@ class PropertyCalculator:
             return None
 
     def prep_tangent_theta(
-        self, r: np.ndarray, line_R_max: float, template: FieldLine, tangent_norm: Optional[np.ndarray] = None
+        self,
+        r: np.ndarray,
+        line_R_max: float,
+        template: FieldLine,
+        tangent_norm: Optional[np.ndarray] = None,
     ) -> Optional[np.ndarray]:
         """Calculate theta (colatitude) of tangent vector along the field line.
-        
+
         Returns theta angle in radians for each point along the field line.
         """
         if getattr(template.save_flags, PropertyName.TANGENT_THETA.flag_name):
@@ -323,7 +342,7 @@ class PropertyCalculator:
                 x, y, z = t_norm
                 r_sph = np.sqrt(x**2 + y**2 + z**2)
                 theta = np.rad2deg(np.arccos(z / np.where(r_sph == 0, 1, r_sph)))
-                
+
                 logger.debug(f"Calculated tangent theta with {len(theta)} points")
                 return theta.astype(np.float32)
             else:
@@ -337,10 +356,14 @@ class PropertyCalculator:
             return None
 
     def prep_tangent_phi(
-        self, r: np.ndarray, line_R_max: float, template: FieldLine, tangent_norm: Optional[np.ndarray] = None
+        self,
+        r: np.ndarray,
+        line_R_max: float,
+        template: FieldLine,
+        tangent_norm: Optional[np.ndarray] = None,
     ) -> Optional[np.ndarray]:
         """Calculate phi (azimuth) of tangent vector along the field line.
-        
+
         Returns phi angle in radians for each point along the field line.
         """
         if getattr(template.save_flags, PropertyName.TANGENT_PHI.flag_name):
@@ -357,7 +380,7 @@ class PropertyCalculator:
                 # Convert to spherical coordinates
                 x, y, z = t_norm
                 phi = np.rad2deg(np.arctan2(y, x))
-                
+
                 logger.debug(f"Calculated tangent phi with {len(phi)} points")
                 return phi.astype(np.float32)
             else:

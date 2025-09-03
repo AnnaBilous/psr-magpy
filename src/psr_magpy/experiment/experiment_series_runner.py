@@ -69,7 +69,11 @@ class ExperimentSeriesRunner:
     ) -> List[ExperimentResult]:
         """Run a list of experiments."""
         results: List[ExperimentResult] = []
-        lines_dir = self.output_directory / self.series_config.name / self.series_config.LINES_DIR
+        lines_dir = (
+            self.output_directory
+            / self.series_config.name
+            / self.series_config.LINES_DIR
+        )
 
         for i, experiment in enumerate(experiments, 1):
             logger.info(
@@ -104,7 +108,11 @@ class ExperimentSeriesRunner:
 
             # Save grid if requested
             if self.save_grids:
-                grids_dir = self.output_directory / self.series_config.name / self.series_config.GRIDS_DIR
+                grids_dir = (
+                    self.output_directory
+                    / self.series_config.name
+                    / self.series_config.GRIDS_DIR
+                )
                 grid = experiment.grid.create_grid()
                 if grid is not None:
                     grid_path = grids_dir / f"{experiment.name}.fits"
@@ -119,7 +127,10 @@ class ExperimentSeriesRunner:
             # Run the experiment
             exp_start_time = time.time()
             try:
-                result = cast(ExperimentResult, run_experiment(experiment, save_grids=self.save_grids))
+                result = cast(
+                    ExperimentResult,
+                    run_experiment(experiment, save_grids=self.save_grids),
+                )
                 duration = time.time() - exp_start_time
                 if result.success:
                     logger.info(
@@ -185,18 +196,18 @@ class ExperimentSeriesRunner:
             if lines_dir.exists():
                 shutil.rmtree(lines_dir)
                 logger.info("Deleted existing lines directory")
-            
+
             # Delete summary files
             summary_files = list(series_dir.glob("*_results_summary.yaml"))
             for summary_file in summary_files:
                 summary_file.unlink()
                 logger.info("Deleted existing summary file: %s", summary_file)
-        
+
         # Create directories if requested and they don't exist
         if self.create_directories:
             if not series_dir.exists():
                 series_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Create subdirectories
             for subdir in self.series_config.get_subdirectories():
                 subdir_path = series_dir / subdir
@@ -205,7 +216,9 @@ class ExperimentSeriesRunner:
             logger.info("Skipping directory creation (create_directories=False)")
 
         # Set up logging
-        log_file = series_dir / self.series_config.LOGS_DIR / f"{self.series_config.name}.log"
+        log_file = (
+            series_dir / self.series_config.LOGS_DIR / f"{self.series_config.name}.log"
+        )
         setup_logging(
             log_file=log_file,
             log_level=logging.INFO,
@@ -226,7 +239,7 @@ class ExperimentSeriesRunner:
             # Get total experiments first to know the series size
             all_experiments = self.series_config.load_experiments()
             total_experiments_in_series = len(all_experiments)
-            
+
             experiments = self._get_remaining_experiments()
             if not experiments:
                 logger.info("No remaining experiments to run")
@@ -247,10 +260,11 @@ class ExperimentSeriesRunner:
             except ValueError as e:
                 # If no experiments found and we want to save configs, create them
                 if self.save_individual_configs:
-                    logger.info("No existing experiments found, creating new experiment series")
+                    logger.info(
+                        "No existing experiments found, creating new experiment series"
+                    )
                     experiments = self.series_config.create_experiment_series(
-                        save_configs=True, 
-                        create_directories=self.create_directories
+                        save_configs=True, create_directories=self.create_directories
                     )
                     total_experiments_in_series = len(experiments)
                 else:
@@ -266,7 +280,9 @@ class ExperimentSeriesRunner:
                     continue
                 filtered_experiments.append(experiments[i])
             experiments = filtered_experiments
-            logger.info(f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total")
+            logger.info(
+                f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
+            )
 
         # Save individual configs if requested
         if self.save_individual_configs:
@@ -310,7 +326,9 @@ class ExperimentSeriesRunner:
                     }
 
         remaining_experiments = []
-        for i, exp in enumerate(self.series_config.create_experiment_series(create_directories=False)):
+        for i, exp in enumerate(
+            self.series_config.create_experiment_series(create_directories=False)
+        ):
             if exp.name not in completed_experiments or self.overwrite_experiments:
                 remaining_experiments.append(exp)
 
@@ -361,7 +379,12 @@ class ExperimentSeriesRunner:
         # Add new results
         for result in experiment_results:
             # Count batch files
-            batch_pattern = str(self.output_directory / self.series_config.name / self.series_config.LINES_DIR / f"{result.experiment_name}*batch_*_out_of_*.fits")
+            batch_pattern = str(
+                self.output_directory
+                / self.series_config.name
+                / self.series_config.LINES_DIR
+                / f"{result.experiment_name}*batch_*_out_of_*.fits"
+            )
             batch_files = glob.glob(batch_pattern)
             logger.debug(f"Batch file pattern: {batch_pattern}")
             logger.debug(f"Found batch files: {batch_files}")
@@ -372,7 +395,7 @@ class ExperimentSeriesRunner:
                 "start_time": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "duration": self._format_duration(result.duration),
                 "success": result.success,
-                "batch_files": len(batch_files)
+                "batch_files": len(batch_files),
             }
 
             # Add error message if present
@@ -408,13 +431,19 @@ class ExperimentSeriesRunner:
             "failed_experiments": sum(1 for r in sorted_results if not r["success"]),
             "total_duration": self._format_duration(
                 sum(
-                    float(r["duration"].rstrip("s")) 
-                    if r["duration"].endswith("s") 
-                    else float(r["duration"].rstrip("min")) * 60 
-                    if r["duration"].endswith("min") 
-                    else float(r["duration"].rstrip("h")) * 3600 
-                    if r["duration"].endswith("h") 
-                    else float(r["duration"].rstrip("d")) * 86400 
+                    (
+                        float(r["duration"].rstrip("s"))
+                        if r["duration"].endswith("s")
+                        else (
+                            float(r["duration"].rstrip("min")) * 60
+                            if r["duration"].endswith("min")
+                            else (
+                                float(r["duration"].rstrip("h")) * 3600
+                                if r["duration"].endswith("h")
+                                else float(r["duration"].rstrip("d")) * 86400
+                            )
+                        )
+                    )
                     for r in sorted_results
                 )
             ),
@@ -448,7 +477,11 @@ class ExperimentSeriesRunner:
     def _save_individual_configs(self, experiments: List[ExperimentConfig]) -> None:
         """Save individual experiment configurations."""
         # Use the series-specific configs directory
-        configs_dir = self.output_directory / self.series_config.name / self.series_config.CONFIGS_DIR
+        configs_dir = (
+            self.output_directory
+            / self.series_config.name
+            / self.series_config.CONFIGS_DIR
+        )
 
         logger.info(f"Saving {len(experiments)} individual configs to {configs_dir}")
 
@@ -516,19 +549,24 @@ class InMemoryExperimentSeriesRunner:
             # Run the experiment
             exp_start_time = time.time()
             try:
-                result = cast(ExperimentResult, run_experiment(experiment, save_grids=self.save_grids))
+                result = cast(
+                    ExperimentResult,
+                    run_experiment(experiment, save_grids=self.save_grids),
+                )
                 duration = time.time() - exp_start_time
-                
+
                 if result.success and result.results is not None:
                     # Estimate memory usage
                     result_memory_mb = result.results.estimate_size() / (1024 * 1024)
                     total_memory_used += result_memory_mb
-                    
+
                     logger.info(
-                        "✓ Experiment %s completed in %.2fs (%.1f MB)", 
-                        experiment.name, duration, result_memory_mb
+                        "✓ Experiment %s completed in %.2fs (%.1f MB)",
+                        experiment.name,
+                        duration,
+                        result_memory_mb,
                     )
-                    
+
                     # Check memory limit
                     if total_memory_used > self.max_memory_mb:
                         warning_msg = f"Memory usage ({total_memory_used:.1f} MB) exceeds limit ({self.max_memory_mb:.1f} MB)"
@@ -566,7 +604,7 @@ class InMemoryExperimentSeriesRunner:
             # Add result to the list (keep results in memory if requested)
             if not self.keep_results and result.results is not None:
                 result.results = None
-                
+
             results.append(result)
 
         logger.info("Total memory used: %.1f MB", total_memory_used)
@@ -577,7 +615,7 @@ class InMemoryExperimentSeriesRunner:
         # Create experiments
         experiments = self.series_config.create_experiment_series(
             save_configs=self.save_individual_configs,
-            create_directories=False  # In-memory runner doesn't need directories
+            create_directories=False,  # In-memory runner doesn't need directories
         )
         total_experiments_in_series = len(experiments)
 
@@ -590,7 +628,9 @@ class InMemoryExperimentSeriesRunner:
                     continue
                 filtered_experiments.append(experiments[i])
             experiments = filtered_experiments
-            logger.info(f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total")
+            logger.info(
+                f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
+            )
 
         # Run experiments
         start_time = time.time()
@@ -622,18 +662,23 @@ def run_experiment_series(
     create_directories: bool = True,
 ) -> SeriesResult:
     """Convenience function to run an experiment series."""
-    
+
     # Check if any experiments have save_results_to_disk=False and warn user
-    experiments = series_config.create_experiment_series(save_configs=False, create_directories=False)
+    experiments = series_config.create_experiment_series(
+        save_configs=False, create_directories=False
+    )
     for experiment in experiments:
-        if hasattr(experiment.tracing, 'save_results_to_disk') and not experiment.tracing.save_results_to_disk:
+        if (
+            hasattr(experiment.tracing, "save_results_to_disk")
+            and not experiment.tracing.save_results_to_disk
+        ):
             logger.warning(
                 "WARNING: run_experiment_series() will override save_results_to_disk=False "
                 "and force results to be saved to disk. Use run_experiment_series_in_memory() "
                 "if you want to keep results in memory only."
             )
             break
-    
+
     runner = ExperimentSeriesRunner(
         series_config=series_config,
         save_individual_configs=save_individual_configs,
