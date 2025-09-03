@@ -123,6 +123,7 @@ def get_OFL_edges_precise(
         R_LC: Light cylinder radii (alternative to P_ms)
         h_LC_coeff: Height coefficient for OFL calculation
 
+
     Returns:
         OFLEdgeResult with R_LC values and edge footpoint arrays
     """
@@ -386,6 +387,10 @@ def calculate_and_save_OFL_edges(
 
         # Process each R_LC value and its edge footpoints
         output_path = Path(output_path)
+        
+        # Create output directory if it doesn't exist
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
         base_path = output_path.parent / output_path.stem
         extension = output_path.suffix
 

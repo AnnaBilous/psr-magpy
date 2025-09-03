@@ -225,6 +225,30 @@ class ExperimentSeriesConfig(BaseModel):
         config_path = self.get_experiment_config_path(experiment_number)
         return ExperimentConfig.load(config_path)
 
+    def get_total_experiments_from_summary(self) -> int:
+        """Get the total number of experiments from the summary YAML file.
+
+        Returns:
+            Total number of experiments from summary
+
+        Raises:
+            FileNotFoundError: If summary.yaml does not exist
+            KeyError: If 'total_experiments' key is missing from summary
+        """
+        output_dir = self.output_dir or "."
+        summary_path = Path(output_dir) / self.name / f"{self.name}_results_summary.yaml"
+        
+        if not summary_path.exists():
+            raise FileNotFoundError(f"Summary file not found: {summary_path}")
+        
+        with open(summary_path, 'r') as f:
+            summary = yaml.safe_load(f)
+        
+        if 'total_experiments' not in summary:
+            raise KeyError(f"Key 'total_experiments' not found in summary file: {summary_path}")
+        
+        return summary['total_experiments']
+
     def save(self, filename: Optional[str] = None) -> None:
         """Save configuration to YAML file in the configs directory.
 
