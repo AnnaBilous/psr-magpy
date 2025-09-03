@@ -209,7 +209,17 @@ class ExperimentSeriesConfig(BaseModel):
         Returns:
             Path to the experiment config file
         """
-        return self.get_configs_dir() / f"{self.name}_{experiment_number:03d}.yaml"
+        # Try regular config first, then subset config
+        regular_path = self.get_configs_dir() / f"{self.name}_{experiment_number:03d}.yaml"
+        subset_path = self.get_configs_dir() / f"{self.name}_{experiment_number:03d}_subset.yaml"
+        
+        if regular_path.exists():
+            return regular_path
+        elif subset_path.exists():
+            return subset_path
+        else:
+            # If neither exists, return the regular path (will raise error when loading)
+            return regular_path
 
     def load_experiment_config(self, experiment_number: int) -> "ExperimentConfig":
         """Load a specific experiment config by number.
