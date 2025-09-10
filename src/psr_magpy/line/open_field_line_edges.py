@@ -355,7 +355,7 @@ def calculate_and_save_OFL_edges(
                 logger.error(error_msg)
                 raise ValueError(error_msg)
             else:
-                if grid.nside >= 512:
+                if grid.nside > 512:
                     error_msg = f"Precise edge calculation requires HealpixGrid with nside < 512, got nside = {grid.nside}."
                     logger.error(error_msg)
                     raise ValueError(error_msg)
