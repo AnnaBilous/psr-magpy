@@ -340,6 +340,7 @@ class TestCalculateAndSaveOFLEdges:
             save_r_cyl_max=True,
             save_z_abs_max=True,
             save_r_line=True,
+            reversed_error=True,
         )
         
         self.r_lc_values = np.array([10.0, 5.0, 2.0])
@@ -429,6 +430,196 @@ class TestCalculateAndSaveOFLEdges:
             assert False, "Should have raised ValueError"
         except ValueError as e:
             assert "Precise edge calculation requires HealpixGrid" in str(e)
+    
+    @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
+    @patch('psr_magpy.io.get_io_factory')
+    def test_calculate_and_save_template_reversed_error_addition(self, mock_io_factory, mock_experiment_config):
+        """Test that reversed_error is added to template if not present."""
+        mock_config = Mock()
+        mock_experiment_config.load.return_value = mock_config
+        
+        # Mock field line data
+        mock_ofl_data = Mock(spec=FieldLineSet)
+        mock_ofl_data.n_field_lines = 1000
+        mock_config.load_combined_batch_data.return_value = mock_ofl_data
+        
+        # Mock HealpixGrid
+        mock_grid = Mock(spec=HealpixGrid)
+        mock_grid.nside = 64
+        mock_grid.grid_type = Mock()
+        mock_grid.grid_type.value = "healpix"
+        mock_config.grid.create_grid.return_value = mock_grid
+        
+        # Mock IO factory and field line set
+        mock_io = Mock()
+        mock_io_factory.return_value = mock_io
+        mock_field_line_set = Mock(spec=FieldLineSet)
+        mock_field_line_set.n_field_lines = 100
+        
+        # Mock property system
+        mock_property_system = Mock()
+        mock_field_line_set.property_system = mock_property_system
+        
+        # Mock get_property to return appropriate data based on property type
+        def mock_get_property(prop):
+            if prop.name == 'FOOTPOINT_ID':
+                return np.array([1, 2, 3])
+            elif prop.name == 'REVERSED_ERROR':
+                return np.array([0.001, 0.002, 0.005])
+            else:
+                return None
+        
+        mock_property_system.get_property.side_effect = mock_get_property
+        
+        # Mock save_flags for I/O system
+        mock_save_flags = Mock()
+        mock_save_flags.save_footpoint_id = True
+        mock_save_flags.save_r_cyl_max = True
+        mock_save_flags.save_z_abs_max = True
+        mock_save_flags.save_r_line = True
+        mock_save_flags.save_reversed_error = True
+        mock_field_line_set.save_flags = mock_save_flags
+        
+        mock_field_line_set.subset_by_footpoint_ids.return_value = mock_field_line_set
+        mock_io.load_data.return_value = mock_field_line_set
+        
+        # Create template without reversed_error
+        template_without_error = FieldLine(
+            save_footpoint_id=True,
+            save_r_cyl_max=True,
+            save_z_abs_max=True,
+            save_r_line=True,
+            save_reversed_error=False  # Not included initially
+        )
+        
+        # Mock the edge calculation
+        with patch('psr_magpy.line.open_field_line_edges.OFLEdgeCalculator') as mock_calc:
+            mock_calc_instance = Mock()
+            mock_calc.return_value = mock_calc_instance
+            mock_calc_instance.calculate_edges.return_value = OFLEdgeResult(
+                R_LC=np.array([10.0, 5.0]),
+                edge_footpoints=[np.array([1, 2]), np.array([3])],
+                precise_edges=False
+            )
+            
+            # Mock glob to return batch files
+            with patch('glob.glob') as mock_glob:
+                mock_glob.return_value = ['batch_001.fits', 'batch_002.fits']
+                
+                result = calculate_and_save_OFL_edges(
+                    experiment_config_path=str(self.experiment_config_path),
+                    lines_dir=str(self.lines_dir),
+                    template=template_without_error,
+                    R_LC_values=self.r_lc_values,
+                    output_path=str(self.output_path),
+                    precise_edges=False
+                )
+                
+                # Verify that reversed_error was added to template
+                assert template_without_error.property_system.save_flags.save_reversed_error == True
+                assert result is not None
+    
+    @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
+    @patch('psr_magpy.io.get_io_factory')
+    def test_calculate_and_save_error_filtering(self, mock_io_factory, mock_experiment_config):
+        """Test that footpoints with high reversed_error are filtered out."""
+        mock_config = Mock()
+        mock_experiment_config.load.return_value = mock_config
+        
+        # Mock field line data
+        mock_ofl_data = Mock(spec=FieldLineSet)
+        mock_ofl_data.n_field_lines = 1000
+        mock_config.load_combined_batch_data.return_value = mock_ofl_data
+        
+        # Mock HealpixGrid
+        mock_grid = Mock(spec=HealpixGrid)
+        mock_grid.nside = 64
+        mock_grid.grid_type = Mock()
+        mock_grid.grid_type.value = "healpix"
+        mock_config.grid.create_grid.return_value = mock_grid
+        
+        # Mock IO factory and field line set
+        mock_io = Mock()
+        mock_io_factory.return_value = mock_io
+        mock_field_line_set = Mock(spec=FieldLineSet)
+        mock_field_line_set.n_field_lines = 100
+        
+        # Mock property system to return footpoint IDs and reversed errors
+        mock_property_system = Mock()
+        mock_field_line_set.property_system = mock_property_system
+        
+        # Mock get_property to return appropriate data based on property type
+        def mock_get_property(prop):
+            if prop.name == 'FOOTPOINT_ID':
+                return np.array([1, 2, 3, 4, 5])
+            elif prop.name == 'REVERSED_ERROR':
+                return np.array([0.001, 0.002, 0.01, 0.005, 0.0005])  # threshold is 0.001
+            else:
+                return None
+        
+        mock_property_system.get_property.side_effect = mock_get_property
+        
+        # Mock save_flags for I/O system
+        mock_save_flags = Mock()
+        mock_save_flags.save_footpoint_id = True
+        mock_save_flags.save_r_cyl_max = True
+        mock_save_flags.save_z_abs_max = True
+        mock_save_flags.save_r_line = True
+        mock_save_flags.save_reversed_error = True
+        mock_field_line_set.save_flags = mock_save_flags
+        
+        mock_field_line_set.subset_by_footpoint_ids.return_value = mock_field_line_set
+        mock_io.load_data.return_value = mock_field_line_set
+        
+        # Create template with reversed_error
+        template_with_error = FieldLine(
+            save_footpoint_id=True,
+            save_r_cyl_max=True,
+            save_z_abs_max=True,
+            save_r_line=True,
+            save_reversed_error=True
+        )
+        
+        # Mock the edge calculation
+        with patch('psr_magpy.line.open_field_line_edges.OFLEdgeCalculator') as mock_calc:
+            mock_calc_instance = Mock()
+            mock_calc.return_value = mock_calc_instance
+            mock_calc_instance.calculate_edges.return_value = OFLEdgeResult(
+                R_LC=np.array([10.0, 5.0]),
+                edge_footpoints=[np.array([1, 2, 3, 4, 5]), np.array([1, 2, 3])],  # Two arrays for two R_LC values
+                precise_edges=False
+            )
+            
+            # Mock glob to return batch files
+            with patch('glob.glob') as mock_glob:
+                mock_glob.return_value = ['batch_001.fits']
+                
+                result = calculate_and_save_OFL_edges(
+                    experiment_config_path=str(self.experiment_config_path),
+                    lines_dir=str(self.lines_dir),
+                    template=template_with_error,
+                    R_LC_values=self.r_lc_values,
+                    output_path=str(self.output_path),
+                    precise_edges=False
+                )
+                
+                # Verify that subset_by_footpoint_ids was called with filtered footpoints
+                # The filtering should remove footpoints with error > 0.001
+                calls = mock_field_line_set.subset_by_footpoint_ids.call_args_list
+                assert len(calls) > 0, "subset_by_footpoint_ids was never called"
+                
+                # Check that filtering occurred (some footpoints were removed)
+                # Original footpoints: [1, 2, 3, 4, 5] with errors: [0.001, 0.002, 0.01, 0.005, 0.0005]
+                # After filtering (error <= 0.001): should be [1, 5] (removing 2, 3, 4)
+                # For second R_LC: [1, 2, 3] -> [1] (removing 2, 3)
+                
+                # Verify that the first call has fewer footpoints than the original 5
+                first_call_footpoints = calls[0][0][0]
+                assert len(first_call_footpoints) < 5, f"Expected filtering to reduce footpoints, got {first_call_footpoints}"
+                
+                # Verify that footpoint 3 (error 0.01) was filtered out
+                assert 3 not in first_call_footpoints, f"Footpoint 3 (high error) should be filtered out, got {first_call_footpoints}"
+                assert result is not None
 
 
 class TestIntegration:
@@ -453,6 +644,7 @@ class TestIntegration:
             save_r_cyl_max=True,
             save_z_abs_max=True,
             save_r_line=True,
+            reversed_error=True,
         )
         
         r_lc_values = np.array([10.0, 5.0])
