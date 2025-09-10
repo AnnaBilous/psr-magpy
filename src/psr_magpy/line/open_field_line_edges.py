@@ -412,11 +412,9 @@ def calculate_and_save_OFL_edges(
 
                 try:
                     # Ensure template includes reversed_error
-                    template_with_error = {}
-                    for prop_name, prop_value in template.items():
-                        template_with_error[prop_name] = prop_value
-                    if not template_with_error.get(PropertyName.REVERSED_ERROR, False):
-                        template_with_error[PropertyName.REVERSED_ERROR] = True
+                    template_with_error = FieldLine(**template.save_flags.__dict__)
+                    if not getattr(template_with_error.save_flags, 'save_reversed_error', False):
+                        template_with_error.save_flags.save_reversed_error = True
                     
                     # Load batch file with full template including reversed_error
                     batch_data = get_io_factory().load_data(
@@ -475,10 +473,10 @@ def calculate_and_save_OFL_edges(
                         continue
 
                     # Create subset of this batch (remove reversed_error from template)
-                    subset_template = {}
-                    for prop_name, prop_value in template.items():
-                        if prop_name != PropertyName.REVERSED_ERROR:
-                            subset_template[prop_name] = prop_value
+                    subset_flags = template.save_flags.__dict__.copy()
+                    if 'save_reversed_error' in subset_flags:
+                        del subset_flags['save_reversed_error']
+                    subset_template = FieldLine(**subset_flags)
                     
                     batch_subset = batch_data.subset_by_footpoint_ids(
                         edge_footpoint_ids_in_batch, template=subset_template
