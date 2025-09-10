@@ -253,7 +253,6 @@ def calculate_and_save_OFL_edges(
     trim_radius: float = 5.0,
     precise_edges: bool = False,
     R_LC_edge_coefficient: float = 1.02,
-    error_threshold: float = 0.001,
 ) -> OFLEdgeResult:
     """Calculate OFL edges and save as FITS file.
 
@@ -352,10 +351,14 @@ def calculate_and_save_OFL_edges(
     try:
         if precise_edges:
             if not isinstance(grid, HealpixGrid):
-                error_msg = f"Precise edge calculation requires HealpixGrid, got {type(grid).__name__}."
+                error_msg = f"Precise edge calculation requires HealpixGrid with nside < 512, got {type(grid).__name__}."
                 logger.error(error_msg)
                 raise ValueError(error_msg)
-            
+            else:
+                if grid.nside >= 512:
+                    error_msg = f"Precise edge calculation requires HealpixGrid with nside < 512, got nside = {grid.nside}."
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
 
         calculator = OFLEdgeCalculator(grid, h_LC_coeff=h_LC_coeff, precise_edges=precise_edges)
 
@@ -412,13 +415,13 @@ def calculate_and_save_OFL_edges(
 
                 try:
                     # Ensure template includes reversed_error
-                    template_with_error = FieldLine(**template.save_flags.__dict__)
-                    if not getattr(template_with_error.save_flags, 'save_reversed_error', False):
-                        template_with_error.save_flags.save_reversed_error = True
-                    
-                    # Load batch file with full template including reversed_error
+                    if not template.property_system.save_flags.save_reversed_error:
+                        template.property_system.save_flags.save_reversed_error = True
+                        logger.debug(f"    Added reversed_error to template")
+
+                    # Load batch file with full template
                     batch_data = get_io_factory().load_data(
-                        FieldLineSet, batch_file, template=template_with_error
+                        FieldLineSet, batch_file, template=template
                     )
 
                     if batch_data is None or batch_data.n_field_lines == 0:
@@ -447,37 +450,21 @@ def calculate_and_save_OFL_edges(
                     # Filter by reversed_error threshold
                     reversed_errors = batch_data.property_system.get_property(PropertyName.REVERSED_ERROR)
                     if reversed_errors is not None:
-                        original_count = len(edge_footpoint_ids_in_batch)
+                        error_threshold = 1e-3  # Adjust threshold as needed
                         filtered_footpoint_ids = []
                         for fp_id in edge_footpoint_ids_in_batch:
-                            # Find index of this footpoint ID in the batch
-                            fp_index = None
-                            for k, batch_fp_id in enumerate(batch_footpoint_ids):
-                                if batch_fp_id == fp_id:
-                                    fp_index = k
-                                    break
-                            
-                            if fp_index is not None and fp_index < len(reversed_errors):
-                                if reversed_errors[fp_index] <= error_threshold:
-                                    filtered_footpoint_ids.append(fp_id)
+                            # Find index of this footpoint ID
+                            fp_idx = batch_footpoint_ids.tolist().index(fp_id)
+                            if reversed_errors[fp_idx] <= error_threshold:
+                                filtered_footpoint_ids.append(fp_id)
                         edge_footpoint_ids_in_batch = filtered_footpoint_ids
-                        
-                        # Log if any lines were filtered out
-                        filtered_count = len(edge_footpoint_ids_in_batch)
-                        if filtered_count < original_count:
-                            deleted_count = original_count - filtered_count
-                            logger.info(f"    Filtered out {deleted_count} edge footpoints with reversed_error > {error_threshold} (kept {filtered_count}/{original_count})")
+                        logger.debug(f"    Filtered to {len(edge_footpoint_ids_in_batch)} footpoints with error <= {error_threshold}")
 
                     if not edge_footpoint_ids_in_batch:
-                        logger.debug(f"    No edge footpoints below error threshold in this batch, skipping")
+                        logger.debug(f"    No edge footpoints after error filtering, skipping")
                         continue
 
-                    # Create subset of this batch (remove reversed_error from template)
-                    subset_flags = template.save_flags.__dict__.copy()
-                    if 'save_reversed_error' in subset_flags:
-                        del subset_flags['save_reversed_error']
-                    subset_template = FieldLine(**subset_flags)
-                    
+                    # Create subset of this batch
                     batch_subset = batch_data.subset_by_footpoint_ids(
                         edge_footpoint_ids_in_batch
                     )
