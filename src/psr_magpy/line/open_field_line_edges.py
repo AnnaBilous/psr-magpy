@@ -479,7 +479,7 @@ def calculate_and_save_OFL_edges(
                     subset_template = FieldLine(**subset_flags)
                     
                     batch_subset = batch_data.subset_by_footpoint_ids(
-                        edge_footpoint_ids_in_batch, template=subset_template
+                        edge_footpoint_ids_in_batch
                     )
 
                     if batch_subset.n_field_lines > 0:
