@@ -412,7 +412,9 @@ def calculate_and_save_OFL_edges(
 
                 try:
                     # Ensure template includes reversed_error
-                    template_with_error = template.copy()
+                    template_with_error = {}
+                    for prop_name, prop_value in template.items():
+                        template_with_error[prop_name] = prop_value
                     if not template_with_error.get(PropertyName.REVERSED_ERROR, False):
                         template_with_error[PropertyName.REVERSED_ERROR] = True
                     
