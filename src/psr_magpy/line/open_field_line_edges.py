@@ -452,6 +452,7 @@ def calculate_and_save_OFL_edges(
                     if reversed_errors is not None:
                         error_threshold = 1e-3  # Adjust threshold as needed
                         filtered_footpoint_ids = []
+                        original_footpoint_number = len(edge_footpoint_ids_in_batch)
                         for fp_id in edge_footpoint_ids_in_batch:
                             # Find index of this footpoint ID
                             fp_idx = batch_footpoint_ids.tolist().index(fp_id)
@@ -459,6 +460,8 @@ def calculate_and_save_OFL_edges(
                                 filtered_footpoint_ids.append(fp_id)
                         edge_footpoint_ids_in_batch = filtered_footpoint_ids
                         logger.debug(f"    Filtered to {len(edge_footpoint_ids_in_batch)} footpoints with error <= {error_threshold}")
+                        if original_footpoint_number > len(edge_footpoint_ids_in_batch):
+                            logger.info(f"    Filtered from {original_footpoint_number} to {len(edge_footpoint_ids_in_batch)} footpoints with error <= {error_threshold}")
 
                     if not edge_footpoint_ids_in_batch:
                         logger.debug(f"    No edge footpoints after error filtering, skipping")
