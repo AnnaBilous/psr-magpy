@@ -73,18 +73,6 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
     else:
         ftp_ids_not_inner = np.copy(ftp_ids)
     n_ftp = len(ftp_ids_not_inner)
-    #import matplotlib.pyplot as plt
-    #full_grid = HealpixGrid(nside=256)
-    #print("Grid nline", len(grid.longitude))
-    #print(grid.indices)
-    #print("Full grid nline", len(full_grid.longitude))
-
-    full_grid_ftp_ids_not_inner = grid.indices[ftp_ids_not_inner]
-    full_grid_ftp_ids = grid.indices[ftp_ids]
-
-    #plt.plot(full_grid.longitude, full_grid.colatitude, '.')
-    #plt.plot(full_grid.longitude[full_grid_ftp_ids_not_inner], full_grid.colatitude[full_grid_ftp_ids_not_inner], 'k.')
-    #plt.show()
 
     # Handle empty input
     if n_ftp == 0:
@@ -92,22 +80,18 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
 
     # Get all eight nearest neighbours for all footpoints at once
     neighbour_footpoints = hp.pixelfunc.get_all_neighbours(
-        grid.nside, full_grid_ftp_ids_not_inner, nest=False
+        grid.nside, ftp_ids_not_inner, nest=False
     )
-    #l = grid.longitude
-    #c = grid.colatitude
-    #print(ftp_ids_not_inner[:5])
-    #print(neighbour_footpoints[:5,:])
-    #exit(1)
+
     # Vectorized neighbor checking
     # Mark valid neighbors (remove -1 values)
-    neighbour_footpoints_valid = neighbour_footpoints >= 0
+    neighbour_footpoints_valid = neighbour_footpoints > 0
 
     # Count valid neighbors per footpoint
     n_neighbours_per_footpoint = np.sum(neighbour_footpoints_valid, axis=0)
 
     # Check which neighbors are in ftp_ids
-    neighbours_in_ftp_ids = np.isin(neighbour_footpoints, full_grid_ftp_ids)
+    neighbours_in_ftp_ids = np.isin(neighbour_footpoints, ftp_ids)
 
     # Count neighbors that are both valid and in ftp_ids
     n_neighbours_in_ftp_ids = np.sum(
@@ -116,26 +100,8 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
     n_neighbours_in_ftp_ids = np.sum(neighbours_in_ftp_ids, axis=0)
     # Edge detection: footpoint is edge if it has fewer neighbors in ftp_ids than expected
     is_edge = n_neighbours_in_ftp_ids < n_neighbours_per_footpoint - 1
-    for iii,f in enumerate(ftp_ids_not_inner):
-      if is_edge[iii] and False:  
-        print(n_neighbours_per_footpoint[iii])
-        for jj in range(8):
-            print("\t", neighbour_footpoints[jj,iii])
-        print(n_neighbours_in_ftp_ids[iii])
-        print(is_edge[iii])
-        print("=====" )
-        plt.plot(grid.longitude, grid.colatitude, 'o', color='0.5')
-        plt.plot(grid.longitude[ftp_ids_not_inner], grid.colatitude[ftp_ids_not_inner], 'k.')
-        plt.scatter([l[f]], [c[f]], s=150, color='yellow')
-        plt.scatter(l[neighbour_footpoints[:,iii]], c[neighbour_footpoints[:,iii]], s=150, color='green')
-        plt.show()
 
     ftp_ids_edge = ftp_ids_not_inner[is_edge]
-
-    #plt.plot(grid.longitude, grid.colatitude, 'k.')
-    #plt.plot(grid.longitude[ftp_ids_edge], grid.colatitude[ftp_ids_edge], 'r.')
-    #plt.show()
-    #exit(1)
     return ftp_ids_edge
 
 
@@ -192,9 +158,7 @@ def get_OFL_edges_precise(
         cur_ftp_ids = lines.get_OFL_footpoints(r_lc, h_LC_coeff=h_LC_coeff)
         ftp_ids.append(cur_ftp_ids)
         inner_ftp_ids.append(cur_ftp_ids)
-    #print(self.grid.indices)
-    print(grid.indices)
-    print(len(grid.indices))
+
     for i in range(n_values):
         cur_edge_ftp_ids = healpix_get_single_OFL_edge_precise(
             grid, ftp_ids[i], ftp_ids_inner=inner_ftp_ids[i]
@@ -289,6 +253,7 @@ def calculate_and_save_OFL_edges(
     trim_radius: float = 5.0,
     precise_edges: bool = False,
     R_LC_edge_coefficient: float = 1.02,
+    error_threshold: float = 0.001,
 ) -> OFLEdgeResult:
     """Calculate OFL edges and save as FITS file.
 
@@ -390,13 +355,11 @@ def calculate_and_save_OFL_edges(
                 error_msg = f"Precise edge calculation requires HealpixGrid with nside < 512, got {type(grid).__name__}."
                 logger.error(error_msg)
                 raise ValueError(error_msg)
-            """
             else:
                 if grid.nside >= 512:
                     error_msg = f"Precise edge calculation requires HealpixGrid with nside < 512, got nside = {grid.nside}."
                     logger.error(error_msg)
                     raise ValueError(error_msg)
-            """
 
         calculator = OFLEdgeCalculator(grid, h_LC_coeff=h_LC_coeff, precise_edges=precise_edges)
 
@@ -452,9 +415,14 @@ def calculate_and_save_OFL_edges(
                 logger.debug(f"  Processing batch file: {batch_file}")
 
                 try:
-                    # Load batch file with full template
+                    # Ensure template includes reversed_error
+                    template_with_error = template.copy()
+                    if not template_with_error.get(PropertyName.REVERSED_ERROR, False):
+                        template_with_error[PropertyName.REVERSED_ERROR] = True
+                    
+                    # Load batch file with full template including reversed_error
                     batch_data = get_io_factory().load_data(
-                        FieldLineSet, batch_file, template=template
+                        FieldLineSet, batch_file, template=template_with_error
                     )
 
                     if batch_data is None or batch_data.n_field_lines == 0:
@@ -480,9 +448,41 @@ def calculate_and_save_OFL_edges(
                         logger.debug(f"    No edge footpoints in this batch, skipping")
                         continue
 
-                    # Create subset of this batch
+                    # Filter by reversed_error threshold
+                    reversed_errors = batch_data.property_system.get_property(PropertyName.REVERSED_ERROR)
+                    if reversed_errors is not None:
+                        original_count = len(edge_footpoint_ids_in_batch)
+                        filtered_footpoint_ids = []
+                        for fp_id in edge_footpoint_ids_in_batch:
+                            # Find index of this footpoint ID in the batch
+                            fp_index = None
+                            for k, batch_fp_id in enumerate(batch_footpoint_ids):
+                                if batch_fp_id == fp_id:
+                                    fp_index = k
+                                    break
+                            
+                            if fp_index is not None and fp_index < len(reversed_errors):
+                                if reversed_errors[fp_index] <= error_threshold:
+                                    filtered_footpoint_ids.append(fp_id)
+                        edge_footpoint_ids_in_batch = filtered_footpoint_ids
+                        
+                        # Log if any lines were filtered out
+                        filtered_count = len(edge_footpoint_ids_in_batch)
+                        if filtered_count < original_count:
+                            deleted_count = original_count - filtered_count
+                            logger.info(f"    Filtered out {deleted_count} edge footpoints with reversed_error > {error_threshold} (kept {filtered_count}/{original_count})")
+
+                    if not edge_footpoint_ids_in_batch:
+                        logger.debug(f"    No edge footpoints below error threshold in this batch, skipping")
+                        continue
+
+                    # Create subset of this batch (remove reversed_error from template)
+                    subset_template = template.copy()
+                    if PropertyName.REVERSED_ERROR in subset_template:
+                        del subset_template[PropertyName.REVERSED_ERROR]
+                    
                     batch_subset = batch_data.subset_by_footpoint_ids(
-                        edge_footpoint_ids_in_batch
+                        edge_footpoint_ids_in_batch, template=subset_template
                     )
 
                     if batch_subset.n_field_lines > 0:
