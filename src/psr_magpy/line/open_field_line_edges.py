@@ -452,6 +452,11 @@ def calculate_and_save_OFL_edges(
                 logger.debug(f"  Processing batch file: {batch_file}")
 
                 try:
+                    # Ensure template includes reversed_error
+                    if not template.property_system.save_flags.save_reversed_error:
+                        template.property_system.save_flags.save_reversed_error = True
+                        logger.debug(f"    Added reversed_error to template")
+
                     # Load batch file with full template
                     batch_data = get_io_factory().load_data(
                         FieldLineSet, batch_file, template=template
@@ -480,6 +485,20 @@ def calculate_and_save_OFL_edges(
                         logger.debug(f"    No edge footpoints in this batch, skipping")
                         continue
 
+                    # Filter by reversed_error threshold
+                    reversed_errors = batch_data.property_system.get_property(PropertyName.REVERSED_ERROR)
+                    if reversed_errors is not None:
+                        error_threshold = 1e-3  # Adjust threshold as needed
+                        filtered_footpoint_ids = []
+                        original_footpoint_number = len(edge_footpoint_ids_in_batch)
+                        for fp_id in edge_footpoint_ids_in_batch:
+                            # Find index of this footpoint ID
+                            fp_idx = batch_footpoint_ids.tolist().index(fp_id)
+                            if reversed_errors[fp_idx] <= error_threshold:
+                                filtered_footpoint_ids.append(fp_id)
+                        edge_footpoint_ids_in_batch = filtered_footpoint_ids
+                        if original_footpoint_number > len(edge_footpoint_ids_in_batch):
+                            logger.info(f"    Filtered from {original_footpoint_number} to {len(edge_footpoint_ids_in_batch)} footpoints with error <= {error_threshold}")
                     # Create subset of this batch
                     batch_subset = batch_data.subset_by_footpoint_ids(
                         edge_footpoint_ids_in_batch
