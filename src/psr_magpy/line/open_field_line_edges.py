@@ -552,3 +552,268 @@ def calculate_and_save_OFL_edges(
         raise ValueError(error_msg)
 
     return edge_result
+
+
+def calculate_and_save_OFL_regions(
+    experiment_config_path: Union[str, Path],
+    lines_dir: Union[str, Path],
+    template: FieldLine,
+    R_LC_values: np.ndarray,
+    output_path: Union[str, Path],
+    h_LC_coeff: float = 3**1.5 / 2.0,
+    trim_lines: bool = False,
+    trim_type: str = "sphere",
+    trim_radius: float = 5.0,
+) -> OFLEdgeResult:
+    """Calculate OFL regions and save as FITS file.
+
+    Note: R_LC_values are automatically sorted in descending order.
+
+    Args:
+        experiment_config_path: Path to experiment configuration file
+        lines_dir: Directory containing field line batch files
+        template: FieldLine template specifying which properties to save
+        R_LC_values: Array of light cylinder radii for region calculation
+        output_path: Path where to save the filtered region lines FITS file
+        h_LC_coeff: Height coefficient for OFL calculation
+        trim_lines: Whether to trim field lines to light cylinder before saving
+        trim_type: Trimming method ("sphere" or "cylinder")
+        trim_radius: Radius for trimming (light cylinder radius)
+
+    Returns:
+        OFLEdgeResult: Result from region calculation (edge_footpoints contains all OFL footpoints)
+
+    Raises:
+        ValueError: If data loading fails or no OFL footpoints found
+        FileNotFoundError: If experiment config or lines directory not found
+    """
+    from psr_magpy.experiment.experiment_config import ExperimentConfig
+    from psr_magpy.io import get_io_factory
+    from psr_magpy.line.field_line_set import FieldLineSet
+    from psr_magpy.line.field_line import FieldLine
+    from psr_magpy.line.property_system import PropertyName
+    import glob
+
+    logger = get_logger(__name__, console_format_brief=True)
+
+    # Ensure R_LC_values are sorted in descending order
+    R_LC_values = np.array(R_LC_values) if not isinstance(R_LC_values, np.ndarray) else R_LC_values
+    if len(R_LC_values) > 1:
+        R_LC_values = np.sort(R_LC_values)[::-1]
+        logger.info(f"R_LC_values sorted in descending order: {R_LC_values}")
+
+    # Load experiment configuration
+    try:
+        experiment_config = ExperimentConfig.load(experiment_config_path)
+        logger.info(f"Loaded experiment config: {experiment_config.name}")
+    except Exception as e:
+        error_msg = (
+            f"Failed to load experiment config from {experiment_config_path}: {e}"
+        )
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    # Create grid from experiment config
+    try:
+        grid = experiment_config.grid.create_grid()
+        if grid is None:
+            error_msg = "Failed to create grid from experiment config"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        if grid.grid_type is None:
+            error_msg = "Grid type is None"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        logger.info(f"Created grid: {grid.grid_type.value}")
+    except Exception as e:
+        error_msg = f"Failed to create grid: {e}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    # Phase 1: Load minimal data for OFL region calculation
+    logger.info("Phase 1: Loading minimal data for OFL region calculation")
+    try:
+        # Create minimal template for OFL calculation
+        minimal_template = FieldLine(
+            save_footpoint_id=True,  # Always required
+            save_r_cyl_max=True,
+            save_z_abs_max=True,
+            # All other properties default to False
+        )
+
+        OFL_data = experiment_config.load_combined_batch_data(
+            minimal_template, str(lines_dir)
+        )
+        if OFL_data is None:
+            error_msg = f"No field line data found in {lines_dir}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        logger.info(
+            f"Loaded {OFL_data.n_field_lines} field lines with minimal template"
+        )
+    except Exception as e:
+        error_msg = f"Failed to load field line data from {lines_dir}: {e}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    # Calculate OFL regions (all footpoints, not just edges)
+    try:
+        logger.info(f"Calculating OFL regions for {len(R_LC_values)} R_LC values")
+        
+        region_ftp_ids = []
+        for r_lc in R_LC_values:
+            cur_ftp_ids = OFL_data.get_OFL_footpoints(r_lc, h_LC_coeff=h_LC_coeff)
+            region_ftp_ids.append(cur_ftp_ids)
+            logger.info(f"R_LC = {r_lc:.2f}: {len(cur_ftp_ids)} OFL footpoints")
+        
+        # Create result object (reusing OFLEdgeResult structure)
+        region_result = OFLEdgeResult(R_LC=R_LC_values, edge_footpoints=region_ftp_ids, precise_edges=False)
+        
+    except Exception as e:
+        error_msg = f"Failed to calculate OFL regions: {e}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    # Phase 2: Extract region data with full template
+    logger.info("Phase 2: Extracting region data with full template")
+    try:
+        # Find all batch files
+        batch_pattern = f"{lines_dir}/{experiment_config.name}_batch_*.fits"
+        batch_files = sorted(glob.glob(batch_pattern))
+
+        if not batch_files:
+            error_msg = f"No batch files found matching pattern: {batch_pattern}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        logger.info(f"Found {len(batch_files)} batch files")
+
+        # Process each R_LC value and its region footpoints
+        output_path = Path(output_path)
+        
+        # Create output directory if it doesn't exist
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        base_path = output_path.parent / output_path.stem
+        extension = output_path.suffix
+
+        for i, r_lc in enumerate(region_result.R_LC):
+            footpoint_indices = region_result.edge_footpoints[i]  # Contains all OFL footpoints
+            logger.info(
+                f"Processing R_LC = {r_lc:.2f}: {len(footpoint_indices)} OFL footpoints"
+            )
+
+            if len(footpoint_indices) == 0:
+                logger.warning(f"  No OFL footpoints for R_LC = {r_lc:.2f}")
+                continue
+
+            # Convert to set for efficient lookup
+            region_footpoint_set = set(footpoint_indices.tolist())
+
+            # Load and subset each batch file
+            combined_region_data = None
+
+            for batch_file in batch_files:
+                logger.debug(f"  Processing batch file: {batch_file}")
+
+                try:
+                    # Load batch file with full template
+                    batch_data = get_io_factory().load_data(
+                        FieldLineSet, batch_file, template=template
+                    )
+
+                    if batch_data is None or batch_data.n_field_lines == 0:
+                        logger.debug(f"    No data in batch file, skipping")
+                        continue
+
+                    # Get footpoint IDs from this batch
+                    batch_footpoint_ids = batch_data.property_system.get_property(
+                        PropertyName.FOOTPOINT_ID
+                    )
+
+                    if batch_footpoint_ids is None:
+                        logger.debug(f"    No footpoint IDs in batch file, skipping")
+                        continue
+
+                    # Find footpoint IDs that are in the region
+                    region_footpoint_ids_in_batch = []
+                    for j, fp_id in enumerate(batch_footpoint_ids):
+                        if fp_id in region_footpoint_set:
+                            region_footpoint_ids_in_batch.append(fp_id)
+
+                    if not region_footpoint_ids_in_batch:
+                        logger.debug(f"    No region footpoints in this batch, skipping")
+                        continue
+
+                    # Create subset of this batch
+                    batch_subset = batch_data.subset_by_footpoint_ids(
+                        region_footpoint_ids_in_batch
+                    )
+
+                    if batch_subset.n_field_lines > 0:
+                        logger.debug(
+                            f"    Found {batch_subset.n_field_lines} region field lines in batch"
+                        )
+
+                        # Combine with previous batch subsets
+                        if combined_region_data is None:
+                            combined_region_data = batch_subset
+                        else:
+                            combined_region_data.append(batch_subset)
+                    else:
+                        logger.debug(
+                            f"    No region field lines found in this batch (this is normal)"
+                        )
+
+                except Exception as e:
+                    logger.warning(f"    Error processing batch file {batch_file}: {e}")
+                    continue
+
+            # Save combined region data for this R_LC value
+            if combined_region_data is not None and combined_region_data.n_field_lines > 0:
+                subset_filename = f"{base_path}_{i:03d}{extension}"
+
+                logger.info(
+                    f"  Saving {combined_region_data.n_field_lines} region field lines to {subset_filename}"
+                )
+
+                # Trim field lines if requested
+                if trim_lines:
+                    logger.info(
+                        f"  Trimming field lines to R_LC = {trim_radius} using {trim_type} method"
+                    )
+                    combined_region_data.trim_to_light_cylinder(
+                        R_LC=trim_radius, trim_type=trim_type
+                    )
+                    logger.info(
+                        f"  Trimmed region data now has {combined_region_data.n_field_lines} field lines"
+                    )
+
+                # Create I/O instance and add R_LC keyword to header
+                from psr_magpy.io.data_io import FieldLineSetIO
+
+                io_instance = FieldLineSetIO(combined_region_data)
+                io_instance.add_header_keyword(
+                    "R_LC", r_lc, "Light cylinder radius for this subset"
+                )
+
+                # Save with the I/O instance that has the header keyword
+                io_instance.save(combined_region_data, subset_filename)
+
+                logger.info(f"  Successfully saved region data for R_LC = {r_lc:.2f}")
+            else:
+                logger.warning(
+                    f"  No region field lines found for R_LC = {r_lc:.2f} across all batch files"
+                )
+                logger.warning(
+                    f"  Expected {len(region_footpoint_set)} footpoint IDs but found none"
+                )
+
+        logger.info("Phase 2: Region data extraction completed")
+
+    except Exception as e:
+        error_msg = f"Failed to extract and save region data: {e}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    return region_result
