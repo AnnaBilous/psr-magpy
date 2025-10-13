@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "psr_magpy"
 version = "0.1.0"
 description = "Magnetic field line tracing package for pulsar magnetosphere modeling"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
 authors = [
     {name = "Anna Bilous", email = "hanna.bilous@gmail.com"}
 ]
@@ -19,6 +21,16 @@ dependencies = [
     "pydantic>=2.0.0",
     "pyyaml>=6.0",
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Topic :: Scientific/Engineering :: Physics",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -27,12 +39,9 @@ dev = [
     "flake8>=4.0.0",
 ]
 
-[tool.setuptools]
-packages = ["psr_magpy"]
-package-dir = {"" = "src"}
-
-[tool.setuptools.data-files]
-"share/psr_magpy" = ["README.md"]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["psr_magpy*"]
 
 [tool.isort]
 profile = "black"
