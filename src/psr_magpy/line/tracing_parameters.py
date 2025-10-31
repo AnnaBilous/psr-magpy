@@ -29,12 +29,14 @@ class TracingDefaults:
     MAX_INTEGRATION_RADIUS = 10.0
     THRESHOLD_LINE_DISTANCE = 1.0
     T_SPAN = (0.0, 1e8)
+    T_COEFF = 10.0  # Coefficient for dynamic t_span calculation: max_integration_radius * t_coeff / dt
     RTOL = 5.0e-9
     ATOL = 5.0e-9
     SURFACE_RADIUS = 1.0 - 1.0e-8
     DT = 0.01
     MAX_STEP = 0.01
     METHOD = "RK45"  # Integration method for ODE solver
+    INTEGRATION_SYSTEM = "A"  # Integration system: "A" (current) or "B" (t_eval based)
     TRACE_OPEN_LINES_BACKWARDS = False
     VERIFY_BY_REVERSING = False
     REVERSED_ERROR_THRESHOLD = 1.0e-3  # Maximum allowed reversed error
@@ -76,6 +78,11 @@ class IntegrationParameters(BaseModel):
     t_span: Tuple[float, float] = Field(
         default=TracingDefaults.T_SPAN, description="Integration time span (start, end)"
     )
+    t_coeff: float = Field(
+        default=TracingDefaults.T_COEFF,
+        gt=0,
+        description="Coefficient for dynamic t_span calculation: max_integration_radius * t_coeff / dt",
+    )
     rtol: float = Field(
         default=TracingDefaults.RTOL,
         gt=0,
@@ -104,6 +111,10 @@ class IntegrationParameters(BaseModel):
     method: str = Field(
         default=TracingDefaults.METHOD,
         description="Integration method for ODE solver (e.g., 'RK45', 'DOP853', 'BDF', 'Radau')",
+    )
+    integration_system: str = Field(
+        default=TracingDefaults.INTEGRATION_SYSTEM,
+        description="Integration system: 'A' (current dense_output) or 'B' (t_eval based)",
     )
     trace_open_lines_backwards: bool = Field(
         default=TracingDefaults.TRACE_OPEN_LINES_BACKWARDS,
@@ -155,6 +166,15 @@ class IntegrationParameters(BaseModel):
             logger.warning(
                 f"Large dt value: {self.dt}. This may affect integration accuracy."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_integration_system(self):
+        """Validate integration system parameter."""
+        if self.integration_system not in ["A", "B"]:
+            error_msg = f"integration_system must be 'A' or 'B', got {self.integration_system}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
         return self
 
 
