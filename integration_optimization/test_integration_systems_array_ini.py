@@ -105,7 +105,7 @@ if __name__ == "__main__":
     results_table = []
     # Benchmark requested cases
     cases = [
-        {"max_integration_radius": 500, "nlon": 10},
+        {"max_integration_radius": 500, "nlon": 2},
         {"max_integration_radius": 500, "nlon": 50},
     ]
 

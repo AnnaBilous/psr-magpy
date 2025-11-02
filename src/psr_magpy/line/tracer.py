@@ -21,6 +21,7 @@ logger = get_logger(__name__, console_format_brief=True)
 class FieldLineTracer:
     """Main field line tracer for magnetic field analysis."""
 
+
     class _EventDetector:
         """Handles event detection for field line integration."""
 
@@ -43,7 +44,30 @@ class FieldLineTracer:
             return radius - self.max_integration_radius
 
         hit_Rmax.terminal = True
+        
+    class _EventDetector_squared:
+        """Handles event detection for field line integration."""
 
+        def __init__(self, surface_radius: float, max_integration_radius: float):
+            """Initialize event detector."""
+            self.Rs2 = surface_radius**2
+            self.Rm2 = max_integration_radius**2
+
+        def hit_surface(self, t: float, r: np.ndarray, K: float) -> float:
+            """Event function for hitting neutron star surface."""
+            return float(np.dot(r, r) - self.Rs2)
+
+        hit_surface.terminal = True
+        hit_surface.direction = -1 # only inward crossings
+
+        def hit_Rmax(self, t: float, r: np.ndarray, K: float) -> float:
+            """Event function for hitting maximum radius."""
+            return float(np.dot(r, r) - self.Rm2)
+
+        hit_Rmax.terminal = True
+        hit_Rmax.direction = +1 # only outward crossings
+
+    
     def __init__(self, field: Any, params: TracingParameters) -> None:
         """Initialize the field line tracer."""
         logger.info(
@@ -54,8 +78,13 @@ class FieldLineTracer:
         self.field = field
         self.params = params
 
-        # Initialize event detector
-        self.event_detector = self._EventDetector(
+        # Initialize event detector based on integration system
+        if params.integration.integration_system == "A":
+            detector_class = self._EventDetector
+        else:  # System B
+            detector_class = self._EventDetector_squared
+        
+        self.event_detector = detector_class(
             surface_radius=params.integration.surface_radius,
             max_integration_radius=params.integration.max_integration_radius,
         )
@@ -72,8 +101,12 @@ class FieldLineTracer:
         self, surface_radius: float, max_integration_radius: float
     ) -> None:
         """Update event detector parameters."""
-        self.event_detector.surface_radius = surface_radius
-        self.event_detector.max_integration_radius = max_integration_radius
+        if isinstance(self.event_detector, self._EventDetector):
+            self.event_detector.surface_radius = surface_radius
+            self.event_detector.max_integration_radius = max_integration_radius
+        elif isinstance(self.event_detector, self._EventDetector_squared):
+            self.event_detector.Rs2 = surface_radius**2
+            self.event_detector.Rm2 = max_integration_radius**2
 
     def _field_for_integration(self, t: float, r: np.ndarray, K: float) -> np.ndarray:
         """Wrapper for field calculation that includes unused time parameter required by solve_ivp."""
@@ -131,35 +164,8 @@ class FieldLineTracer:
             "rtol": rtol,
             "atol": atol,
             "max_step": max_step,
+            "dense_output": True,
         }
-
-        # Configure integration system
-        if self.params.integration.integration_system == "A":
-            # System A: Current implementation with dense_output
-            solve_ivp_args["dense_output"] = True
-        else:  # System B
-            # System B: Build t_eval once and use dense_output=False
-            dt = self.params.integration.dt
-            if isinstance(dt, int) or dt > 1:
-                t_eval = np.linspace(t_span[0], t_span[1], int(dt))
-            else:
-                # Handle both positive and negative time spans
-                if t_span[1] >= t_span[0]:
-                    # Forward time integration
-                    t_eval = np.append(np.arange(t_span[0], t_span[1], dt), t_span[1])
-                else:
-                    # Backward time integration (t_span[1] < t_span[0])
-                    t_eval = np.append(np.arange(t_span[0], t_span[1], -dt), t_span[1])
-            
-            # Ensure we don't have empty time array
-            if len(t_eval) == 0:
-                # Fallback to linspace with minimum 2 points
-                t_eval = np.linspace(t_span[0], t_span[1], max(int(dt), 2))
-            
-            solve_ivp_args.update({
-                "dense_output": False,
-                "t_eval": t_eval,
-            })
 
         return solve_ivp(**solve_ivp_args)
 
@@ -202,32 +208,27 @@ class FieldLineTracer:
         )
 
         # Handle different integration systems
-        if self.params.integration.integration_system == "A":
-            # System A: Use dense_output and sample at desired points
-            dt = self.params.integration.dt
-            #print(field_line.t[0], field_line.t[-1])
-            if isinstance(dt, int) or dt > 1:
-                t = np.linspace(field_line.t[0], field_line.t[-1], int(dt))
+     
+        dt = self.params.integration.dt
+        #print(field_line.t[0], field_line.t[-1])
+        if isinstance(dt, int) or dt > 1:
+            t = np.linspace(field_line.t[0], field_line.t[-1], int(dt))
+        else:
+            # Handle both positive and negative time spans
+            t_start, t_end = field_line.t[0], field_line.t[-1]
+            if t_end >= t_start:
+                # Forward time integration
+                t = np.append(np.arange(t_start, t_end, dt), t_end)
             else:
-                # Handle both positive and negative time spans
-                t_start, t_end = field_line.t[0], field_line.t[-1]
-                if t_end >= t_start:
-                    # Forward time integration
-                    t = np.append(np.arange(t_start, t_end, dt), t_end)
-                else:
-                    # Backward time integration (t_end < t_start)
-                    t = np.append(np.arange(t_start, t_end, -dt), t_end)
+                # Backward time integration (t_end < t_start)
+                t = np.append(np.arange(t_start, t_end, -dt), t_end)
 
-            # Ensure we don't have empty time array
-            if len(t) == 0:
-                # Fallback to linspace with minimum 2 points
-                t = np.linspace(field_line.t[0], field_line.t[-1], max(int(dt), 2))
+        # Ensure we don't have empty time array
+        if len(t) == 0:
+            # Fallback to linspace with minimum 2 points
+            t = np.linspace(field_line.t[0], field_line.t[-1], max(int(dt), 2))
 
-            r = field_line.sol(t)
-        else:  # System B
-            # System B: Points are already sampled at t_eval
-            r = field_line.y  # already sampled at t_eval
-            t = field_line.t  # corresponding time points
+        r = field_line.sol(t)
 
         # Log final radius for debugging
         final_radius = np.sqrt(np.sum(r[:, -1] ** 2))
