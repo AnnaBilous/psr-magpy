@@ -13,6 +13,7 @@ from scipy.integrate import solve_ivp
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.property_calculator import PropertyCalculator
+from psr_magpy.line.field_calculator import FieldCalculator, PythonFieldCalculator
 from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -30,7 +31,7 @@ class FieldLineTracer:
             self.surface_radius = surface_radius
             self.max_integration_radius = max_integration_radius
 
-        def hit_surface(self, t: float, r: np.ndarray, K: float) -> float:
+        def hit_surface(self, t: float, r: np.ndarray, K: int) -> float:
             """Event function for hitting neutron star surface."""
             radius = float(np.sqrt(np.sum(r**2)))
 
@@ -38,7 +39,7 @@ class FieldLineTracer:
 
         hit_surface.terminal = True
 
-        def hit_Rmax(self, t: float, r: np.ndarray, K: float) -> float:
+        def hit_Rmax(self, t: float, r: np.ndarray, K: int) -> float:
             """Event function for hitting maximum radius."""
             radius = float(np.sqrt(np.sum(r**2)))
             return radius - self.max_integration_radius
@@ -55,6 +56,19 @@ class FieldLineTracer:
         # Store parameters
         self.field = field
         self.params = params
+
+        # Initialize field calculator based on backend
+        field_backend = params.integration.field_backend
+        if field_backend == "python":
+            self.field_calculator = PythonFieldCalculator(field)
+        elif field_backend == "numba":
+            error_msg = "Numba field backend not yet implemented. Use field_backend='python' for now."
+            logger.error(error_msg)
+            raise NotImplementedError(error_msg)
+        else:
+            error_msg = f"Unknown field_backend: {field_backend}. Must be 'python' or 'numba'."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         # Initialize event detector
         self.event_detector = self._EventDetector(
@@ -77,14 +91,14 @@ class FieldLineTracer:
         self.event_detector.surface_radius = surface_radius
         self.event_detector.max_integration_radius = max_integration_radius
 
-    def _field_for_integration(self, t: float, r: np.ndarray, K: float) -> np.ndarray:
+    def _field_for_integration(self, t: float, r: np.ndarray, K: int) -> np.ndarray:
         """Wrapper for field calculation that includes unused time parameter required by solve_ivp."""
-        return self.field.get_total_field(r, K, normalize=True)
+        return self.field_calculator.get_field(r, K, normalize=True)
 
     def integrate_field_line(
         self,
         r_initial: np.ndarray,
-        K: float,
+        K: int,
         max_integration_radius: float,
         trace_open_lines_backwards: bool,
     ) -> Any:
@@ -164,9 +178,9 @@ class FieldLineTracer:
             r_initial_array, K=1, normalize=True
         )
         dotprod = np.dot(B_initial_norm, r_initial_array)
-        K = np.sign(dotprod)
+        K = int(np.sign(dotprod))
         if K == 0:
-            K = 1.0
+            K = 1
 
         # Use internal integration method
         field_line = self.integrate_field_line(
@@ -239,9 +253,9 @@ class FieldLineTracer:
                 r_initial_array_reversed, K=1, normalize=True
             )
             dotprod = np.dot(B_initial_reversed_norm, r_initial_array_reversed)
-            K_reversed = np.sign(dotprod)
+            K_reversed = int(np.sign(dotprod))
             if K_reversed == 0:
-                K_reversed = 1.0
+                K_reversed = 1
 
             field_line_reversed = self.integrate_field_line(
                 r_initial_array_reversed,

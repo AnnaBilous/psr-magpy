@@ -37,6 +37,7 @@ class TracingDefaults:
     MAX_STEP = 0.01
     METHOD = "RK45"  # Integration method for ODE solver
     INTEGRATION_SYSTEM = "A"  # Integration system: "A" (current) or "B" (t_eval based)
+    FIELD_BACKEND = "python"  # Field calculation backend: "python" or "numba"
     TRACE_OPEN_LINES_BACKWARDS = False
     VERIFY_BY_REVERSING = False
     REVERSED_ERROR_THRESHOLD = 1.0e-3  # Maximum allowed reversed error
@@ -116,6 +117,10 @@ class IntegrationParameters(BaseModel):
         default=TracingDefaults.INTEGRATION_SYSTEM,
         description="Integration system: 'A' (current dense_output) or 'B' (t_eval based)",
     )
+    field_backend: str = Field(
+        default=TracingDefaults.FIELD_BACKEND,
+        description="Field calculation backend: 'python' (Python implementation) or 'numba' (Numba-compiled)",
+    )
     trace_open_lines_backwards: bool = Field(
         default=TracingDefaults.TRACE_OPEN_LINES_BACKWARDS,
         description="Whether to trace open field lines backwards from surface",
@@ -173,6 +178,15 @@ class IntegrationParameters(BaseModel):
         """Validate integration system parameter."""
         if self.integration_system not in ["A", "B"]:
             error_msg = f"integration_system must be 'A' or 'B', got {self.integration_system}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        return self
+
+    @model_validator(mode="after")
+    def validate_field_backend(self):
+        """Validate field backend parameter."""
+        if self.field_backend not in ["python", "numba"]:
+            error_msg = f"field_backend must be 'python' or 'numba', got {self.field_backend}"
             logger.error(error_msg)
             raise ValueError(error_msg)
         return self
