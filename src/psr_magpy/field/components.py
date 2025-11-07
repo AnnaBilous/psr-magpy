@@ -120,6 +120,20 @@ class FieldComponent(ABC):
         return np.asarray(self.params.offset_r_ns, dtype=np.float64)
 
     @cached_property
+    def numba_compatible_offset_vector(self) -> NDArray[np.float64]:
+        """Get offset vector as numpy array (3-element) for Numba compatibility.
+        
+        Returns the same as moment_offset_vector property. Provided for consistency
+        with Numba-compatible API.
+        
+        Returns
+        -------
+        NDArray[np.float64]
+            3-element offset vector (float64).
+        """
+        return self.moment_offset_vector
+
+    @cached_property
     def rotate_magn_to_spin_frame(self) -> Rotation:
         """Get rotation matrix from magnetic to spin frame (cached)."""
         return Rotation.from_euler(
@@ -132,6 +146,36 @@ class FieldComponent(ABC):
         """Get rotation matrix from spin to magnetic frame (cached)."""
         return self.rotate_magn_to_spin_frame.inv()
 
+    @cached_property
+    def numba_compatible_rotation_matrix(self) -> NDArray[np.float64]:
+        """Get rotation matrix from magnetic to spin frame as numpy array (3x3).
+        
+        Returns the rotation matrix as a 3x3 numpy array (float64) for Numba compatibility.
+        This is equivalent to rotate_magn_to_spin_frame but returns a matrix instead of
+        a scipy Rotation object.
+        
+        Returns
+        -------
+        NDArray[np.float64]
+            3x3 rotation matrix (float64) for transforming vectors from magnetic to spin frame.
+        """
+        return self.rotate_magn_to_spin_frame.as_matrix().astype(np.float64)
+
+    @cached_property
+    def numba_compatible_rotation_matrix_inv(self) -> NDArray[np.float64]:
+        """Get inverse rotation matrix from spin to magnetic frame as numpy array (3x3).
+        
+        Returns the inverse rotation matrix as a 3x3 numpy array (float64) for Numba compatibility.
+        This is equivalent to rotate_spin_to_magn_frame but returns a matrix instead of
+        a scipy Rotation object.
+        
+        Returns
+        -------
+        NDArray[np.float64]
+            3x3 rotation matrix (float64) for transforming vectors from spin to magnetic frame.
+        """
+        return self.rotate_spin_to_magn_frame.as_matrix().astype(np.float64)
+
     @abstractmethod
     def _calculate_field(
         self, r_magn_frame: NDArray[np.float64]
@@ -143,6 +187,31 @@ class FieldComponent(ABC):
     def get_moment_type(self) -> MultipoleType:
         """Get the moment type for this component."""
         pass
+
+    def get_numba_params(self) -> dict:
+        """Get Numba-compatible parameters as a dictionary.
+        
+        Returns a dictionary containing all parameters needed for Numba-compiled
+        field calculations:
+        - B_magnitude: float (field strength scaling factor)
+        - rotation_matrix: NDArray[float64] (3x3, magn to spin frame)
+        - rotation_matrix_inv: NDArray[float64] (3x3, spin to magn frame)
+        - offset_vector: NDArray[float64] (3-element, offset in spin frame)
+        - moment_type: str (enum value: "dipole" or "quadrupole")
+        
+        Returns
+        -------
+        dict
+            Dictionary with keys: 'B_magnitude', 'rotation_matrix', 'rotation_matrix_inv',
+            'offset_vector', 'moment_type'
+        """
+        return {
+            "B_magnitude": float(self.params.B_magnitude),
+            "rotation_matrix": self.numba_compatible_rotation_matrix,
+            "rotation_matrix_inv": self.numba_compatible_rotation_matrix_inv,
+            "offset_vector": self.numba_compatible_offset_vector,
+            "moment_type": self.params.moment_type.value,
+        }
 
     def _transform_to_magnetic_frame(
         self, r_spin_frame: NDArray[np.float64]

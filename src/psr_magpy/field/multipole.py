@@ -106,6 +106,51 @@ class MultipoleField:
         """Get number of field components."""
         return len(self.field_components)
 
+    def get_numba_config(self) -> List[dict]:
+        """Get Numba-compatible configuration for all field components.
+        
+        Collects Numba-compatible parameters from all components and validates
+        that all components support Numba compilation.
+        
+        Returns
+        -------
+        List[dict]
+            List of parameter dictionaries, one per component. Each dict contains:
+            - 'B_magnitude': float
+            - 'rotation_matrix': NDArray[float64] (3x3, magn to spin frame)
+            - 'rotation_matrix_inv': NDArray[float64] (3x3, spin to magn frame)
+            - 'offset_vector': NDArray[float64] (3-element)
+            - 'moment_type': str ("dipole" or "quadrupole")
+        
+        Raises
+        ------
+        ValueError
+            If any component does not support Numba compilation (missing get_numba_params method).
+        """
+        config = []
+        for i, component in enumerate(self.field_components):
+            if not hasattr(component, "get_numba_params"):
+                error_msg = (
+                    f"Component {i+1} ({type(component).__name__}) does not support "
+                    "Numba compilation. Missing get_numba_params() method."
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            try:
+                params = component.get_numba_params()
+                config.append(params)
+            except Exception as e:
+                error_msg = (
+                    f"Failed to get Numba parameters from component {i+1} "
+                    f"({type(component).__name__}): {e}"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg) from e
+        
+        logger.debug(f"Generated Numba config for {len(config)} components")
+        return config
+
     @property
     def quiver_plotter(self) -> Quiver2DFieldPlotter:
         """Get the quiver field plotter instance."""
