@@ -11,6 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.line.field_numba import get_total_field_numba
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -133,4 +134,113 @@ class PythonFieldCalculator(FieldCalculator):
             if mag > 0:
                 self._F /= mag
         
-        return self._F.copy()  # Return copy to avoid modification by subsequent calls  
+        return self._F.copy()  # Return copy to avoid modification by subsequent calls
+
+
+class NumbaFieldCalculator(FieldCalculator):
+    """Numba-compiled implementation of field calculator.
+    
+    Pre-compiles field calculation on initialization and uses Numba-compiled
+    functions for maximum performance. All calculations are performed in float64.
+    """
+    
+    def __init__(self, field):
+        """Initialize Numba field calculator.
+        
+        Parameters
+        ----------
+        field : MultipoleField
+            The magnetic field object to calculate from.
+            
+        Raises
+        ------
+        ValueError
+            If field components are not Numba-compatible.
+        """
+        super().__init__(field)
+        
+        # Get Numba-compatible configuration
+        try:
+            config = field.get_numba_config()
+        except ValueError as e:
+            error_msg = f"Field is not Numba-compatible: {e}"
+            logger.error(error_msg)
+            raise ValueError(error_msg) from e
+        
+        # Convert config list to arrays for Numba efficiency
+        self._n_components = len(config)
+        self._B_magnitudes = np.array(
+            [p["B_magnitude"] for p in config], dtype=np.float64
+        )
+        self._rotation_matrices = np.array(
+            [p["rotation_matrix"] for p in config], dtype=np.float64
+        )
+        self._rotation_matrices_inv = np.array(
+            [p["rotation_matrix_inv"] for p in config], dtype=np.float64
+        )
+        self._offset_vectors = np.array(
+            [p["offset_vector"] for p in config], dtype=np.float64
+        )
+        self._moment_types = np.array(
+            [0 if p["moment_type"] == "dipole" else 1 for p in config],
+            dtype=np.int32
+        )
+        
+        # Warmup: call Numba function once to trigger compilation
+        # Use a dummy position to avoid first-call overhead during integration
+        dummy_r = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+        try:
+            _ = get_total_field_numba(
+                dummy_r, 1, True,
+                self._n_components,
+                self._B_magnitudes,
+                self._rotation_matrices,
+                self._rotation_matrices_inv,
+                self._offset_vectors,
+                self._moment_types,
+            )
+            logger.debug(f"Numba field calculator warmed up for {self._n_components} components")
+        except Exception as e:
+            error_msg = f"Failed to warmup Numba field calculator: {e}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from e
+    
+    def get_field(
+        self, r: np.ndarray, K: int, normalize: bool = True
+    ) -> NDArray[np.float64]:
+        """Calculate magnetic field at position r using Numba-compiled implementation.
+        
+        Parameters
+        ----------
+        r : np.ndarray
+            Position vector (3-element array). Assumes float64.
+        K : int
+            Field direction multiplier (typically 1 or -1).
+        normalize : bool, optional
+            Whether to normalize the field vector. Default is True.
+            
+        Returns
+        -------
+        NDArray[np.float64]
+            Magnetic field vector (3-element array, float64).
+            
+        Notes
+        -----
+        No input validation is performed for maximum performance. Inputs are
+        assumed to be valid (3-element float64 array, K in {1, -1}).
+        """
+        # Ensure r is float64
+        r_f64 = np.asarray(r, dtype=np.float64)
+        
+        # Call Numba-compiled function
+        return get_total_field_numba(
+            r_f64,
+            K,
+            normalize,
+            self._n_components,
+            self._B_magnitudes,
+            self._rotation_matrices,
+            self._rotation_matrices_inv,
+            self._offset_vectors,
+            self._moment_types,
+        )

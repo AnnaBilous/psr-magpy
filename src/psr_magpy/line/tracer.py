@@ -13,7 +13,11 @@ from scipy.integrate import solve_ivp
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.property_calculator import PropertyCalculator
-from psr_magpy.line.field_calculator import FieldCalculator, PythonFieldCalculator
+from psr_magpy.line.field_calculator import (
+    FieldCalculator,
+    PythonFieldCalculator,
+    NumbaFieldCalculator,
+)
 from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -62,9 +66,7 @@ class FieldLineTracer:
         if field_backend == "python":
             self.field_calculator = PythonFieldCalculator(field)
         elif field_backend == "numba":
-            error_msg = "Numba field backend not yet implemented. Use field_backend='python' for now."
-            logger.error(error_msg)
-            raise NotImplementedError(error_msg)
+            self.field_calculator = NumbaFieldCalculator(field)
         else:
             error_msg = f"Unknown field_backend: {field_backend}. Must be 'python' or 'numba'."
             logger.error(error_msg)
