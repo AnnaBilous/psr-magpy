@@ -2,10 +2,18 @@
 
 from typing import Optional, Tuple, Dict, Any, Union, Literal
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.patches import Circle
+# Ensure we use matplotlib's mpl_toolkits, not system namespace package
+import sys
+import os
+_matplotlib_path = os.path.dirname(matplotlib.__file__)
+_mpl_toolkits_path = os.path.join(_matplotlib_path, 'mpl_toolkits')
+if _mpl_toolkits_path not in sys.path:
+    sys.path.insert(0, _mpl_toolkits_path)
 from mpl_toolkits.mplot3d import Axes3D
 
 from psr_magpy.utils.logging_config import get_logger

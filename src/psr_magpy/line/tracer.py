@@ -8,7 +8,6 @@ and integration parameters.
 from typing import Any
 from astropy.coordinates import CartesianRepresentation
 import numpy as np
-from scipy.integrate import solve_ivp
 
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.field_line import FieldLine
@@ -18,6 +17,7 @@ from psr_magpy.line.field_calculator import (
     PythonFieldCalculator,
     NumbaFieldCalculator,
 )
+from psr_magpy.line.solver import ODESolver, SciPySolver, CyRKSolver
 from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -72,6 +72,22 @@ class FieldLineTracer:
             logger.error(error_msg)
             raise ValueError(error_msg)
 
+        # Initialize solver based on backend
+        solver_backend = params.integration.solver_backend
+        if solver_backend == "scipy":
+            self.solver = SciPySolver()
+        elif solver_backend == "numba":
+            # TODO: Implement NumbaSolver
+            error_msg = f"Numba solver backend not yet implemented"
+            logger.error(error_msg)
+            raise NotImplementedError(error_msg)
+        elif solver_backend == "cyrk":
+            self.solver = CyRKSolver()
+        else:
+            error_msg = f"Unknown solver_backend: {solver_backend}. Must be 'scipy', 'numba', or 'cyrk'."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
         # Initialize event detector
         self.event_detector = self._EventDetector(
             surface_radius=params.integration.surface_radius,
@@ -94,8 +110,13 @@ class FieldLineTracer:
         self.event_detector.max_integration_radius = max_integration_radius
 
     def _field_for_integration(self, t: float, r: np.ndarray, K: int) -> np.ndarray:
-        """Wrapper for field calculation that includes unused time parameter required by solve_ivp."""
+        """Wrapper for field calculation that includes unused time parameter required by ODE solvers."""
         return self.field_calculator.get_field(r, K, normalize=True)
+    
+    def _field_for_integration_with_args(self, t: float, r: np.ndarray, *args) -> np.ndarray:
+        """Wrapper that extracts K from args for solver interface."""
+        K = args[0] if len(args) > 0 else 1
+        return self._field_for_integration(t, r, K)
 
     def integrate_field_line(
         self,
@@ -138,21 +159,21 @@ class FieldLineTracer:
             f"Integrating field line from {r_initial} with K={K}, max_integration_radius={max_integration_radius}"
         )
 
-        # Prepare solve_ivp arguments
-        solve_ivp_args = {
-            "fun": self._field_for_integration,
-            "t_span": t_span,
-            "y0": r_initial,
-            "args": [K],
-            "events": (self.event_detector.hit_surface, self.event_detector.hit_Rmax),
-            "method": self.params.integration.method,
-            "rtol": rtol,
-            "atol": atol,
-            "max_step": max_step,
-            "dense_output": True,
-        }
+        # Use solver abstraction
+        solution = self.solver.solve(
+            fun=self._field_for_integration_with_args,
+            t_span=t_span,
+            y0=r_initial,
+            events=(self.event_detector.hit_surface, self.event_detector.hit_Rmax),
+            method=self.params.integration.method,
+            rtol=rtol,
+            atol=atol,
+            max_step=max_step,
+            dense_output=True,
+            args=(K,),  # Pass K as additional argument
+        )
 
-        return solve_ivp(**solve_ivp_args)
+        return solution
 
     def trace_single_line(
         self,
@@ -267,7 +288,9 @@ class FieldLineTracer:
             )
 
             if field_line_reversed.success:
-                r_reversed_final = field_line_reversed.sol(field_line_reversed.t[-1])
+                # Use actual integration endpoint, not interpolated value
+                # This ensures accuracy regardless of interpolation method
+                r_reversed_final = field_line_reversed.y[:, -1]
                 # Calculate distance from original starting point
                 distance_from_start = np.sqrt(
                     np.sum((r_reversed_final - r_initial_array) ** 2)

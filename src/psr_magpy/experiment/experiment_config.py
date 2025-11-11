@@ -335,6 +335,7 @@ class TracingConfig(BaseModel):
     method: str = TracingDefaults.METHOD
     integration_system: str = TracingDefaults.INTEGRATION_SYSTEM
     field_backend: str = TracingDefaults.FIELD_BACKEND
+    solver_backend: str = TracingDefaults.SOLVER_BACKEND
     trace_open_lines_backwards: bool = TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
     verify_by_reversing: bool = TracingDefaults.VERIFY_BY_REVERSING
     reversed_error_threshold: float = TracingDefaults.REVERSED_ERROR_THRESHOLD
@@ -374,6 +375,7 @@ class TracingConfig(BaseModel):
             method=self.method,
             integration_system=self.integration_system,
             field_backend=self.field_backend,
+            solver_backend=self.solver_backend,
             trace_open_lines_backwards=self.trace_open_lines_backwards,
             verify_by_reversing=self.verify_by_reversing,
             reversed_error_threshold=self.reversed_error_threshold,
