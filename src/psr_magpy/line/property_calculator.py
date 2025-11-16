@@ -164,28 +164,20 @@ class PropertyCalculator:
         """
         if getattr(template.save_flags, PropertyName.CURVATURE_LINE.flag_name):
             if line_R_max >= self.threshold_line_distance:
-                eps = 1e-12
-                R = r.T
+                r64 = r.astype(np.float64)
+                ds = 1.0 # uniform sampling
+                r1 = np.gradient(r64, ds, axis=1)     
+                r2 = np.gradient(r1,  ds, axis=1)     
+                t_abs = np.linalg.norm(r1, axis=0)    
+                t_norm = r1 / t_abs[None, :]           
+                proj = (np.sum(r2 * t_norm, axis=0, keepdims=True)) * t_norm
+                k_vec = r2 - proj                     
+                k_abs = np.linalg.norm(k_vec, axis=0) 
+                # Curvature κ and radius ρ
+                eps = 1e-15                            # to avoid 0-division for straight segments
+                kappa = k_abs / np.maximum(t_abs**2, eps)
+                curvature_radius   = np.where(kappa > 0.0, 1.0 / kappa, np.inf)
 
-                # First and second derivatives wrt t (uniform spacing)
-                # Use edge_order=1 for small arrays to avoid requiring 3+ points
-                edge_order = 1 if R.shape[0] < 3 else 2
-                R1 = np.gradient(R, dt, axis=0, edge_order=edge_order)  # r'(t)
-                R2 = np.gradient(R1, dt, axis=0, edge_order=edge_order)  # r''(t)
-
-                # Speed and unit tangent
-                v = np.linalg.norm(R1, axis=1)
-                good_v = v > eps
-
-                # Curvature: ||r' x r''|| / ||r'||^3
-                cross12 = np.cross(R1, R2)
-                cross12_norm = np.linalg.norm(cross12, axis=1)
-                kappa = np.full(R.shape[0], np.nan)
-                kappa[good_v] = cross12_norm[good_v] / (v[good_v] ** 3 + eps)
-
-                curvature_radius = np.full_like(kappa, np.nan)
-                good_k = kappa > eps
-                curvature_radius[good_k] = 1.0 / kappa[good_k]
 
                 # Return as a list containing a single 1D array
                 logger.debug(
@@ -220,59 +212,67 @@ class PropertyCalculator:
         """
         if getattr(template.save_flags, PropertyName.PA_LINE.flag_name):
             if line_R_max >= self.threshold_line_distance:
-                Npoints = r.shape[1]
-                if tangent_norm is None:
-                    t = np.gradient(r, axis=1)
-                    t_abs = np.linalg.norm(t, axis=0, keepdims=True)
-                    safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
-                    t_norm = t / safe_t_abs
-                else:
-                    t_norm = tangent_norm
+                
+                r64 = r.astype(np.float64)
+                
+                ds = 1.0 # uniform sampling
+                r1 = np.gradient(r64, ds, axis=1)     
+                r2 = np.gradient(r1,  ds, axis=1)     
 
-                n = np.gradient(t_norm, axis=1)
+                # tangent vector
+                t_abs = np.linalg.norm(r1, axis=0, keepdims=True)
+                t_abs = np.maximum(t_abs, 1e-12)    
+                t_norm = r1 / t_abs                 
+
+                # curvature normal
+                proj = np.sum(r2 * t_norm, axis=0, keepdims=True) * t_norm
+                n = r2 - proj                      
                 n_abs = np.linalg.norm(n, axis=0, keepdims=True)
-                safe_n_abs = np.where(n_abs == 0.0, 1.0, n_abs)
-                n_norm = n / safe_n_abs
+                n_abs = np.maximum(n_abs, 1e-12)
+                n_norm = n / n_abs                 
+                unstable_points = (n_abs[0, :] <= 1.1e-12) | (t_abs[0, :] <= 1.1e-12)
+                
+                #Local PA frame via Gram–Schmidt
+                
+                Npoints = r.shape[1]
+                # Global reference axes
+                ref_z = np.tile(np.array([[0.0], [0.0], [1.0]]), (1, Npoints))
+                ref_x = np.tile(np.array([[1.0], [0.0], [0.0]]), (1, Npoints))
 
-                # Convert to spherical coordinates manually to avoid astropy issues
-                x, y, z = t_norm
-                r_sph = np.sqrt(x**2 + y**2 + z**2)
-                t_phi = np.arctan2(y, x)
-                t_theta = np.arccos(z / np.where(r_sph == 0, 1, r_sph))
+                # Choose ref = z_hat unless t_norm · z_hat is too close to +-1, then use x_hat
+                dot_tz = np.sum(t_norm * ref_z, axis=0)
+                use_x = np.abs(dot_tz) > 0.9
+                ref = ref_z.copy()
+                ref[:, use_x] = ref_x[:, use_x]
 
-                l0 = np.zeros((3, Npoints), dtype=np.float32)
-                l0[0, :] = -np.sin(t_phi)
-                l0[1, :] = np.cos(t_phi)
-                l0[2, :] = 0
+                # e1: component of ref perpendicular to t_norm, normalized
+                e1 = ref - t_norm * np.sum(ref * t_norm, axis=0, keepdims=True)
+                e1_norm = np.linalg.norm(e1, axis=0, keepdims=True)
+                e1_norm = np.maximum(e1_norm, 1e-12)
+                e1 /= e1_norm
 
-                m0 = np.zeros((3, Npoints), dtype=np.float32)
-                m0[0, :] = np.cos(t_theta) * np.cos(t_phi)
-                m0[1, :] = np.cos(t_theta) * np.sin(t_phi)
-                m0[2, :] = -np.sin(t_theta)
-                nom = np.sum(n_norm * l0, axis=0)
-                denom = np.sum(n_norm * m0, axis=0)
-                PA = np.arctan2(nom, denom).astype(np.float32)
+                # e2: completes right-handed frame, also perp to t_norm
+                e2 = np.cross(t_norm.T, e1.T).T
+                e2_norm = np.linalg.norm(e2, axis=0, keepdims=True)
+                e2_norm = np.maximum(e2_norm, 1e-12)
+                e2 /= e2_norm
 
-                # PA is prone to numerical instability when FL tangent's azimuth is close to multiple of pi
-                # and LOS colatitude is close to 90 degrees.
-                # This is a hack to fix it.
-                eps = 0.01
-                cr_t_phi = (
-                    (t_phi < eps)
-                    | (t_phi > 2 * np.pi - eps)
-                    | (np.abs(t_phi - np.pi) < eps)
-                )
-                cr = cr_t_phi & (np.abs(t_theta - 1.57) < 0.01)
-                PA[cr] = np.arctan2(-n[1, cr], n[0, cr])
-
+                # Project curvature normal onto this basis
+                nom = np.sum(n_norm * e1, axis=0)
+                denom = np.sum(n_norm * e2, axis=0)
+                
+                PA = np.arctan2(nom, denom)   
+                
                 if B_dir == -1:
                     PA = PA + np.pi
-                PA[PA <= -np.pi] += 2 * np.pi
-                PA[PA >= np.pi] -= 2 * np.pi
-
-                PA = np.rad2deg(PA)
+                PA = (PA + np.pi) % (2 * np.pi) - np.pi
+                PA = np.rad2deg(PA).astype(np.float32)
+                
+                PA[unstable_points] = np.nan
+                
                 logger.debug(f"Calculated PA line with {len(PA)} points")
 
+               
             else:
                 PA = np.array([], dtype=np.float32)
                 logger.debug(
