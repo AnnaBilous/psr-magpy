@@ -77,9 +77,14 @@ class FootpointGrid(ABC):
     """
 
     def __init__(self) -> None:
-        """Initialize grid attributes."""
+        """Initialize grid attributes.
+        
+        Note: Grid coordinates are not computed until setup() is called
+        or footpoint_coordinates is accessed (lazy initialization).
+        """
         self.partial: bool = False
-        self.footpoint_coordinates: Optional[CartesianRepresentation] = None
+        self._footpoint_coordinates: Optional[CartesianRepresentation] = None
+        self._initialized: bool = False
         self.nline_ori: Optional[int] = None
         self.indices: Optional[np.ndarray] = None
         self.nline: Optional[int] = None
@@ -90,7 +95,8 @@ class FootpointGrid(ABC):
         """Load grid from FITS file."""
         from psr_magpy.io import load_data
 
-        return load_data(cls, fitsname)
+        result = load_data(cls, fitsname)
+        return cast(T, result)
 
     @classmethod
     def _create_grid_from_header(
@@ -107,7 +113,37 @@ class FootpointGrid(ABC):
         if grid_class is None:
             raise PSRMagPyGridError(f"Unknown grid type: {grid_type}")
 
-        return cast(T, grid_class.from_header(header))
+        # Type ignore: from_header is a class method on grid classes, not visible to mypy on ABCMeta
+        return cast(T, grid_class.from_header(header))  # type: ignore[attr-defined]
+
+    @property
+    def footpoint_coordinates(self) -> CartesianRepresentation:
+        """Get footpoint coordinates (lazy initialization).
+        
+        Coordinates are computed on first access if grid is not yet initialized.
+        
+        Returns
+        -------
+        CartesianRepresentation
+            Footpoint coordinates
+            
+        Raises
+        ------
+        PSRMagPyGridError
+            If grid setup fails
+        """
+        if not self._initialized:
+            self.setup()
+        if self._footpoint_coordinates is None:
+            raise PSRMagPyGridError("Grid coordinates are None after setup")
+        return self._footpoint_coordinates
+    
+    @footpoint_coordinates.setter
+    def footpoint_coordinates(self, value: CartesianRepresentation) -> None:
+        """Set footpoint coordinates directly."""
+        self._footpoint_coordinates = value
+        if value is not None:
+            self._initialized = True
 
     @property
     def colatitude(self) -> np.ndarray:
@@ -115,7 +151,7 @@ class FootpointGrid(ABC):
         spherical = self.footpoint_coordinates.represent_as(
             PhysicsSphericalRepresentation
         )
-        return spherical.theta.to(u.deg).value
+        return np.asarray(spherical.theta.to(u.deg).value)
 
     @property
     def longitude(self) -> np.ndarray:
@@ -123,40 +159,61 @@ class FootpointGrid(ABC):
         spherical = self.footpoint_coordinates.represent_as(
             PhysicsSphericalRepresentation
         )
-        return spherical.phi.to(u.deg).value
+        return np.asarray(spherical.phi.to(u.deg).value)
 
     @abstractmethod
     def _prepare_footpoints(self) -> CartesianRepresentation:
         """Create footpoint coordinates."""
         pass
 
-    def _set_up_grid(self) -> None:
-        """Set up grid coordinates and indices."""
+    def setup(self) -> None:
+        """Explicitly initialize grid coordinates and indices.
+        
+        This method computes footpoint coordinates by calling the abstract
+        _prepare_footpoints() method. It can be called explicitly or will
+        be called automatically when footpoint_coordinates is first accessed.
+        
+        Raises
+        ------
+        PSRMagPyGridError
+            If grid setup fails
+        """
+        if self._initialized:
+            logger.debug("Grid already initialized, skipping setup")
+            return
+            
         try:
+            grid_type_str = self.grid_type.value if self.grid_type is not None else "unknown"
             logger.debug(
-                f"Preparing footpoint coordinates for {self.grid_type.value} grid"
+                f"Preparing footpoint coordinates for {grid_type_str} grid"
             )
             start_time = time.time()
 
-            self.footpoint_coordinates = self._prepare_footpoints()
-            self.nline_ori = len(self.footpoint_coordinates.x)
+            self._footpoint_coordinates = self._prepare_footpoints()
+            self.nline_ori = len(self._footpoint_coordinates.x)
             self.indices = np.arange(self.nline_ori)
             self.nline = self.nline_ori
+            self._initialized = True
 
             duration = time.time() - start_time
             logger.info(f"Grid setup: {self.nline} points in {duration:.3f}s")
-            logger.debug(f"Grid type: {self.grid_type.value}, partial: {self.partial}")
+            grid_type_str = self.grid_type.value if self.grid_type is not None else "unknown"
+            logger.debug(f"Grid type: {grid_type_str}, partial: {self.partial}")
 
         except Exception as e:
             raise PSRMagPyGridError(f"Failed to set up grid: {str(e)}") from e
+    
+    def _set_up_grid(self) -> None:
+        """Internal method for backward compatibility. Use setup() instead."""
+        self.setup()
 
     def subset_grid(self, grid_indices: np.ndarray) -> "FootpointGrid":
         """Create subset of grid points."""
+        if self.indices is None:
+            raise PSRMagPyGridError("Cannot create subset: indices is None")
         logger.debug(f"Creating subset: {len(grid_indices)}/{len(self.indices)} points")
 
         # Validate using Pydantic model
-        if self.indices is None:
-            raise PSRMagPyGridError("Cannot create subset: grid indices are None")
         
         SubsetGridParams(
             grid_indices=grid_indices,
@@ -212,10 +269,12 @@ class FootpointGrid(ABC):
 
     def _copy_attributes(self, copied: "FootpointGrid") -> None:
         """Copy common attributes to the copied grid."""
-        copied.footpoint_coordinates = self.footpoint_coordinates
+        copied._footpoint_coordinates = self._footpoint_coordinates
+        copied._initialized = self._initialized
         copied.indices = self.indices.copy() if self.indices is not None else None
         copied.partial = self.partial
         copied.nline = self.nline
+        copied.nline_ori = self.nline_ori
 
     @classmethod
     def _extract_params(
@@ -261,14 +320,14 @@ class SphericalGridParams(BaseModel):
 class SphericalGrid(FootpointGrid):
     """Regular spherical grid with uniform spacing in longitude and latitude."""
 
-    def __init__(self, nlon: int, nlat: int, pole_lat: float = 0, skip_setup: bool = False):
+    def __init__(self, nlon: int, nlat: int, pole_lat: float = 0, auto_setup: bool = True):
         """Initialize spherical grid.
 
         Args:
             nlon: Number of longitude divisions
             nlat: Number of latitude divisions
             pole_lat: Latitude of grid pole in degrees (default: 0)
-            skip_setup: If True, skip calling _set_up_grid (used when loading from file)
+            auto_setup: If True, automatically call setup() (default: True for backward compatibility)
         """
         super().__init__()
         self.grid_type = GridType.SPHERICAL
@@ -281,8 +340,8 @@ class SphericalGrid(FootpointGrid):
         self.pole_lat = Angle(params.pole_lat * u.deg)
 
         logger.debug(f"Initializing SphericalGrid: {nlon}x{nlat}, pole_lat={pole_lat}°")
-        if not skip_setup:
-            self._set_up_grid()
+        if auto_setup:
+            self.setup()
 
     def __repr__(self) -> str:
         return (
@@ -295,7 +354,10 @@ class SphericalGrid(FootpointGrid):
         """Create SphericalGrid from FITS header."""
         params = cls._extract_params(header, ["NLON", "NLAT"])
         # Map header names to constructor names
-        return cls(nlon=params["NLON"], nlat=params["NLAT"], skip_setup=True)
+        grid = cls(nlon=params["NLON"], nlat=params["NLAT"], auto_setup=False)
+        # Coordinates will be loaded from FITS file, so mark as initialized
+        grid._initialized = True
+        return grid
 
     def _prepare_footpoints(self) -> CartesianRepresentation:
         """Create spherical grid coordinates."""
@@ -355,12 +417,12 @@ class HealpixGridParams(BaseModel):
 class HealpixGrid(FootpointGrid):
     """HEALPix grid for uniform spherical sampling."""
 
-    def __init__(self, nside: int, skip_setup: bool = False):
+    def __init__(self, nside: int, auto_setup: bool = True):
         """Initialize HEALPix grid.
 
         Args:
             nside: HEALPix resolution parameter (must be power of 2)
-            skip_setup: If True, skip calling _set_up_grid (used when loading from file)
+            auto_setup: If True, automatically call setup() (default: True for backward compatibility)
         """
         super().__init__()
         self.grid_type = GridType.HEALPIX
@@ -368,8 +430,8 @@ class HealpixGrid(FootpointGrid):
         # Pydantic validation
         params = HealpixGridParams(nside=nside)
         self.nside = params.nside
-        if not skip_setup:
-            self._set_up_grid()
+        if auto_setup:
+            self.setup()
 
     def __repr__(self) -> str:
         return f"HealpixGrid(nside={self.nside})"
@@ -403,7 +465,7 @@ class HealpixGrid(FootpointGrid):
     def from_header(cls, header: pf.Header) -> "HealpixGrid":
         """Create HealpixGrid from FITS header."""
         params = cls._extract_params(header, ["NSIDE"])
-        return cls(nside=params["NSIDE"], skip_setup=True)
+        return cls(nside=params["NSIDE"], auto_setup=False)
 
     def copy(self) -> "HealpixGrid":
         """Create a copy of the grid."""
@@ -421,12 +483,12 @@ class RandomGridParams(BaseModel):
 class RandomGrid(FootpointGrid):
     """Random uniform distribution of points on a sphere."""
 
-    def __init__(self, nline_ori: int, skip_setup: bool = False):
+    def __init__(self, nline_ori: int, auto_setup: bool = True):
         """Initialize random grid.
 
         Args:
             nline_ori: Number of random points to generate
-            skip_setup: If True, skip calling _set_up_grid (used when loading from file)
+            auto_setup: If True, automatically call setup() (default: True for backward compatibility)
         """
         super().__init__()
         self.grid_type = GridType.RANDOM
@@ -436,14 +498,12 @@ class RandomGrid(FootpointGrid):
         self.nline_ori = params.nline_ori
 
         # Issue warning about saving to file
-        if not skip_setup:
+        if auto_setup:
             logger.warning(
                 "RandomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
                 "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
             )
-
-        if not skip_setup:
-            self._set_up_grid()
+            self.setup()
 
     def __repr__(self) -> str:
         return f"RandomGrid(nline_ori={self.nline_ori})"
@@ -453,6 +513,8 @@ class RandomGrid(FootpointGrid):
 
     def _prepare_footpoints(self) -> CartesianRepresentation:
         # Muller method for random points on a sphere
+        if self.nline_ori is None:
+            raise PSRMagPyGridError("Cannot prepare footpoints: nline_ori is None")
         u: np.ndarray = np.random.normal(loc=0, scale=1, size=(3, self.nline_ori))
         norm: np.ndarray = (np.sum(u**2, axis=0)) ** 0.5
         x, y, z = u / norm
@@ -462,10 +524,18 @@ class RandomGrid(FootpointGrid):
     def from_header(cls, header: pf.Header) -> "RandomGrid":
         """Create RandomGrid from FITS header."""
         params = cls._extract_params(header, ["NLINE"])
-        return cls(nline_ori=params["NLINE"], skip_setup=True)
+        nline = params["NLINE"]
+        if not isinstance(nline, int):
+            raise PSRMagPyGridError(f"Invalid NLINE value: {nline}")
+        grid = cls(nline_ori=nline, auto_setup=False)
+        # Coordinates will be loaded from FITS file, so mark as initialized
+        grid._initialized = True
+        return grid
 
     def copy(self) -> "RandomGrid":
         """Create a copy of the grid."""
+        if self.nline_ori is None:
+            raise PSRMagPyGridError("Cannot copy grid: nline_ori is None")
         copied = RandomGrid(self.nline_ori)
         self._copy_attributes(copied)
         return copied
@@ -495,14 +565,14 @@ class CustomGrid(FootpointGrid):
     """Custom grid with user-provided coordinates."""
 
     def __init__(
-        self, nline_ori: int, coordinates: Optional[CartesianRepresentation] = None, skip_setup: bool = False
+        self, nline_ori: int, coordinates: Optional[CartesianRepresentation] = None, auto_setup: bool = True
     ):
         """Initialize custom grid.
 
         Args:
             nline_ori: Number of points in the grid
             coordinates: Initial coordinates (optional, defaults to NaN)
-            skip_setup: If True, skip setting up indices (used when loading from file)
+            auto_setup: If True, automatically set up indices (default: True for backward compatibility)
         """
         super().__init__()
         self.grid_type = GridType.CUSTOM
@@ -512,12 +582,9 @@ class CustomGrid(FootpointGrid):
 
         self.nline_ori = params.nline_ori
         self.set_coordinates(params.coordinates)
-        if not skip_setup:
+        if auto_setup:
             self.indices = np.arange(self.nline_ori)
             self.nline = self.nline_ori
-
-        # Issue warning about saving to file
-        if not skip_setup:
             logger.warning(
                 "CustomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
                 "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
@@ -544,6 +611,8 @@ class CustomGrid(FootpointGrid):
         """
         if coordinates is None:
             # Create NaN coordinates
+            if self.nline_ori is None:
+                raise PSRMagPyGridError("Cannot create NaN coordinates: nline_ori is None")
             nan_coords = np.full(self.nline_ori, np.nan)
             self.footpoint_coordinates = CartesianRepresentation(
                 nan_coords, nan_coords, nan_coords
@@ -559,10 +628,18 @@ class CustomGrid(FootpointGrid):
     def from_header(cls, header: pf.Header) -> "CustomGrid":
         """Create CustomGrid from FITS header."""
         params = cls._extract_params(header, ["NLINE"])
-        return cls(nline_ori=params["NLINE"], skip_setup=True)
+        nline = params["NLINE"]
+        if not isinstance(nline, int):
+            raise PSRMagPyGridError(f"Invalid NLINE value: {nline}")
+        grid = cls(nline_ori=nline, auto_setup=False)
+        # Coordinates will be loaded from FITS file, so mark as initialized
+        grid._initialized = True
+        return grid
 
     def copy(self) -> "CustomGrid":
         """Create a copy of the grid."""
+        if self.nline_ori is None:
+            raise PSRMagPyGridError("Cannot copy grid: nline_ori is None")
         copied = CustomGrid(self.nline_ori)
         self._copy_attributes(copied)
         return copied
@@ -688,8 +765,9 @@ def create_fine_resolution_subset_from_coarse_OFL(
         raise PSRMagPyGridError("Both grids must be HealpixGrid for footpoint upgrade")
 
     # Upgrade footpoints from coarse to fine resolution
-    coarse_nside = coarse_grid_initial.nside
-    fine_nside = fine_grid_initial.nside
+    # Type ignore: nside exists on HealpixGrid subclass, verified by hasattr check above
+    coarse_nside = coarse_grid_initial.nside  # type: ignore[attr-defined]
+    fine_nside = fine_grid_initial.nside  # type: ignore[attr-defined]
     OFL_footpoints_fine = upgrade_healpix_footpoints(
         coarse_nside, fine_nside, OFL_footpoints
     )
@@ -804,17 +882,19 @@ def create_subset_grid_config(
     grid_path = f"grids/{grid_filename}"
 
     # Create appropriate config based on grid type
+    # Type ignore: nlon, nlat, pole_lat exist on SphericalGrid subclass
+    # Type ignore: nside exists on HealpixGrid subclass
     if grid_type.lower() == "spherical":
-        config = SphericalGridConfig(
-            nlon=original_grid.nlon,
-            nlat=original_grid.nlat,
-            pole_lat=original_grid.pole_lat.deg,
+        config: Union[SphericalGridConfig, HealpixGridConfig] = SphericalGridConfig(
+            nlon=original_grid.nlon,  # type: ignore[attr-defined]
+            nlat=original_grid.nlat,  # type: ignore[attr-defined]
+            pole_lat=original_grid.pole_lat.deg,  # type: ignore[attr-defined]
             subset=True,
             grid_file_path=grid_path,
         )
     elif grid_type.lower() == "healpix":
         config = HealpixGridConfig(
-            nside=original_grid.nside, subset=True, grid_file_path=grid_path
+            nside=original_grid.nside, subset=True, grid_file_path=grid_path  # type: ignore[attr-defined]
         )
     else:
         raise ValueError(
