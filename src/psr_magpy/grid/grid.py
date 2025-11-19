@@ -146,7 +146,8 @@ class FootpointGrid(ABC):
         # Set subset properties
         new_grid.partial = True
         new_grid.footpoint_coordinates = self.footpoint_coordinates[grid_indices]
-        new_grid.indices = grid_indices
+        # Preserve original footpoint IDs by indexing into self.indices
+        new_grid.indices = self.indices[grid_indices]
         new_grid.nline = len(grid_indices)
 
         logger.info(f"Subset created: {new_grid.nline} points")
@@ -246,13 +247,14 @@ class SphericalGridParams(BaseModel):
 class SphericalGrid(FootpointGrid):
     """Regular spherical grid with uniform spacing in longitude and latitude."""
 
-    def __init__(self, nlon: int, nlat: int, pole_lat: float = 0):
+    def __init__(self, nlon: int, nlat: int, pole_lat: float = 0, skip_setup: bool = False):
         """Initialize spherical grid.
 
         Args:
             nlon: Number of longitude divisions
             nlat: Number of latitude divisions
             pole_lat: Latitude of grid pole in degrees (default: 0)
+            skip_setup: If True, skip calling _set_up_grid (used when loading from file)
         """
         super().__init__()
         self.grid_type = GridType.SPHERICAL
@@ -265,7 +267,8 @@ class SphericalGrid(FootpointGrid):
         self.pole_lat = Angle(params.pole_lat * u.deg)
 
         logger.debug(f"Initializing SphericalGrid: {nlon}x{nlat}, pole_lat={pole_lat}°")
-        self._set_up_grid()
+        if not skip_setup:
+            self._set_up_grid()
 
     def __repr__(self) -> str:
         return (
@@ -278,7 +281,7 @@ class SphericalGrid(FootpointGrid):
         """Create SphericalGrid from FITS header."""
         params = cls._extract_params(header, ["NLON", "NLAT"])
         # Map header names to constructor names
-        return cls(nlon=params["NLON"], nlat=params["NLAT"])
+        return cls(nlon=params["NLON"], nlat=params["NLAT"], skip_setup=True)
 
     def _prepare_footpoints(self) -> CartesianRepresentation:
         """Create spherical grid coordinates."""
@@ -340,11 +343,12 @@ class HealpixGridParams(BaseModel):
 class HealpixGrid(FootpointGrid):
     """HEALPix grid for uniform spherical sampling."""
 
-    def __init__(self, nside: int):
+    def __init__(self, nside: int, skip_setup: bool = False):
         """Initialize HEALPix grid.
 
         Args:
             nside: HEALPix resolution parameter (must be power of 2)
+            skip_setup: If True, skip calling _set_up_grid (used when loading from file)
         """
         super().__init__()
         self.grid_type = GridType.HEALPIX
@@ -352,7 +356,8 @@ class HealpixGrid(FootpointGrid):
         # Pydantic validation
         params = HealpixGridParams(nside=nside)
         self.nside = params.nside
-        self._set_up_grid()
+        if not skip_setup:
+            self._set_up_grid()
 
     def __repr__(self) -> str:
         return f"HealpixGrid(nside={self.nside})"
@@ -386,7 +391,7 @@ class HealpixGrid(FootpointGrid):
     def from_header(cls, header: pf.Header) -> "HealpixGrid":
         """Create HealpixGrid from FITS header."""
         params = cls._extract_params(header, ["NSIDE"])
-        return cls(nside=params["NSIDE"])
+        return cls(nside=params["NSIDE"], skip_setup=True)
 
     def copy(self) -> "HealpixGrid":
         """Create a copy of the grid."""
@@ -404,11 +409,12 @@ class RandomGridParams(BaseModel):
 class RandomGrid(FootpointGrid):
     """Random uniform distribution of points on a sphere."""
 
-    def __init__(self, nline_ori: int):
+    def __init__(self, nline_ori: int, skip_setup: bool = False):
         """Initialize random grid.
 
         Args:
             nline_ori: Number of random points to generate
+            skip_setup: If True, skip calling _set_up_grid (used when loading from file)
         """
         super().__init__()
         self.grid_type = GridType.RANDOM
@@ -418,12 +424,14 @@ class RandomGrid(FootpointGrid):
         self.nline_ori = params.nline_ori
 
         # Issue warning about saving to file
-        logger.warning(
-            "RandomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
-            "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
-        )
+        if not skip_setup:
+            logger.warning(
+                "RandomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
+                "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
+            )
 
-        self._set_up_grid()
+        if not skip_setup:
+            self._set_up_grid()
 
     def __repr__(self) -> str:
         return f"RandomGrid(nline_ori={self.nline_ori})"
@@ -442,7 +450,7 @@ class RandomGrid(FootpointGrid):
     def from_header(cls, header: pf.Header) -> "RandomGrid":
         """Create RandomGrid from FITS header."""
         params = cls._extract_params(header, ["NLINE"])
-        return cls(nline_ori=params["NLINE"])
+        return cls(nline_ori=params["NLINE"], skip_setup=True)
 
     def copy(self) -> "RandomGrid":
         """Create a copy of the grid."""
@@ -475,13 +483,14 @@ class CustomGrid(FootpointGrid):
     """Custom grid with user-provided coordinates."""
 
     def __init__(
-        self, nline_ori: int, coordinates: Optional[CartesianRepresentation] = None
+        self, nline_ori: int, coordinates: Optional[CartesianRepresentation] = None, skip_setup: bool = False
     ):
         """Initialize custom grid.
 
         Args:
             nline_ori: Number of points in the grid
             coordinates: Initial coordinates (optional, defaults to NaN)
+            skip_setup: If True, skip setting up indices (used when loading from file)
         """
         super().__init__()
         self.grid_type = GridType.CUSTOM
@@ -491,14 +500,16 @@ class CustomGrid(FootpointGrid):
 
         self.nline_ori = params.nline_ori
         self.set_coordinates(params.coordinates)
-        self.indices = np.arange(self.nline_ori)
-        self.nline = self.nline_ori
+        if not skip_setup:
+            self.indices = np.arange(self.nline_ori)
+            self.nline = self.nline_ori
 
         # Issue warning about saving to file
-        logger.warning(
-            "CustomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
-            "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
-        )
+        if not skip_setup:
+            logger.warning(
+                "CustomGrid created: This grid must be saved to a file and referenced by path in experiment configs. "
+                "Use grid.save_to_fits('path/to/grid.fits') to save the grid."
+            )
 
     def __repr__(self) -> str:
         return f"CustomGrid(nline_ori={self.nline_ori})"
@@ -536,7 +547,7 @@ class CustomGrid(FootpointGrid):
     def from_header(cls, header: pf.Header) -> "CustomGrid":
         """Create CustomGrid from FITS header."""
         params = cls._extract_params(header, ["NLINE"])
-        return cls(nline_ori=params["NLINE"])
+        return cls(nline_ori=params["NLINE"], skip_setup=True)
 
     def copy(self) -> "CustomGrid":
         """Create a copy of the grid."""

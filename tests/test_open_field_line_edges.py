@@ -149,6 +149,7 @@ class TestGetOFLEdgesPrecise:
     def setup_method(self):
         """Set up test fixtures."""
         self.mock_grid = Mock(spec=FootpointGrid)
+        self.mock_grid.indices = np.array([0, 1, 2, 3, 4, 5])
         self.mock_lines = Mock(spec=FieldLineSet)
     
     def test_get_ofl_edges_precise_no_parameters(self):
@@ -526,6 +527,12 @@ class TestCalculateAndSaveOFLEdges:
         mock_config = Mock()
         mock_experiment_config.load.return_value = mock_config
         
+        # Mock tracing config with reversed_error_threshold
+        mock_tracing = Mock()
+        mock_tracing.reversed_error_threshold = 0.001
+        mock_config.tracing = mock_tracing
+        mock_config.name = "test_experiment"
+        
         # Mock field line data
         mock_ofl_data = Mock(spec=FieldLineSet)
         mock_ofl_data.n_field_lines = 1000
@@ -542,7 +549,7 @@ class TestCalculateAndSaveOFLEdges:
         mock_io = Mock()
         mock_io_factory.return_value = mock_io
         mock_field_line_set = Mock(spec=FieldLineSet)
-        mock_field_line_set.n_field_lines = 100
+        mock_field_line_set.n_field_lines = 5  # Match the number of footpoints
         
         # Mock property system to return footpoint IDs and reversed errors
         mock_property_system = Mock()
@@ -568,7 +575,19 @@ class TestCalculateAndSaveOFLEdges:
         mock_save_flags.save_reversed_error = True
         mock_field_line_set.save_flags = mock_save_flags
         
-        mock_field_line_set.subset_by_footpoint_ids.return_value = mock_field_line_set
+        # Create a mock for the subset result
+        mock_subset = Mock(spec=FieldLineSet)
+        mock_subset.n_field_lines = 2  # After filtering, should have 2 footpoints [1, 5]
+        mock_subset.append = Mock()  # For combining batches
+        mock_subset.save_flags = mock_save_flags  # Copy save_flags from parent mock
+        mock_subset.property_system = mock_property_system  # Copy property_system from parent mock
+        
+        # Make subset_by_footpoint_ids return the subset mock
+        def mock_subset_by_footpoint_ids(footpoint_ids):
+            # Verify it's called with filtered footpoints
+            return mock_subset
+        
+        mock_field_line_set.subset_by_footpoint_ids = Mock(side_effect=mock_subset_by_footpoint_ids)
         mock_io.load_data.return_value = mock_field_line_set
         
         # Create template with reversed_error

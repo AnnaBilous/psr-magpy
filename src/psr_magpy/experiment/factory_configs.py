@@ -192,6 +192,9 @@ class TracingFactoryConfig(BaseModel):
     dt: Union[float, List[float]] = TracingDefaults.DT
     max_step: Union[float, List[float]] = TracingDefaults.MAX_STEP
     method: Union[str, List[str]] = TracingDefaults.METHOD
+    integration_system: Union[str, List[str]] = TracingDefaults.INTEGRATION_SYSTEM
+    field_backend: Union[str, List[str]] = TracingDefaults.FIELD_BACKEND
+    solver_backend: Union[str, List[str]] = TracingDefaults.SOLVER_BACKEND
     trace_open_lines_backwards: Union[bool, List[bool]] = (
         TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
     )

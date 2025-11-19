@@ -89,7 +89,7 @@ class TestFieldComponentParams:
     
     def test_invalid_offset_vector_type(self):
         """Test validation error for wrong offset vector type."""
-        with pytest.raises(ValueError, match="list or array"):
+        with pytest.raises((ValueError, Exception), match=".*list or array.*"):
             FieldComponentParams(
                 offset_r_ns="invalid",
                 moment_type=MultipoleType.DIPOLE

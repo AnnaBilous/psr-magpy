@@ -411,6 +411,12 @@ def calculate_and_save_OFL_edges(
 
     # Phase 2: Extract edge data with full template
     logger.info("Phase 2: Extracting edge data with full template")
+    
+    # Ensure reversed_error is in template if needed for filtering
+    if not template.property_system.save_flags.save_reversed_error:
+        template.property_system.save_flags.save_reversed_error = True
+        logger.debug("Added reversed_error to template for filtering")
+    
     try:
         # Find all batch files
         batch_pattern = f"{lines_dir}/{experiment_config.name}_batch_*.fits"
@@ -470,10 +476,20 @@ def calculate_and_save_OFL_edges(
                         logger.debug(f"    No footpoint IDs in batch file, skipping")
                         continue
 
-                    # Find footpoint IDs that are in the edge
+                    # Get reversed_error if available for filtering
+                    batch_reversed_error = batch_data.property_system.get_property(
+                        PropertyName.REVERSED_ERROR
+                    )
+                    reversed_error_threshold = getattr(experiment_config.tracing, 'reversed_error_threshold', 1.0e-3)
+                    
+                    # Find footpoint IDs that are in the edge and pass error threshold
                     edge_footpoint_ids_in_batch = []
                     for j, fp_id in enumerate(batch_footpoint_ids):
                         if fp_id in edge_footpoint_set:
+                            # Filter by reversed_error if available
+                            if batch_reversed_error is not None and len(batch_reversed_error) > j:
+                                if batch_reversed_error[j] > reversed_error_threshold:
+                                    continue  # Skip this footpoint due to high error
                             edge_footpoint_ids_in_batch.append(fp_id)
 
                     if not edge_footpoint_ids_in_batch:
@@ -676,6 +692,13 @@ def calculate_and_save_OFL_regions(
 
     # Phase 2: Extract region data with full template
     logger.info("Phase 2: Extracting region data with full template")
+    
+    # Ensure reversed_error is in template for filtering
+    reversed_error_threshold = getattr(experiment_config.tracing, 'reversed_error_threshold', 1.0e-3)
+    if not template.property_system.save_flags.save_reversed_error:
+        template.property_system.save_flags.save_reversed_error = True
+        logger.debug("Added reversed_error to template for filtering")
+    
     try:
         # Find all batch files
         batch_pattern = f"{lines_dir}/{experiment_config.name}_batch_*.fits"
@@ -735,10 +758,19 @@ def calculate_and_save_OFL_regions(
                         logger.debug(f"    No footpoint IDs in batch file, skipping")
                         continue
 
-                    # Find footpoint IDs that are in the region
+                    # Get reversed_error if available for filtering
+                    batch_reversed_error = batch_data.property_system.get_property(
+                        PropertyName.REVERSED_ERROR
+                    )
+                    
+                    # Find footpoint IDs that are in the region and pass error threshold
                     region_footpoint_ids_in_batch = []
                     for j, fp_id in enumerate(batch_footpoint_ids):
                         if fp_id in region_footpoint_set:
+                            # Filter by reversed_error if available
+                            if batch_reversed_error is not None and len(batch_reversed_error) > j:
+                                if batch_reversed_error[j] > reversed_error_threshold:
+                                    continue  # Skip this footpoint due to high error
                             region_footpoint_ids_in_batch.append(fp_id)
 
                     if not region_footpoint_ids_in_batch:
