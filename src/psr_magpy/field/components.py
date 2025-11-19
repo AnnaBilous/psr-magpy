@@ -13,6 +13,7 @@ from astropy import units as u
 from astropy.coordinates import PhysicsSphericalRepresentation
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyFieldError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -113,9 +114,7 @@ class FieldComponent(ABC):
                 moment_type=self.get_moment_type(),
             )
         except Exception as e:
-            error_msg = f"Failed to initialize parameters: {e}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyFieldError(f"Failed to initialize parameters: {e}") from e
 
         logger.debug(f"Successfully initialized {self.__class__.__name__}")
 
@@ -239,11 +238,9 @@ class FieldComponent(ABC):
         """Calculate the magnetic field at a given position in the spin frame."""
         # Input validation
         if not np.isfinite(r_spin_frame).all():
-            error_msg = (
+            raise PSRMagPyFieldError(
                 f"Invalid position vector containing non-finite values: {r_spin_frame}"
             )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
 
         try:
             r_magn_frame = self._transform_to_magnetic_frame(r_spin_frame)
@@ -251,16 +248,12 @@ class FieldComponent(ABC):
 
             # Validate output
             if not np.isfinite(field).all():
-                error_msg = f"Calculated field contains non-finite values: {field}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyFieldError(f"Calculated field contains non-finite values: {field}")
 
             return field
 
         except Exception as e:
-            error_msg = f"Error calculating field: {e}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyFieldError(f"Error calculating field: {e}") from e
 
     def __repr__(self) -> str:
         """Return string representation of the field component."""
@@ -322,9 +315,7 @@ class DipoleFieldComponent(FieldComponent):
             return field
 
         except Exception as e:
-            error_msg = f"Error in dipole field calculation: {e}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyFieldError(f"Error in dipole field calculation: {e}") from e
 
     def get_moment_type(self) -> MultipoleType:
         """Get the moment type for this component."""
@@ -380,9 +371,7 @@ class QuadrupoleFieldComponent(FieldComponent):
             return field
 
         except Exception as e:
-            error_msg = f"Error in quadrupole field calculation: {e}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyFieldError(f"Error in quadrupole field calculation: {e}") from e
 
     def get_moment_type(self) -> MultipoleType:
         """Get the moment type for this component."""

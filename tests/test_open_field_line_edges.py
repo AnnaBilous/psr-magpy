@@ -18,6 +18,7 @@ from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.grid.grid import HealpixGrid, FootpointGrid
 from psr_magpy.line.property_system import PropertyName
+from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyGridError, PSRMagPyExperimentError
 
 
 class TestOFLEdgeResult:
@@ -379,8 +380,8 @@ class TestCalculateAndSaveOFLEdges:
                 R_LC_values=self.r_lc_values,
                 output_path=str(self.output_path)
             )
-            assert False, "Should have raised FileNotFoundError"
-        except FileNotFoundError as e:
+            assert False, "Should have raised PSRMagPyIOError"
+        except PSRMagPyIOError as e:
             assert "Failed to load experiment config" in str(e)
     
     @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
@@ -398,9 +399,9 @@ class TestCalculateAndSaveOFLEdges:
                 R_LC_values=self.r_lc_values,
                 output_path=str(self.output_path)
             )
-            assert False, "Should have raised ValueError"
-        except ValueError as e:
-            assert "No field line data found" in str(e)
+            assert False, "Should have raised PSRMagPyIOError"
+        except PSRMagPyIOError as e:
+            assert "No field line data found" in str(e) or "Failed to load field line data" in str(e)
     
     @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
     def test_calculate_and_save_invalid_grid(self, mock_experiment_config):
@@ -428,9 +429,9 @@ class TestCalculateAndSaveOFLEdges:
                 output_path=str(self.output_path),
                 precise_edges=True  # This will trigger the grid type check
             )
-            assert False, "Should have raised ValueError"
-        except ValueError as e:
-            assert "Precise edge calculation requires HealpixGrid" in str(e)
+            assert False, "Should have raised PSRMagPyExperimentError"
+        except PSRMagPyExperimentError as e:
+            assert "Precise edge calculation requires HealpixGrid" in str(e) or "Failed to calculate OFL edges" in str(e)
     
     @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
     @patch('psr_magpy.io.get_io_factory')

@@ -7,6 +7,7 @@ from sys import getsizeof
 import numpy as np
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyValidationError, PSRMagPyPropertyError
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.property_system import PropertyName
 
@@ -125,16 +126,14 @@ class FieldLineSet(FieldLine):
         """Get template field line and validate input."""
         if isinstance(field_lines, list):
             if not field_lines:
-                error_msg = "Empty field_lines list provided"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyValidationError("Empty field_lines list provided")
             return field_lines[0]
         elif isinstance(field_lines, FieldLine):
             return field_lines
         else:
-            error_msg = f"Expected FieldLine or list of FieldLine, got {type(field_lines).__name__}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyValidationError(
+                f"Expected FieldLine or list of FieldLine, got {type(field_lines).__name__}"
+            )
 
     def append(
         self, field_lines: Union[List[FieldLine], FieldLine, "FieldLineSet"]
@@ -162,9 +161,7 @@ class FieldLineSet(FieldLine):
         if isinstance(field_lines, list):
             self._append_field_line_list(field_lines)
         else:
-            error_msg = f"Unexpected type: {type(field_lines).__name__}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyValidationError(f"Unexpected type: {type(field_lines).__name__}")
 
     def _append_field_line_set(self, field_line_set: "FieldLineSet") -> None:
         """Append another FieldLineSet."""
@@ -173,9 +170,7 @@ class FieldLineSet(FieldLine):
             self.property_system.get_flags_dict()
             != field_line_set.property_system.get_flags_dict()
         ):
-            error_msg = "FieldLineSet has incompatible save flags configuration"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyPropertyError("FieldLineSet has incompatible save flags configuration")
 
         logger.debug(
             f"Appending FieldLineSet with {field_line_set.n_field_lines} lines"
@@ -233,9 +228,8 @@ class FieldLineSet(FieldLine):
                 self.property_system.get_flags_dict()
                 != line.property_system.get_flags_dict()
             ):
-                error_msg = f"Field line {i} has incompatible save flags configuration"
-                logger.error(error_msg)
-                raise ValueError(
+                raise PSRMagPyPropertyError(
+                    f"Field line {i} has incompatible save flags configuration. "
                     "All field lines must have the same save flags configuration"
                 )
 
@@ -475,29 +469,23 @@ class FieldLineSet(FieldLine):
             footpoint_ids = footpoint_ids.tolist()
 
         if not footpoint_ids:
-            error_msg = "footpoint_ids list cannot be empty"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyValidationError("footpoint_ids list cannot be empty")
 
         # Check if footpoint_id property is enabled
         if (
             PropertyName.FOOTPOINT_ID
             not in self.property_system.get_enabled_properties()
         ):
-            error_msg = (
+            raise PSRMagPyPropertyError(
                 "footpoint_id property must be enabled to subset by footpoint IDs"
             )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
 
         # Get current footpoint IDs
         current_footpoint_ids = self.property_system.get_property(
             PropertyName.FOOTPOINT_ID
         )
         if current_footpoint_ids is None:
-            error_msg = "footpoint_id property is None"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyPropertyError("footpoint_id property is None")
 
         # Convert footpoint_ids to set for efficient lookup
         target_footpoint_set = set(footpoint_ids)
@@ -573,15 +561,11 @@ class FieldLineSet(FieldLine):
         print("Trimming to light cylinder")
         # Check if r_line property is enabled
         if PropertyName.R_LINE not in self.property_system.get_enabled_properties():
-            error_msg = "r_line property must be enabled to trim field lines"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyPropertyError("r_line property must be enabled to trim field lines")
 
         r_line_data = self.property_system.get_property(PropertyName.R_LINE)
         if r_line_data is None:
-            error_msg = "r_line property is None"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyPropertyError("r_line property is None")
 
         # Properties that should be trimmed along with r_line
         line_properties = [

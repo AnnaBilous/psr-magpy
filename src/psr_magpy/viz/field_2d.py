@@ -17,6 +17,7 @@ if _mpl_toolkits_path not in sys.path:
 from mpl_toolkits.mplot3d import Axes3D
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyFieldError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -239,15 +240,13 @@ class Grid3DVisualizer:
 
         # Check if points define a valid plane
         if np.allclose(p1, p2) or np.allclose(p1, p3) or np.allclose(p2, p3):
-            error_msg = "At least two points coincide. Cannot define a plane."
-            raise ValueError(error_msg)
+            raise PSRMagPyFieldError("At least two points coincide. Cannot define a plane.")
 
         v1 = p2 - p1
         v2 = p3 - p1
         cross_product = np.cross(v1, v2)
         if np.allclose(cross_product, 0):
-            error_msg = "Points are collinear. Cannot define a plane."
-            raise ValueError(error_msg)
+            raise PSRMagPyFieldError("Points are collinear. Cannot define a plane.")
 
         # Calculate plane basis vectors
         v1_norm = v1 / np.linalg.norm(v1)
@@ -395,9 +394,7 @@ def plot_field_lines_2d(
         coords = [X, np.full_like(X, fixed_coord), Y]
         xlabel, ylabel = "X", "Z"
     else:
-        error_msg = f"Invalid plane: {plane}. Must be 'xy', 'yz', or 'xz'"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyFieldError(f"Invalid plane: {plane}. Must be 'xy', 'yz', or 'xz'")
 
     # Calculate field at each point
     field_values = np.zeros((n_points, n_points, 3))

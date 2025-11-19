@@ -19,6 +19,7 @@ from psr_magpy.line.field_calculator import (
 )
 from psr_magpy.line.solver import ODESolver, SciPySolver, CyRKSolver
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyTracingError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -76,9 +77,7 @@ class FieldLineTracer:
             self.solver = SciPySolver()
         elif solver_backend == "numba":
             # TODO: Implement NumbaSolver
-            error_msg = f"Numba solver backend not yet implemented"
-            logger.error(error_msg)
-            raise NotImplementedError(error_msg)
+            raise NotImplementedError("Numba solver backend not yet implemented")
         elif solver_backend == "cyrk":
             self.solver = CyRKSolver()
 

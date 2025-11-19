@@ -556,7 +556,8 @@ class TestGridIOTests:
     
     def test_load_nonexistent_file(self):
         """Test loading from nonexistent file."""
-        with pytest.raises(ValueError, match="Validation failed for load operation"):
+        from psr_magpy.utils.exceptions import PSRMagPyIOError
+        with pytest.raises(PSRMagPyIOError, match="Validation failed for load operation"):
             FootpointGrid.load_from_fits("nonexistent_file.fits")
     
     def test_load_invalid_fits(self, temp_dir):

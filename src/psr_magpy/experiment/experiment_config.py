@@ -42,6 +42,7 @@ from psr_magpy.line.tracing_parameters import (
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyValidationError, PSRMagPyFieldError, PSRMagPyGridError
 from psr_magpy.line.tracing_parameters import TracingDefaults
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -94,9 +95,7 @@ class FieldConfig(BaseModel):
                     offset_r_ns=comp.offset_r_ns,
                 )
             else:
-                error_msg = f"Unknown field component type: {comp_type}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyFieldError(f"Unknown field component type: {comp_type}")
 
             field_components.append(component)
 
@@ -126,9 +125,7 @@ class FieldConfig(BaseModel):
                     offset_r_ns=comp.offset_r_ns,
                 )
             else:
-                error_msg = f"Unknown field component type: {comp_type}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyFieldError(f"Unknown field component type: {comp_type}")
 
             # Get complete parameters including defaults
             complete_params = component.params.model_dump()
@@ -352,9 +349,7 @@ class GridConfig(BaseModel):
                 )  # Remove subset flag when creating from scratch
                 return HealpixGrid(**params)
         else:
-            error_msg = "No grid type specified"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("No grid type specified")
 
 
 class TracingConfig(BaseModel):
@@ -498,8 +493,21 @@ class ExperimentConfig:
             )
             self.template.save_flags.save_reversed_error = True
 
-    def save(self, filepath: Union[str, Path]) -> None:
-        """Save configuration to YAML file."""
+    def save(self, filepath: Union[str, Path], overwrite: bool = False) -> None:
+        """Save configuration to YAML file.
+
+        Args:
+            filepath: Path where to save the configuration file
+            overwrite: If True, delete existing file before saving. If False and file exists,
+                      raises FileExistsError (handled by underlying I/O system).
+        """
+        filepath = Path(filepath)
+        
+        # Handle overwrite flag
+        if overwrite and filepath.exists():
+            filepath.unlink()
+            logger.debug(f"Deleted existing config file: {filepath}")
+        
         # Ensure I/O module is imported for registration
         import psr_magpy.io
         from psr_magpy.io import get_io_factory
@@ -558,9 +566,7 @@ class ExperimentConfig:
 
         # Determine lines directory
         if lines_dir is None:
-            error_msg = "lines_dir must be specified"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyValidationError("lines_dir must be specified")
 
         # Find all batch files for this experiment
         batch_pattern = f"{lines_dir}/{self.name}_batch_*.fits"
@@ -600,9 +606,9 @@ class ExperimentConfig:
             unique_ids = set(footpoint_ids)
             if len(unique_ids) != len(footpoint_ids):
                 duplicates = [id for id in unique_ids if footpoint_ids.count(id) > 1]
-                error_msg = f"Duplicate footpoint indices found: {duplicates[:10]}{'...' if len(duplicates) > 10 else ''}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyValidationError(
+                    f"Duplicate footpoint indices found: {duplicates[:10]}{'...' if len(duplicates) > 10 else ''}"
+                )
             else:
                 logger.info(f"Verified {len(footpoint_ids)} unique footpoint indices")
 

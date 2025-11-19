@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 import psutil
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyValidationError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -284,11 +285,9 @@ class PerformanceParameters(BaseModel):
             If n_trial exceeds grid size
         """
         if self.n_trial > grid_size:
-            error_msg = (
+            raise PSRMagPyValidationError(
                 f"n_trial ({self.n_trial}) cannot exceed grid size ({grid_size})"
             )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
 
 
 class OutputParameters(BaseModel):

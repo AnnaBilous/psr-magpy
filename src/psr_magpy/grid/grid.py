@@ -2,7 +2,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional, Any, TypeVar, Type, Union, cast, List, Dict, TYPE_CHECKING
+from typing import Optional, Any, TypeVar, Type, Union, cast, List, Dict, Tuple, TYPE_CHECKING
 from pathlib import Path
 
 import healpy as hp
@@ -18,10 +18,12 @@ from astropy.io import fits as pf
 from astropy.nddata import CCDData
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyGridError, PSRMagPyValidationError, PSRMagPyIOError, PSRMagPyExperimentError
 from pydantic import BaseModel, Field, model_validator, field_validator
 
 if TYPE_CHECKING:
-    from psr_magpy.experiment.experiment_config import GridConfig
+    from psr_magpy.experiment.experiment_config import GridConfig, ExperimentConfig
+    from psr_magpy.line.field_line import FieldLine
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -108,9 +110,7 @@ class FootpointGrid(ABC):
         }
         grid_class = grid_classes.get(grid_type)
         if grid_class is None:
-            error_msg = f"Unknown grid type: {grid_type}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError(f"Unknown grid type: {grid_type}")
 
         return cast(T, grid_class.from_header(header))
 
@@ -153,9 +153,7 @@ class FootpointGrid(ABC):
             logger.debug(f"Grid type: {self.grid_type.value}, partial: {self.partial}")
 
         except Exception as e:
-            error_msg = f"Failed to set up grid: {str(e)}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyGridError(f"Failed to set up grid: {str(e)}") from e
 
     def subset_grid(self, grid_indices: np.ndarray) -> "FootpointGrid":
         """Create subset of grid points."""
@@ -163,9 +161,7 @@ class FootpointGrid(ABC):
 
         # Validate using Pydantic model
         if self.indices is None:
-            error_msg = "Cannot create subset: grid indices are None"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Cannot create subset: grid indices are None")
         
         SubsetGridParams(
             grid_indices=grid_indices,
@@ -217,9 +213,7 @@ class FootpointGrid(ABC):
 
             return ax
         except Exception as e:
-            error_msg = f"Failed to plot footpoint coordinates: {e}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyGridError(f"Failed to plot footpoint coordinates: {e}") from e
 
     @abstractmethod
     def copy(self) -> "FootpointGrid":
@@ -245,9 +239,7 @@ class FootpointGrid(ABC):
                 params[param] = header[param]
                 logger.debug(f"Found parameter {param}: {header[param]}")
             except KeyError:
-                error_msg = f"Missing {param} parameter in header"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyIOError(f"Missing {param} parameter in header")
         return params
 
     def _get_header_params(self) -> Dict[str, Any]:
@@ -366,9 +358,7 @@ class HealpixGridParams(BaseModel):
     @model_validator(mode="after")
     def validate_power_of_two(self):
         if not (self.nside & (self.nside - 1) == 0):
-            error_msg = f"nside must be a power of 2, got {self.nside}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError(f"nside must be a power of 2, got {self.nside}")
         return self
 
 
@@ -505,9 +495,9 @@ class CustomGridParams(BaseModel):
     def validate_coordinates_length(self):
         if self.coordinates is not None:
             if len(self.coordinates.x) != self.nline_ori:
-                error_msg = f"Coordinates length {len(self.coordinates.x)} != nline_ori {self.nline_ori}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise ValueError(
+                    f"Coordinates length {len(self.coordinates.x)} != nline_ori {self.nline_ori}"
+                )
         return self
 
 
@@ -570,9 +560,9 @@ class CustomGrid(FootpointGrid):
             )
         else:
             if len(coordinates.x) != self.nline_ori:
-                error_msg = f"Coordinates length {len(coordinates.x)} != nline_ori {self.nline_ori}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyGridError(
+                    f"Coordinates length {len(coordinates.x)} != nline_ori {self.nline_ori}"
+                )
             self.footpoint_coordinates = coordinates
 
     @classmethod
@@ -596,6 +586,193 @@ Provides different grid types for sampling points on a sphere:
 - RandomGrid: Random uniform distribution
 - CustomGrid: User-defined coordinates
 """
+
+
+def upgrade_healpix_footpoints(
+    coarse_nside: int, fine_nside: int, footpoint_indices: np.ndarray
+) -> np.ndarray:
+    """Upgrade healpix footpoint indices from coarse to fine resolution.
+
+    Creates a boolean map at coarse resolution marking footpoint locations,
+    upgrades it to fine resolution using healpix ud_grade, and returns the
+    fine resolution indices.
+
+    Args:
+        coarse_nside: Healpix nside parameter for coarse resolution
+        fine_nside: Healpix nside parameter for fine resolution
+        footpoint_indices: Array of pixel indices at coarse resolution
+
+    Returns:
+        Array of pixel indices at fine resolution corresponding to upgraded footpoints
+
+    Example:
+        >>> coarse_indices = np.array([100, 200, 300])
+        >>> fine_indices = upgrade_healpix_footpoints(128, 256, coarse_indices)
+        >>> len(fine_indices)  # Typically 4x more pixels at higher resolution
+    """
+    # Create boolean map: True where OFL footpoints are located
+    coarse_map = np.zeros(hp.nside2npix(coarse_nside), dtype=bool)
+    coarse_map[footpoint_indices] = True
+
+    # Upgrade the boolean map to fine resolution
+    fine_map = hp.pixelfunc.ud_grade(coarse_map, fine_nside)
+
+    # Get indices where the fine map is True
+    fine_footpoint_indices = np.where(fine_map)[0]
+
+    logger.debug(
+        f"Upgraded {len(footpoint_indices)} coarse footpoints (nside={coarse_nside}) "
+        f"to {len(fine_footpoint_indices)} fine footpoints (nside={fine_nside})"
+    )
+
+    return fine_footpoint_indices
+
+
+def create_fine_resolution_subset_from_coarse_OFL(
+    coarse_experiment: "ExperimentConfig",
+    fine_experiment: "ExperimentConfig",
+    R_LC: float,
+    coarse_lines_dir: Union[str, Path],
+    fine_grids_dir: Union[str, Path],
+    h_LC_coeff: float = 3**1.5 / 2.0,
+    template: Optional["FieldLine"] = None,
+) -> Tuple[Path, "GridConfig"]:
+    """Create fine resolution subset grid from coarse experiment OFL footpoints.
+
+    This function:
+    1. Loads OFL data from coarse experiment
+    2. Extracts OFL footpoints
+    3. Creates fine resolution grid
+    4. Upgrades footpoints from coarse to fine resolution
+    5. Creates and saves subset grid
+    6. Returns grid filepath and updated grid config
+
+    Args:
+        coarse_experiment: Coarse resolution experiment config
+        fine_experiment: Fine resolution experiment config
+        R_LC: Light cylinder radius for OFL calculation
+        coarse_lines_dir: Directory containing coarse experiment batch files
+        fine_grids_dir: Directory where fine subset grid will be saved
+        h_LC_coeff: Height coefficient for OFL calculation (default: 3^1.5 / 2.0)
+        template: Optional FieldLine template (defaults to template_OFL_subset)
+
+    Returns:
+        Tuple of (grid_filepath, updated_grid_config)
+
+    Raises:
+        ValueError: If OFL data cannot be loaded or grids cannot be created
+    """
+    from psr_magpy.line.field_line import FieldLine
+    from psr_magpy.experiment.experiment_config import GridConfig, HealpixGridConfig
+
+    # Use minimal template if not provided
+    if template is None:
+        template = FieldLine.template_OFL_subset()
+
+    # Load OFL data from coarse experiment
+    logger.info(f"Loading OFL data from coarse experiment: {coarse_experiment.name}")
+    OFL_data = coarse_experiment.load_combined_batch_data(template, str(coarse_lines_dir))
+
+    if OFL_data is None:
+        raise PSRMagPyExperimentError(f"No OFL data found for experiment {coarse_experiment.name}")
+
+    # Calculate OFL footpoints
+    OFL_footpoints = OFL_data.get_OFL_footpoints(R_LC, h_LC_coeff=h_LC_coeff)
+    logger.info(f"Found {len(OFL_footpoints)} OFL footpoints")
+
+    if len(OFL_footpoints) == 0:
+        raise PSRMagPyExperimentError(f"No OFL footpoints found for R_LC={R_LC:.2f}")
+
+    # Create coarse grid to get nside
+    coarse_grid_initial = coarse_experiment.grid.create_grid()
+    if coarse_grid_initial is None:
+        raise PSRMagPyExperimentError(f"Could not create coarse grid for experiment {coarse_experiment.name}")
+
+    # Create fine grid
+    fine_grid_initial = fine_experiment.grid.create_grid()
+    if fine_grid_initial is None:
+        raise PSRMagPyExperimentError(f"Could not create fine grid for experiment {fine_experiment.name}")
+
+    # Verify both grids are healpix
+    if not hasattr(coarse_grid_initial, "nside") or not hasattr(fine_grid_initial, "nside"):
+        raise PSRMagPyGridError("Both grids must be HealpixGrid for footpoint upgrade")
+
+    # Upgrade footpoints from coarse to fine resolution
+    coarse_nside = coarse_grid_initial.nside
+    fine_nside = fine_grid_initial.nside
+    OFL_footpoints_fine = upgrade_healpix_footpoints(
+        coarse_nside, fine_nside, OFL_footpoints
+    )
+
+    logger.info(
+        f"Upgraded {len(OFL_footpoints)} coarse footpoints to "
+        f"{len(OFL_footpoints_fine)} fine footpoints"
+    )
+
+    # Create subset grid
+    fine_grid_subset = fine_grid_initial.subset_grid(OFL_footpoints_fine)
+
+    # Save subset grid to file
+    fine_grids_dir = Path(fine_grids_dir)
+    fine_grids_dir.mkdir(parents=True, exist_ok=True)
+    grid_filename = f"{fine_experiment.name}_subset_grid.fits"
+    grid_filepath = fine_grids_dir / grid_filename
+
+    # Remove existing file if it exists
+    if grid_filepath.exists():
+        grid_filepath.unlink()
+        logger.debug(f"Deleted existing grid file: {grid_filepath}")
+
+    fine_grid_subset.save_to_fits(str(grid_filepath))
+    logger.info(f"Saved subset grid: {grid_filepath}")
+
+    # Create updated grid config
+    subset_healpix_config = HealpixGridConfig(
+        nside=fine_nside,
+        grid_file_path=str(grid_filepath),
+        subset=True,
+    )
+    updated_grid_config = GridConfig(healpix=subset_healpix_config)
+
+    return grid_filepath, updated_grid_config
+
+
+def save_subset_grid(
+    grid: FootpointGrid,
+    experiment_name: str,
+    grids_dir: Union[str, Path],
+    overwrite: bool = True,
+) -> Path:
+    """Save subset grid to file with standardized naming.
+
+    Args:
+        grid: The subset grid to save
+        experiment_name: Name of the experiment (used for filename)
+        grids_dir: Directory where grid will be saved
+        overwrite: If True, delete existing file before saving
+
+    Returns:
+        Path to saved grid file
+
+    Example:
+        >>> grid = coarse_grid.subset_grid(indices)
+        >>> grid_path = save_subset_grid(grid, "experiment_001", "/path/to/grids")
+    """
+    grids_dir = Path(grids_dir)
+    grids_dir.mkdir(parents=True, exist_ok=True)
+
+    grid_filename = f"{experiment_name}_subset_grid.fits"
+    grid_filepath = grids_dir / grid_filename
+
+    # Remove existing file if it exists and overwrite is True
+    if overwrite and grid_filepath.exists():
+        grid_filepath.unlink()
+        logger.debug(f"Deleted existing grid file: {grid_filepath}")
+
+    grid.save_to_fits(str(grid_filepath))
+    logger.info(f"Saved subset grid: {grid_filepath}")
+
+    return grid_filepath
 
 
 def create_subset_grid_config(

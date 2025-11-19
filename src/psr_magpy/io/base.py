@@ -15,6 +15,7 @@ from .validator import (
 )
 from .memory_monitor import MemoryMonitor, MemoryThreshold
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyIOError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -60,9 +61,7 @@ class IOUtils:
         path = Path(path)
 
         if must_exist and not path.exists():
-            error_msg = f"File does not exist: {path}"
-            logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
+            raise PSRMagPyIOError(f"File does not exist: {path}")
 
         return path
 

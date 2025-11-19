@@ -125,7 +125,8 @@ def test_template_validation_missing_columns():
         batch_file = list(lines_dir.glob(f"{experiment_name}_batch_*.fits"))[0]
         
         # Should raise error about missing columns
-        with pytest.raises(ValueError, match="Template requires columns that are missing"):
+        from psr_magpy.utils.exceptions import PSRMagPyIOError
+        with pytest.raises(PSRMagPyIOError, match="Template requires columns that are missing"):
             get_io_factory().load_data(FieldLineSet, batch_file, template=template_with_missing)
             
     finally:

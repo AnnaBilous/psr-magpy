@@ -13,6 +13,7 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyIOError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -139,9 +140,7 @@ class BatchFileManager:
 
         # Check filesystem health before proceeding
         if not self._check_filesystem_health(output_dir):
-            error_msg = f"Filesystem health check failed for {output_dir}"
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
+            raise PSRMagPyIOError(f"Filesystem health check failed for {output_dir}")
 
         logger.info(f"Organizing {len(batch_files)} batch files in {output_dir}")
 
@@ -199,9 +198,9 @@ class BatchFileManager:
                             retry_delay *= 2  # Exponential backoff
                         else:
                             # Final attempt failed
-                            error_msg = f"Failed to move {batch_info.path} after {max_retries} attempts: {e}"
-                            logger.error(error_msg)
-                            raise RuntimeError(error_msg)
+                            raise PSRMagPyIOError(
+                                f"Failed to move {batch_info.path} after {max_retries} attempts: {e}"
+                            ) from e
 
             if self.progress_tracker:
                 self.progress_tracker.log_io_completion(
@@ -214,8 +213,6 @@ class BatchFileManager:
             return output_dir
 
         except Exception as e:
-            error_msg = f"Failed to organize batch files: {e}"
-            logger.error(error_msg)
             # Log additional diagnostic information
             logger.error(f"Output directory: {output_dir}")
             logger.error(f"Directory exists: {output_dir.exists()}")
@@ -225,13 +222,7 @@ class BatchFileManager:
             logger.error(
                 f"Available disk space: {shutil.disk_usage(output_dir).free / (1024**3):.2f} GB"
             )
-
-            # Fallback: log warning but don't fail the entire operation
-            logger.warning(
-                "Batch file organization failed, but batch files remain available"
-            )
-            logger.warning("You may need to manually organize the batch files later")
-            return None
+            raise PSRMagPyIOError(f"Failed to organize batch files: {e}") from e
 
     def _create_summary_file(
         self, batch_files: List[BatchFileInfo], summary_path: Path
@@ -302,9 +293,7 @@ class BatchFileManager:
             logger.info("Batch file cleanup completed")
 
         except Exception as e:
-            error_msg = f"Failed to cleanup batch files: {e}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyIOError(f"Failed to cleanup batch files: {e}") from e
 
     def get_batch_summary(self) -> Dict[str, Any]:
         """Get a summary of batch files."""

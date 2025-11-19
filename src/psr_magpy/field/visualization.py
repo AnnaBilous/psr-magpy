@@ -17,6 +17,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyFieldError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -117,9 +118,7 @@ class FieldVisualizer:
             coords = [X, np.full_like(X, fixed_coord), Y]
             xlabel, ylabel = "X", "Z"
         else:
-            error_msg = f"Invalid plane: {plane}. Must be 'xy', 'yz', or 'xz'"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyFieldError(f"Invalid plane: {plane}. Must be 'xy', 'yz', or 'xz'")
 
         # Calculate field at each grid point
         field_vectors = np.zeros((X.shape[0], X.shape[1], 3))
@@ -242,9 +241,7 @@ class FieldVisualizer:
             coords = [X, np.full_like(X, fixed_coord), Y]
             xlabel, ylabel = "X", "Z"
         else:
-            error_msg = f"Invalid plane: {plane}. Must be 'xy', 'yz', or 'xz'"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyFieldError(f"Invalid plane: {plane}. Must be 'xy', 'yz', or 'xz'")
 
         # Calculate field magnitude at each grid point
         field_magnitudes = np.zeros_like(X)

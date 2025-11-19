@@ -31,6 +31,7 @@ from .experiment_metadata import create_experiment_metadata, generate_experiment
 from psr_magpy.io.config_io import reconstruct_from_yaml
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyExperimentError, PSRMagPyIOError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -192,6 +193,48 @@ class ExperimentSeriesConfig(BaseModel):
         output_dir = self.output_dir or "."
         return Path(output_dir) / self.name / self.LOGS_DIR
 
+    def verify_directories(
+        self, create_if_missing: bool = False
+    ) -> Dict[str, Dict[str, Any]]:
+        """Verify existence of standard directories and optionally create them.
+
+        Args:
+            create_if_missing: If True, create directories that don't exist
+
+        Returns:
+            Dictionary with status for each directory type:
+            {
+                'configs': {'exists': bool, 'path': Path, 'created': bool},
+                'grids': {'exists': bool, 'path': Path, 'created': bool},
+                'lines': {'exists': bool, 'path': Path, 'created': bool},
+                'logs': {'exists': bool, 'path': Path, 'created': bool}
+            }
+        """
+        status = {}
+        directories = {
+            "configs": self.get_configs_dir(),
+            "grids": self.get_grids_dir(),
+            "lines": self.get_lines_dir(),
+            "logs": self.get_logs_dir(),
+        }
+
+        for dir_name, dir_path in directories.items():
+            exists = dir_path.exists()
+            created = False
+
+            if not exists and create_if_missing:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                created = True
+                logger.debug(f"Created directory: {dir_path}")
+
+            status[dir_name] = {
+                "exists": exists or created,
+                "path": dir_path,
+                "created": created,
+            }
+
+        return status
+
     def get_subdirectories(self) -> List[str]:
         """Get list of all subdirectory names."""
         return [self.LINES_DIR, self.GRIDS_DIR, self.CONFIGS_DIR, self.LOGS_DIR]
@@ -220,6 +263,29 @@ class ExperimentSeriesConfig(BaseModel):
         else:
             # If neither exists, return the regular path (will raise error when loading)
             return regular_path
+
+    def get_experiment_by_index(
+        self, index: int, experiments: Optional[List["ExperimentConfig"]] = None
+    ) -> Optional["ExperimentConfig"]:
+        """Safely get experiment by index with validation.
+
+        Args:
+            index: Experiment index (0-based)
+            experiments: Optional list of experiments. If None, creates series.
+
+        Returns:
+            ExperimentConfig if index is valid, None otherwise
+        """
+        if experiments is None:
+            experiments = self.create_experiment_series(save_configs=False)
+
+        if index < 0 or index >= len(experiments):
+            logger.warning(
+                f"Experiment index {index} out of range (0-{len(experiments)-1})"
+            )
+            return None
+
+        return experiments[index]
 
     def load_experiment_config(self, experiment_number: int) -> "ExperimentConfig":
         """Load a specific experiment config by number.
@@ -455,9 +521,7 @@ class ExperimentSeriesConfig(BaseModel):
         """
         configs_dir = self.get_configs_dir()
         if not configs_dir.exists():
-            error_msg = f"Configs directory does not exist: {configs_dir}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"Configs directory does not exist: {configs_dir}")
 
         # Load all experiment configs (skip series config)
         experiment_files = sorted(
@@ -469,9 +533,7 @@ class ExperimentSeriesConfig(BaseModel):
         )
 
         if not experiment_files:
-            error_msg = f"No experiment configs found in: {configs_dir}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"No experiment configs found in: {configs_dir}")
 
         experiments = []
         for config_file in experiment_files:
@@ -595,3 +657,195 @@ class ExperimentSeriesConfig(BaseModel):
                         experiments.append(experiment)
 
         return experiments
+
+    def create_subset_series_from_OFL(
+        self,
+        coarse_series_config: "ExperimentSeriesConfig",
+        R_LC: float,
+        h_LC_coeff: float = 3**1.5 / 2.0,
+        experiment_numbers: Optional[List[int]] = None,
+        save_configs: bool = True,
+    ) -> "ExperimentSeriesConfig":
+        """Create subset series from coarse experiment OFL footpoints.
+
+        Processes all experiments in the coarse series, extracts OFL footpoints,
+        creates fine resolution subset grids, and updates fine experiment configs.
+
+        Args:
+            coarse_series_config: Coarse resolution series config
+            R_LC: Light cylinder radius for OFL calculation
+            h_LC_coeff: Height coefficient for OFL calculation
+            experiment_numbers: Optional list of experiment numbers to process.
+                               If None, processes all experiments.
+            save_configs: If True, save updated experiment configs
+
+        Returns:
+            Updated fine series config with subset grids
+
+        Raises:
+            ValueError: If directories don't exist or experiments can't be processed
+        """
+        from psr_magpy.grid.grid import create_fine_resolution_subset_from_coarse_OFL
+        from psr_magpy.experiment.experiment_config import GridConfig, HealpixGridConfig
+
+        # Verify coarse directories
+        coarse_status = coarse_series_config.verify_directories(create_if_missing=False)
+        if not coarse_status["configs"]["exists"] or not coarse_status["lines"]["exists"]:
+            raise PSRMagPyExperimentError("Coarse series directories (configs, lines) must exist")
+
+        # Verify/create fine directories
+        fine_status = self.verify_directories(create_if_missing=True)
+
+        # Create fine experiments
+        fine_experiments = self.create_experiment_series(save_configs=False)
+
+        # Get experiment numbers to process
+        if experiment_numbers is None:
+            coarse_experiments = coarse_series_config.create_experiment_series(
+                save_configs=False
+            )
+            experiment_numbers = list(range(len(coarse_experiments)))
+
+        logger.info(
+            f"Processing {len(experiment_numbers)} experiments for OFL subset creation"
+        )
+
+        successful_count = 0
+        failed_count = 0
+
+        for exp_num in experiment_numbers:
+            logger.info(f"Processing experiment {exp_num}...")
+
+            try:
+                # Load coarse experiment
+                coarse_experiment = coarse_series_config.load_experiment_config(exp_num)
+                logger.debug(f"Loaded coarse experiment: {coarse_experiment.name}")
+
+                # Get corresponding fine experiment
+                fine_experiment = self.get_experiment_by_index(exp_num, fine_experiments)
+                if fine_experiment is None:
+                    logger.warning(
+                        f"No corresponding fine experiment found for {exp_num}, skipping..."
+                    )
+                    failed_count += 1
+                    continue
+
+                logger.debug(f"Using fine experiment: {fine_experiment.name}")
+
+                # Create subset grid using helper function
+                coarse_lines_dir = coarse_series_config.get_lines_dir()
+                fine_grids_dir = self.get_grids_dir()
+
+                grid_filepath, updated_grid_config = (
+                    create_fine_resolution_subset_from_coarse_OFL(
+                        coarse_experiment=coarse_experiment,
+                        fine_experiment=fine_experiment,
+                        R_LC=R_LC,
+                        coarse_lines_dir=coarse_lines_dir,
+                        fine_grids_dir=fine_grids_dir,
+                        h_LC_coeff=h_LC_coeff,
+                    )
+                )
+
+                # Update fine experiment config
+                fine_experiment.grid = updated_grid_config
+
+                # Add subset metadata
+                subset_metadata = {
+                    "coarse_experiment": coarse_experiment.name,
+                    "subset_grid_type": "healpix",
+                    "is_subset_grid": True,
+                    "subset_grid_file": grid_filepath.name,
+                    "R_LC": R_LC,
+                    "h_LC_coeff": h_LC_coeff,
+                }
+
+                if fine_experiment.metadata is None:
+                    fine_experiment.metadata = {}
+                fine_experiment.metadata.update(subset_metadata)
+
+                # Save subset config
+                if save_configs:
+                    fine_config_file = (
+                        self.get_configs_dir() / f"{fine_experiment.name}_subset.yaml"
+                    )
+                    fine_experiment.save(str(fine_config_file), overwrite=True)
+                    logger.info(f"Saved subset experiment config: {fine_config_file}")
+
+                successful_count += 1
+
+            except Exception as e:
+                error_msg = f"Failed to process experiment {exp_num}: {e}"
+                logger.error(error_msg)
+                failed_count += 1
+                continue
+
+        logger.info(
+            f"OFL subset creation completed: {successful_count} successful, "
+            f"{failed_count} failed"
+        )
+
+        # Update series metadata
+        if self.metadata is None:
+            self.metadata = {}
+        self.metadata.update(
+            {
+                "original_series": self.name,
+                "subset_experiments": experiment_numbers,
+                "subset_grid_type": "healpix",
+                "has_subset_grids": True,
+                "coarse_series": coarse_series_config.name,
+                "R_LC": R_LC,
+                "h_LC_coeff": h_LC_coeff,
+            }
+        )
+
+        return self
+
+
+def create_simple_series(
+    name: str,
+    field: Union[FieldConfig, FieldFactoryConfig],
+    grid: Union[GridConfig, GridFactoryConfig],
+    tracing: Union[TracingConfig, TracingFactoryConfig],
+    template: Union[FieldLine, TemplateFactoryConfig],
+    output_dir: Optional[str] = None,
+    description: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> ExperimentSeriesConfig:
+    """Create a simple experiment series configuration.
+
+    Convenience wrapper for common single-config experiment series creation.
+    This function simplifies the creation of ExperimentSeriesConfig when you
+    don't need complex parameter variations.
+
+    Args:
+        name: Series name
+        field: Field configuration (single or factory)
+        grid: Grid configuration (single or factory)
+        tracing: Tracing configuration (single or factory)
+        template: Field line template (single or factory)
+        output_dir: Optional output directory (defaults to current directory)
+        description: Optional series description
+        metadata: Optional metadata dictionary
+
+    Returns:
+        ExperimentSeriesConfig instance
+
+    Example:
+        >>> field = FieldConfig(components=[...])
+        >>> grid = GridConfig(healpix=HealpixGridConfig(nside=128))
+        >>> tracing = TracingConfig()
+        >>> template = FieldLine.template_all()
+        >>> series = create_simple_series("my_series", field, grid, tracing, template)
+    """
+    return ExperimentSeriesConfig(
+        name=name,
+        field=field,
+        grid=grid,
+        tracing=tracing,
+        template=template,
+        output_dir=output_dir,
+        description=description,
+        metadata=metadata,
+    )

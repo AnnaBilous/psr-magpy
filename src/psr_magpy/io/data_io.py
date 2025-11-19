@@ -8,6 +8,7 @@ from astropy.io import fits
 
 from .base import DataIO, IOUtils
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyIOError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -27,9 +28,7 @@ class FitsIO(DataIO):
 
         # Validate with recovery options
         if not self.validate_with_recovery(data, path, "save", **kwargs):
-            error_msg = f"Validation failed for save operation: {path}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"Validation failed for save operation: {path}")
 
         path = IOUtils.ensure_directory(path)
 
@@ -42,9 +41,7 @@ class FitsIO(DataIO):
         """Load data from FITS file with validation and recovery."""
         # Validate with recovery options
         if not self.validate_with_recovery(None, path, "load", **kwargs):
-            error_msg = f"Validation failed for load operation: {path}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"Validation failed for load operation: {path}")
 
         path = IOUtils.validate_path(path, must_exist=True)
 
@@ -208,9 +205,7 @@ class FieldLineSetIO(FitsIO):
 
         # Find FIELD_LINES HDU
         if "FIELD_LINES" not in [h.name for h in hdul]:
-            error_msg = "No FIELD_LINES HDU found in FITS file"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError("No FIELD_LINES HDU found in FITS file")
 
         hdu = hdul["FIELD_LINES"]
         column_names = [col.name.upper() for col in hdu.columns]
@@ -226,9 +221,9 @@ class FieldLineSetIO(FitsIO):
                         missing_columns.append(prop.name)
 
             if missing_columns:
-                error_msg = f"Template requires columns that are missing from FITS file: {missing_columns}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyIOError(
+                    f"Template requires columns that are missing from FITS file: {missing_columns}"
+                )
 
             logger.debug(
                 f"Using provided template with enabled properties: {template.property_system.get_enabled_property_names()}"
@@ -271,9 +266,7 @@ class FieldLineSetIO(FitsIO):
             except KeyError:
                 logger.warning(f"Unknown property name: {col.name}")
             except Exception as e:
-                error_msg = f"Error loading property {col.name}: {str(e)}"
-                logger.error(error_msg)
-                raise
+                raise PSRMagPyIOError(f"Error loading property {col.name}: {str(e)}") from e
 
         # Update field line count
         field_line_set.n_field_lines = len(hdu.data)
@@ -378,9 +371,7 @@ class FieldComponentIO(FitsIO):
             elif moment_type == MultipoleType.QUADRUPOLE:
                 component_class = QuadrupoleFieldComponent
             else:
-                error_msg = f"Unsupported multipole type: {moment_type}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyIOError(f"Unsupported multipole type: {moment_type}")
 
             # Extract component parameters
             component_params = {}
@@ -510,8 +501,6 @@ class GridIO(FitsIO):
 
         grid_class = grid_classes.get(grid_type)
         if grid_class is None:
-            error_msg = f"Unknown grid type: {grid_type}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"Unknown grid type: {grid_type}")
 
         return grid_class.from_header(header)

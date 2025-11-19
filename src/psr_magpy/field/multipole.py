@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from psr_magpy.field.components import FieldComponent
 from psr_magpy.viz import Quiver2DFieldPlotter, Streamline2DFieldPlotter
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyFieldError
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -83,9 +84,7 @@ class MultipoleField:
             self.params = MultipoleFieldParams(field_components=field_components)
             self.field_components = self.params.field_components
         except Exception as e:
-            error_msg = f"Failed to initialize MultipoleField parameters: {e}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyFieldError(f"Failed to initialize MultipoleField parameters: {e}") from e
 
         # Initialize plotters
         self._quiver_plotter = None
@@ -128,23 +127,19 @@ class MultipoleField:
         config = []
         for i, component in enumerate(self.field_components):
             if not hasattr(component, "get_numba_params"):
-                error_msg = (
+                raise PSRMagPyFieldError(
                     f"Component {i+1} ({type(component).__name__}) does not support "
                     "Numba compilation. Missing get_numba_params() method."
                 )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
             
             try:
                 params = component.get_numba_params()
                 config.append(params)
             except Exception as e:
-                error_msg = (
+                raise PSRMagPyFieldError(
                     f"Failed to get Numba parameters from component {i+1} "
                     f"({type(component).__name__}): {e}"
-                )
-                logger.error(error_msg)
-                raise ValueError(error_msg) from e
+                ) from e
         
         logger.debug(f"Generated Numba config for {len(config)} components")
         return config
@@ -259,9 +254,7 @@ class MultipoleField:
                 coords = [X, np.full_like(X, fixed_coord), Y]
                 xlabel, ylabel = "X", "Z"
             else:
-                error_msg = f"Invalid plane: {plane}. Must be 'xy', 'yz', or 'xz'"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyFieldError(f"Invalid plane: {plane}. Must be 'xy', 'yz', or 'xz'")
 
             # Calculate field at each grid point
             U = np.zeros_like(X)
@@ -286,25 +279,17 @@ class MultipoleField:
 
         elif plane_type == "arbitrary":
             if p1 is None or p2 is None or p3 is None:
-                error_msg = "p1, p2, p3 must be provided for arbitrary planes"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyFieldError("p1, p2, p3 must be provided for arbitrary planes")
             if limits_u is None or limits_v is None:
-                error_msg = "limits_u, limits_v must be provided for arbitrary planes"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyFieldError("limits_u, limits_v must be provided for arbitrary planes")
             if n_points_u is None or n_points_v is None:
-                error_msg = (
+                raise PSRMagPyFieldError(
                     "n_points_u, n_points_v must be provided for arbitrary planes"
                 )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
 
             # Check if points coincide
             if np.allclose(p1, p2) or np.allclose(p1, p3) or np.allclose(p2, p3):
-                error_msg = "At least two points coincide. Cannot define a plane."
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyFieldError("At least two points coincide. Cannot define a plane.")
 
             # Calculate plane basis vectors
             v1 = p2 - p1  # First direction vector
@@ -313,9 +298,7 @@ class MultipoleField:
             # Check if points are collinear (cross product should be non-zero)
             cross_product = np.cross(v1, v2)
             if np.allclose(cross_product, 0):
-                error_msg = "Points are collinear. Cannot define a plane."
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyFieldError("Points are collinear. Cannot define a plane.")
 
             # Normalize basis vectors
             v1_norm = v1 / np.linalg.norm(v1)
@@ -357,11 +340,9 @@ class MultipoleField:
             ylabel = f"Plane coord 2 ({limits_v[0]:.1f} to {limits_v[1]:.1f})"
             return U, V, U_field, V_field, xlabel, ylabel
         else:
-            error_msg = (
+            raise PSRMagPyFieldError(
                 f"Invalid plane_type: {plane_type}. Must be 'standard' or 'arbitrary'"
             )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
 
     def plot_2d_quiver(
         self,
@@ -525,17 +506,13 @@ class MultipoleField:
         if p1 is not None and p2 is not None and p3 is not None:
             # Arbitrary plane
             if limits_u is None or limits_v is None:
-                error_msg = (
+                raise PSRMagPyFieldError(
                     "limits_u and limits_v must be provided for arbitrary planes"
                 )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
             if n_points_u is None or n_points_v is None:
-                error_msg = (
+                raise PSRMagPyFieldError(
                     "n_points_u and n_points_v must be provided for arbitrary planes"
                 )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
 
             X, Y, U, V, default_xlabel, default_ylabel = self._calculate_grid_field(
                 plane_type="arbitrary",
@@ -774,17 +751,13 @@ class MultipoleField:
         if p1 is not None and p2 is not None and p3 is not None:
             # Arbitrary plane
             if limits_u is None or limits_v is None:
-                error_msg = (
+                raise PSRMagPyFieldError(
                     "limits_u and limits_v must be provided for arbitrary planes"
                 )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
             if n_points_u is None or n_points_v is None:
-                error_msg = (
+                raise PSRMagPyFieldError(
                     "n_points_u and n_points_v must be provided for arbitrary planes"
                 )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
 
             X, Y, U, V, default_xlabel, default_ylabel = self._calculate_grid_field(
                 plane_type="arbitrary",

@@ -64,7 +64,8 @@ class TestIOUtils:
             
             # Test non-existing file
             non_existing = Path(tmpdir) / "nonexistent.txt"
-            with pytest.raises(FileNotFoundError):
+            from psr_magpy.utils.exceptions import PSRMagPyIOError
+            with pytest.raises(PSRMagPyIOError, match="File does not exist"):
                 IOUtils.validate_path(non_existing, must_exist=True)
             
             # Test non-existing file without must_exist
@@ -135,11 +136,12 @@ class TestIOFactory:
         factory = get_io_factory()
         
         # Test unregistered data type
-        with pytest.raises(ValueError, match="No I/O class registered"):
+        from psr_magpy.utils.exceptions import PSRMagPyIOError
+        with pytest.raises(PSRMagPyIOError, match="No I/O class registered"):
             factory.create_data_io(dict)
         
         # Test unregistered config type
-        with pytest.raises(ValueError, match="No I/O class registered"):
+        with pytest.raises(PSRMagPyIOError, match="No I/O class registered"):
             factory.create_config_io(dict)
     
     def test_factory_save_load(self):
@@ -289,7 +291,8 @@ class TestTemplateFunctionality:
             )
             
             # Should raise error about missing columns
-            with pytest.raises(ValueError, match="Template requires columns that are missing"):
+            from psr_magpy.utils.exceptions import PSRMagPyIOError
+            with pytest.raises(PSRMagPyIOError, match="Template requires columns that are missing"):
                 factory.load_data(FieldLineSet, tmp_path, template=template_with_missing)
                 
         finally:

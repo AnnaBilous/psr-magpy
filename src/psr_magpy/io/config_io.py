@@ -6,6 +6,7 @@ import yaml
 
 from .base import ConfigIO, IOUtils
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyIOError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -21,9 +22,7 @@ class YamlIO(ConfigIO):
         """Save configuration to YAML file with validation and recovery."""
         # Validate with recovery options
         if not self.validate_with_recovery(config, path, "save", **kwargs):
-            error_msg = f"Validation failed for save operation: {path}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"Validation failed for save operation: {path}")
 
         path = IOUtils.ensure_directory(path)
 
@@ -37,9 +36,7 @@ class YamlIO(ConfigIO):
         """Load configuration from YAML file with validation and recovery."""
         # Validate with recovery options
         if not self.validate_with_recovery(None, path, "load", **kwargs):
-            error_msg = f"Validation failed for load operation: {path}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"Validation failed for load operation: {path}")
 
         path = IOUtils.validate_path(path, must_exist=True)
 
@@ -64,9 +61,7 @@ class YamlIO(ConfigIO):
             print(yaml_string)
             print("=====================")
         except Exception as e:
-            error_msg = f"Failed to print configuration: {e}"
-            logger.error(error_msg)
-            raise
+            raise PSRMagPyIOError(f"Failed to print configuration: {e}") from e
 
     def _prepare_for_save(self, config: Any) -> dict:
         """Prepare configuration for saving."""

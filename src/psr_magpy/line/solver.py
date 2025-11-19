@@ -12,6 +12,7 @@ from scipy.integrate import solve_ivp, OdeSolution
 from scipy.interpolate import interp1d
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyTracingError
 
 try:
     from CyRK import pysolve_ivp
@@ -23,7 +24,7 @@ except ImportError:
 logger = get_logger(__name__, console_format_brief=True)
 
 
-class SolverError(RuntimeError):
+class SolverError(PSRMagPyTracingError):
     """Unified exception for ODE solver errors.
     
     Wraps solver-specific exceptions to provide consistent error handling
@@ -39,7 +40,12 @@ class SolverError(RuntimeError):
     def __init__(self, message: str, solver_name: str, original_error: Optional[Exception] = None):
         self.solver_name = solver_name
         self.original_error = original_error
-        super().__init__(message)
+        # Log with solver context, then call parent with original message
+        logger.error(f"[{solver_name}] {message}")
+        # Call PSRMagPyTracingError.__init__ but skip its logging (already logged above)
+        # We need to set the message directly to avoid double logging
+        self.message = message
+        Exception.__init__(self, message)
 
 
 @dataclass
@@ -195,19 +201,13 @@ class SciPySolver(ODESolver):
         try:
             scipy_sol = solve_ivp(**solve_ivp_kwargs)
         except (ValueError, RuntimeError) as e:
-            error_msg = f"SciPy solver failed: {e}"
-            logger.error(error_msg)
-            raise SolverError(error_msg, solver_name="scipy", original_error=e) from e
+            raise SolverError(f"SciPy solver failed: {e}", solver_name="scipy", original_error=e) from e
         except Exception as e:
-            error_msg = f"Unexpected error in SciPy solver: {e}"
-            logger.error(error_msg)
-            raise SolverError(error_msg, solver_name="scipy", original_error=e) from e
+            raise SolverError(f"Unexpected error in SciPy solver: {e}", solver_name="scipy", original_error=e) from e
         
         # Check if integration was successful
         if not scipy_sol.success:
-            error_msg = f"SciPy solver integration failed: {scipy_sol.message}"
-            logger.error(error_msg)
-            raise SolverError(error_msg, solver_name="scipy")
+            raise SolverError(f"SciPy solver integration failed: {scipy_sol.message}", solver_name="scipy")
         
         # Convert to unified Solution object
         return Solution(
@@ -228,9 +228,7 @@ class CyRKSolver(ODESolver):
     def __init__(self):
         """Initialize CyRK solver."""
         if not CYRK_AVAILABLE:
-            error_msg = "CyRK is not available. Install it with: pip install CyRK>=0.16.0"
-            logger.error(error_msg)
-            raise ImportError(error_msg)
+            raise ImportError("CyRK is not available. Install it with: pip install CyRK>=0.16.0")
     
     def solve(
         self,
@@ -303,13 +301,9 @@ class CyRKSolver(ODESolver):
         try:
             cyrk_sol = pysolve_ivp(**cyrk_kwargs)
         except (ValueError, RuntimeError) as e:
-            error_msg = f"CyRK solver failed: {e}"
-            logger.error(error_msg)
-            raise SolverError(error_msg, solver_name="cyrk", original_error=e) from e
+            raise SolverError(f"CyRK solver failed: {e}", solver_name="cyrk", original_error=e) from e
         except Exception as e:
-            error_msg = f"Unexpected error in CyRK solver: {e}"
-            logger.error(error_msg)
-            raise SolverError(error_msg, solver_name="cyrk", original_error=e) from e
+            raise SolverError(f"Unexpected error in CyRK solver: {e}", solver_name="cyrk", original_error=e) from e
         
         # Extract solution arrays
         t = cyrk_sol.t
@@ -319,9 +313,7 @@ class CyRKSolver(ODESolver):
         success = getattr(cyrk_sol, 'success', True)
         if not success:
             message = getattr(cyrk_sol, 'message', 'Integration failed')
-            error_msg = f"CyRK solver integration failed: {message}"
-            logger.error(error_msg)
-            raise SolverError(error_msg, solver_name="cyrk")
+            raise SolverError(f"CyRK solver integration failed: {message}", solver_name="cyrk")
         
         # Handle shape: CyRK might return (n,) or (n, m), ensure (n, m)
         if y.ndim == 1:

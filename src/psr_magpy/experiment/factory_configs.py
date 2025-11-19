@@ -19,6 +19,7 @@ from .experiment_config import (
 )
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyValidationError, PSRMagPyGridError
 from psr_magpy.line.tracing_parameters import TracingDefaults
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -470,9 +471,9 @@ def _expand_random_grid_factory_config(
 
         # Pair nline_ori with grid_file_path
         if len(nline_ori_values) != len(grid_file_paths):
-            error_msg = f"Number of nline_ori values ({len(nline_ori_values)}) must match number of grid_file_paths ({len(grid_file_paths)})"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyValidationError(
+                f"Number of nline_ori values ({len(nline_ori_values)}) must match number of grid_file_paths ({len(grid_file_paths)})"
+            )
 
         for nline_ori, grid_file_path in zip(nline_ori_values, grid_file_paths):
             config = RandomGridConfig(
@@ -501,9 +502,9 @@ def _expand_custom_grid_factory_config(
     elif isinstance(grid.coordinates, list):
         coordinates_values = grid.coordinates
         if len(coordinates_values) != len(nline_ori_values):
-            error_msg = f"Number of coordinates ({len(coordinates_values)}) must match number of nline_ori values ({len(nline_ori_values)})"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyValidationError(
+                f"Number of coordinates ({len(coordinates_values)}) must match number of nline_ori values ({len(nline_ori_values)})"
+            )
         # Ensure each coordinates value is a list of lists
         for i, coords in enumerate(coordinates_values):
             if coords is not None and not isinstance(coords[0], list):
@@ -525,9 +526,9 @@ def _expand_custom_grid_factory_config(
 
         # Pair nline_ori with grid_file_path
         if len(nline_ori_values) != len(grid_file_paths):
-            error_msg = f"Number of nline_ori values ({len(nline_ori_values)}) must match number of grid_file_paths ({len(grid_file_paths)})"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyValidationError(
+                f"Number of nline_ori values ({len(nline_ori_values)}) must match number of grid_file_paths ({len(grid_file_paths)})"
+            )
 
         for nline_ori, coordinates, grid_file_path in zip(
             nline_ori_values, coordinates_values, grid_file_paths
@@ -620,9 +621,7 @@ def expand_grid_configs(
                         config = CustomGridConfig(**params)
                         grid_configs.append(GridConfig(custom=config))
                     else:
-                        error_msg = f"Unknown grid type: {grid_type}"
-                        logger.error(error_msg)
-                        raise ValueError(error_msg)
+                        raise PSRMagPyGridError(f"Unknown grid type: {grid_type}")
         else:
             # Handle regular config object
             if isinstance(grid, SphericalGridConfig):

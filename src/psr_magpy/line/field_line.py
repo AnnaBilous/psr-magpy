@@ -153,6 +153,19 @@ class FieldLine:
         return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True)
 
     @classmethod
+    def template_OFL_subset(cls) -> "FieldLine":
+        """Create minimal configuration template for OFL subset grid creation.
+
+        Includes only footpoint_id (always enabled), r_cyl_max, and z_abs_max.
+        This is the minimal template needed for extracting OFL footpoints from
+        existing field line data to create subset grids.
+
+        This template defines which properties to save during field line tracing.
+        Used as configuration, not for storing actual field line data.
+        """
+        return cls(save_r_cyl_max=True, save_z_abs_max=True)
+
+    @classmethod
     def template_line_coordinates_only(cls) -> "FieldLine":
         """Create configuration template with line coordinates only (r_line).
 

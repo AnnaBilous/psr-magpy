@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, field_validator, ValidationError
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyPropertyError
 
 logger = get_logger(__name__)
 
@@ -70,16 +71,20 @@ class PropertyName(Enum):
         return self.name.lower()
 
 
-class PropertyValidationError(ValueError):
+class PropertyValidationError(PSRMagPyPropertyError):
     """Custom exception for property validation errors."""
 
     def __init__(
         self, message: str, property_name: Optional[str] = None, value: Any = None
     ):
-        self.message = message
         self.property_name = property_name
         self.value = value
-        super().__init__(self.message)
+        # Include property context in message if available
+        if property_name:
+            full_message = f"Property '{property_name}': {message}"
+        else:
+            full_message = message
+        super().__init__(full_message)
 
 
 class PropertyValue(BaseModel):
@@ -235,9 +240,7 @@ class PropertySystem:
             If flags are inconsistent (e.g., footpoint_id disabled)
         """
         if not self.save_flags.save_footpoint_id:
-            error_msg = "footpoint_id must always be enabled"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PropertyValidationError("footpoint_id must always be enabled")
 
         logger.debug("Save flags validation passed")
 
@@ -271,9 +274,7 @@ class PropertySystem:
             If flags are invalid
         """
         if not save_flags.save_footpoint_id:
-            error_msg = "footpoint_id must always be enabled"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PropertyValidationError("footpoint_id must always be enabled")
 
         # Log enabled properties at debug level
         if logger.isEnabledFor(logging.DEBUG):
@@ -366,9 +367,7 @@ class PropertySystem:
                 validation_errors.append(str(e))
 
         if validation_errors:
-            error_msg = f"Property validation failed: {'; '.join(validation_errors)}"
-            logger.error(error_msg)
-            raise PropertyValidationError(error_msg)
+            raise PropertyValidationError(f"Property validation failed: {'; '.join(validation_errors)}")
 
         logger.debug(f"Validated {len(validated_properties)} properties successfully")
         return validated_properties
@@ -415,12 +414,8 @@ class PropertySystem:
             )
 
         except KeyError:
-            error_msg = f"Invalid property name: {prop}"
-            logger.error(
-                f"{error_msg}. Valid properties: {[p.key_name for p in PropertyName]}"
-            )
             raise PropertyValidationError(
-                f"{error_msg}. Must be one of: {[p.key_name for p in PropertyName]}"
+                f"Invalid property name: {prop}. Must be one of: {[p.key_name for p in PropertyName]}"
             )
 
     def _validate_property_access(self, prop: PropertyName) -> None:
@@ -461,6 +456,8 @@ class PropertySystem:
                 msg = error.get("msg", "Validation error")
                 error_details.append(f"{field}: {msg}")
 
-            error_msg = f"Property validation failed for {prop.key_name}: {'; '.join(error_details)}"
-            logger.error(error_msg)
-            raise PropertyValidationError(error_msg, prop.key_name, value)
+            raise PropertyValidationError(
+                f"Property validation failed for {prop.key_name}: {'; '.join(error_details)}",
+                prop.key_name,
+                value
+            )

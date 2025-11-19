@@ -13,6 +13,7 @@ from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.tracing_parameters import PerformanceParameters
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyGridError
 from psr_magpy.io import get_io_factory
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -73,9 +74,7 @@ class MemoryManager:
         time_start = time.time()
 
         if grid.nline is None:
-            error_msg = "Grid nline is None, cannot estimate memory"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Grid nline is None, cannot estimate memory")
 
         n_trial = min(grid.nline, n_trial)
 
@@ -183,9 +182,7 @@ class MemoryManager:
     ) -> FieldLineSet:
         """Process trial batch for memory estimation."""
         if subset_grid.nline is None:
-            error_msg = "Subset grid nline is None"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Subset grid nline is None")
 
         # Use provided tracer or fall back to self.tracer
         active_tracer = tracer if tracer is not None else self.tracer

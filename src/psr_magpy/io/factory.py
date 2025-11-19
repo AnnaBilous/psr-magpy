@@ -14,6 +14,7 @@ from .validator import (
 )
 from .memory_monitor import MemoryMonitor, MemoryThreshold
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyValidationError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -51,9 +52,7 @@ class IOFactory:
     ) -> DataIO:
         """Create a data I/O instance with validation and memory monitoring configuration."""
         if data_type not in cls._data_registry:
-            error_msg = f"No I/O class registered for data type: {data_type.__name__}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"No I/O class registered for data type: {data_type.__name__}")
 
         # Filter out template parameter from kwargs (it's passed to load method, not constructor)
         io_kwargs = {k: v for k, v in kwargs.items() if k != "template"}
@@ -101,9 +100,7 @@ class IOFactory:
         """Create a data I/O instance with data, validation, and memory monitoring configuration."""
         data_type = type(data)
         if data_type not in cls._data_registry:
-            error_msg = f"No I/O class registered for data type: {data_type.__name__}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"No I/O class registered for data type: {data_type.__name__}")
 
         # Create validator with specified configuration
         # Filter out overwrite parameter from kwargs for validator constructor
@@ -195,11 +192,9 @@ class IOFactory:
                     logger.error(f"Failed to register ExperimentSeriesConfig: {e}")
 
             if config_type not in cls._config_registry:
-                error_msg = (
+                raise PSRMagPyIOError(
                     f"No I/O class registered for config type: {config_type.__name__}"
                 )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
 
         # Create validator with specified configuration
         # Filter out overwrite parameter from kwargs for validator constructor

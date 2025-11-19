@@ -11,6 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyFieldError, PSRMagPyTracingError
 from psr_magpy.line.field_numba import get_total_field_numba
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -163,9 +164,7 @@ class NumbaFieldCalculator(FieldCalculator):
         try:
             config = field.get_numba_config()
         except ValueError as e:
-            error_msg = f"Field is not Numba-compatible: {e}"
-            logger.error(error_msg)
-            raise ValueError(error_msg) from e
+            raise PSRMagPyFieldError(f"Field is not Numba-compatible: {e}") from e
         
         # Convert config list to arrays for Numba efficiency
         self._n_components = len(config)
@@ -201,9 +200,7 @@ class NumbaFieldCalculator(FieldCalculator):
             )
             logger.debug(f"Numba field calculator warmed up for {self._n_components} components")
         except Exception as e:
-            error_msg = f"Failed to warmup Numba field calculator: {e}"
-            logger.error(error_msg)
-            raise RuntimeError(error_msg) from e
+            raise PSRMagPyTracingError(f"Failed to warmup Numba field calculator: {e}") from e
     
     def get_field(
         self, r: np.ndarray, K: int, normalize: bool = True

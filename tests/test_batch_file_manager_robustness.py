@@ -106,9 +106,10 @@ class TestBatchFileManagerRobustness:
         
         batch_manager = BatchFileManager(str(self.base_filename))
         
-        # Should return None instead of raising exception
-        result = batch_manager.organize_batch_files()
-        assert result is None
+        # Should raise PSRMagPyIOError on persistent failure
+        from psr_magpy.utils.exceptions import PSRMagPyIOError
+        with pytest.raises(PSRMagPyIOError, match="Failed to organize batch files"):
+            batch_manager.organize_batch_files()
 
     def test_organize_batch_files_handles_missing_source(self):
         """Test handling of missing source files during organization."""

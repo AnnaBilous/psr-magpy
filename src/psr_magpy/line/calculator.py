@@ -13,6 +13,7 @@ from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyTracingError, PSRMagPyGridError
 from psr_magpy.io import get_io_factory
 
 logger = get_logger(__name__)
@@ -168,13 +169,9 @@ class FieldLineCalculator:
         """Process field lines in batches."""
         nline = self.context.grid.nline
         if nline is None:
-            error_msg = "Grid nline is None, cannot process batches"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Grid nline is None, cannot process batches")
         if self.context.grid.indices is None:
-            error_msg = "Grid indices is None, cannot process batches"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Grid indices is None, cannot process batches")
 
         logger.info(f"Processing {nline} field lines in batches of {batch_size}")
         batch_idx = 0
@@ -288,15 +285,11 @@ class FieldLineCalculator:
             f"Processing batch with {subset_grid.nline} field lines using {self.context.params.performance.n_cores} cores"
         )
         if subset_grid.nline is None:
-            error_msg = "Subset grid nline is None, cannot process batch"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Subset grid nline is None, cannot process batch")
         if subset_grid.footpoint_coordinates is None or subset_grid.indices is None:
-            error_msg = (
+            raise PSRMagPyGridError(
                 "Subset grid coordinates or indices are None, cannot process batch"
             )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
         coordinates: CartesianRepresentation = subset_grid.footpoint_coordinates
         indices: np.ndarray = subset_grid.indices
         if (

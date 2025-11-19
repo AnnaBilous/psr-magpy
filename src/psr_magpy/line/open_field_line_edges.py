@@ -8,6 +8,7 @@ from psr_magpy.line.property_system import PropertyName
 from psr_magpy.grid.grid import HealpixGrid, SphericalGrid, RandomGrid, CustomGrid, FootpointGrid
 from psr_magpy.utils.physical_conversions import get_R_LC, get_P_ms
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyGridError, PSRMagPyValidationError, PSRMagPyExperimentError
 
 
 class OFLEdgeResult(NamedTuple):
@@ -334,28 +335,20 @@ def calculate_and_save_OFL_edges(
         experiment_config = ExperimentConfig.load(experiment_config_path)
         logger.info(f"Loaded experiment config: {experiment_config.name}")
     except Exception as e:
-        error_msg = (
+        raise PSRMagPyIOError(
             f"Failed to load experiment config from {experiment_config_path}: {e}"
-        )
-        logger.error(error_msg)
-        raise FileNotFoundError(error_msg)
+        ) from e
 
     # Create grid from experiment config
     try:
         grid = experiment_config.grid.create_grid()
         if grid is None:
-            error_msg = "Failed to create grid from experiment config"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Failed to create grid from experiment config")
         if grid.grid_type is None:
-            error_msg = "Grid type is None"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Grid type is None")
         logger.info(f"Created grid: {grid.grid_type.value}")
     except Exception as e:
-        error_msg = f"Failed to create grid: {e}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyGridError(f"Failed to create grid: {e}") from e
 
     # Phase 1: Load minimal data for edge calculation
     logger.info("Phase 1: Loading minimal data for edge calculation")
@@ -372,30 +365,26 @@ def calculate_and_save_OFL_edges(
             minimal_template, str(lines_dir)
         )
         if OFL_data is None:
-            error_msg = f"No field line data found in {lines_dir}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"No field line data found in {lines_dir}")
         logger.info(
             f"Loaded {OFL_data.n_field_lines} field lines with minimal template"
         )
     except Exception as e:
-        error_msg = f"Failed to load field line data from {lines_dir}: {e}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyIOError(f"Failed to load field line data from {lines_dir}: {e}") from e
 
     # Calculate OFL edges
     try:
         if precise_edges:
             if not isinstance(grid, HealpixGrid):
-                error_msg = f"Precise edge calculation requires HealpixGrid with nside < 512, got {type(grid).__name__}."
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise PSRMagPyGridError(
+                    f"Precise edge calculation requires HealpixGrid with nside < 512, got {type(grid).__name__}."
+                )
             """
             else:
                 if grid.nside >= 512:
-                    error_msg = f"Precise edge calculation requires HealpixGrid with nside < 512, got nside = {grid.nside}."
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
+                    raise PSRMagPyGridError(
+                        f"Precise edge calculation requires HealpixGrid with nside < 512, got nside = {grid.nside}."
+                    )
             """
 
         calculator = OFLEdgeCalculator(grid, h_LC_coeff=h_LC_coeff, precise_edges=precise_edges)
@@ -405,9 +394,7 @@ def calculate_and_save_OFL_edges(
         
         logger.info(f"Calculated edges for {len(edge_result.R_LC)} R_LC values")
     except Exception as e:
-        error_msg = f"Failed to calculate OFL edges: {e}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyExperimentError(f"Failed to calculate OFL edges: {e}") from e
 
     # Phase 2: Extract edge data with full template
     logger.info("Phase 2: Extracting edge data with full template")
@@ -423,9 +410,7 @@ def calculate_and_save_OFL_edges(
         batch_files = sorted(glob.glob(batch_pattern))
 
         if not batch_files:
-            error_msg = f"No batch files found matching pattern: {batch_pattern}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"No batch files found matching pattern: {batch_pattern}")
 
         logger.info(f"Found {len(batch_files)} batch files")
 
@@ -563,9 +548,7 @@ def calculate_and_save_OFL_edges(
         logger.info("Phase 2: Edge data extraction completed")
 
     except Exception as e:
-        error_msg = f"Failed to extract and save edge data: {e}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyIOError(f"Failed to extract and save edge data: {e}") from e
 
     return edge_result
 
@@ -623,28 +606,20 @@ def calculate_and_save_OFL_regions(
         experiment_config = ExperimentConfig.load(experiment_config_path)
         logger.info(f"Loaded experiment config: {experiment_config.name}")
     except Exception as e:
-        error_msg = (
+        raise PSRMagPyIOError(
             f"Failed to load experiment config from {experiment_config_path}: {e}"
-        )
-        logger.error(error_msg)
-        raise FileNotFoundError(error_msg)
+        ) from e
 
     # Create grid from experiment config
     try:
         grid = experiment_config.grid.create_grid()
         if grid is None:
-            error_msg = "Failed to create grid from experiment config"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Failed to create grid from experiment config")
         if grid.grid_type is None:
-            error_msg = "Grid type is None"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyGridError("Grid type is None")
         logger.info(f"Created grid: {grid.grid_type.value}")
     except Exception as e:
-        error_msg = f"Failed to create grid: {e}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyGridError(f"Failed to create grid: {e}") from e
 
     # Phase 1: Load minimal data for OFL region calculation
     logger.info("Phase 1: Loading minimal data for OFL region calculation")
@@ -661,16 +636,12 @@ def calculate_and_save_OFL_regions(
             minimal_template, str(lines_dir)
         )
         if OFL_data is None:
-            error_msg = f"No field line data found in {lines_dir}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"No field line data found in {lines_dir}")
         logger.info(
             f"Loaded {OFL_data.n_field_lines} field lines with minimal template"
         )
     except Exception as e:
-        error_msg = f"Failed to load field line data from {lines_dir}: {e}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyIOError(f"Failed to load field line data from {lines_dir}: {e}") from e
 
     # Calculate OFL regions (all footpoints, not just edges)
     try:
@@ -686,9 +657,7 @@ def calculate_and_save_OFL_regions(
         region_result = OFLEdgeResult(R_LC=R_LC_values, edge_footpoints=region_ftp_ids, precise_edges=False)
         
     except Exception as e:
-        error_msg = f"Failed to calculate OFL regions: {e}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyExperimentError(f"Failed to calculate OFL regions: {e}") from e
 
     # Phase 2: Extract region data with full template
     logger.info("Phase 2: Extracting region data with full template")
@@ -705,9 +674,7 @@ def calculate_and_save_OFL_regions(
         batch_files = sorted(glob.glob(batch_pattern))
 
         if not batch_files:
-            error_msg = f"No batch files found matching pattern: {batch_pattern}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise PSRMagPyIOError(f"No batch files found matching pattern: {batch_pattern}")
 
         logger.info(f"Found {len(batch_files)} batch files")
 
@@ -844,8 +811,6 @@ def calculate_and_save_OFL_regions(
         logger.info("Phase 2: Region data extraction completed")
 
     except Exception as e:
-        error_msg = f"Failed to extract and save region data: {e}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise PSRMagPyIOError(f"Failed to extract and save region data: {e}") from e
 
     return region_result
