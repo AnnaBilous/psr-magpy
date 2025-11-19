@@ -474,9 +474,20 @@ class GridIO(FitsIO):
         grid.footpoint_coordinates = CartesianRepresentation(footpoint_coordinates)
 
         # Load indices
-        grid.indices = np.array([row[0] for row in hdul["FTP_ID"].data])
+        indices_data = hdul["FTP_ID"].data
+        if hasattr(indices_data, "footpoint_id"):
+            # Structured array with named column
+            grid.indices = np.array(indices_data["footpoint_id"])
+        else:
+            # Fallback: assume first column
+            grid.indices = np.array([row[0] for row in indices_data])
         grid.partial = header_main["PARTIAL"]
         grid.nline = len(grid.indices)
+        # Set nline_ori from header (original full grid size)
+        if "NLINE" in header_main:
+            grid.nline_ori = header_main["NLINE"]
+        
+        logger.debug(f"Loaded grid with {grid.nline} points, indices range: [{grid.indices.min()}, {grid.indices.max()}]")
 
         return grid
 
