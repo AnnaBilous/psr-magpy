@@ -316,7 +316,7 @@ def calculate_and_save_OFL_edges(
         FileNotFoundError: If experiment config or lines directory not found
     """
     from psr_magpy.experiment.experiment_config import ExperimentConfig
-    from psr_magpy.io import get_io_factory
+    from psr_magpy.io import load_data
     from psr_magpy.line.field_line_set import FieldLineSet
     from psr_magpy.line.field_line import FieldLine
     from psr_magpy.line.property_system import PropertyName
@@ -444,7 +444,7 @@ def calculate_and_save_OFL_edges(
 
                 try:
                     # Load batch file with full template
-                    batch_data = get_io_factory().load_data(
+                    batch_data = load_data(
                         FieldLineSet, batch_file, template=template
                     )
 
@@ -587,7 +587,7 @@ def calculate_and_save_OFL_regions(
         FileNotFoundError: If experiment config or lines directory not found
     """
     from psr_magpy.experiment.experiment_config import ExperimentConfig
-    from psr_magpy.io import get_io_factory
+    from psr_magpy.io import load_data
     from psr_magpy.line.field_line_set import FieldLineSet
     from psr_magpy.line.field_line import FieldLine
     from psr_magpy.line.property_system import PropertyName
@@ -708,7 +708,7 @@ def calculate_and_save_OFL_regions(
 
                 try:
                     # Load batch file with full template
-                    batch_data = get_io_factory().load_data(
+                    batch_data = load_data(
                         FieldLineSet, batch_file, template=template
                     )
 

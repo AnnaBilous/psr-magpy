@@ -446,15 +446,15 @@ class DataIOValidator(IOValidator):
 
     def _validate_basic(self, data: Any, **kwargs) -> ValidationResult:
         """Basic validation for data objects."""
-        errors = []
-        warnings = []
-        details = {}
+        errors: List[str] = []
+        warnings: List[str] = []
+        details: Dict[str, Any] = {}
 
         # For load operations, data can be None (we don't have it yet)
         operation = kwargs.get("operation", "unknown")
         if operation == "load" and data is None:
             details["data_type"] = "None (load operation)"
-            details["has_validate"] = False
+            details["has_validate"] = "False"
             return ValidationResult(True, errors, warnings, details)
 
         # Check if data is None (for save operations)
@@ -471,15 +471,15 @@ class DataIOValidator(IOValidator):
                 errors.append(f"Data validation error: {e}")
 
         details["data_type"] = type(data).__name__
-        details["has_validate"] = hasattr(data, "validate")
+        details["has_validate"] = str(hasattr(data, "validate"))
 
         return ValidationResult(len(errors) == 0, errors, warnings, details)
 
     def _validate_standard(self, data: Any, **kwargs) -> ValidationResult:
         """Standard validation for data objects."""
-        errors = []
-        warnings = []
-        details = {}
+        errors: List[str] = []
+        warnings: List[str] = []
+        details: Dict[str, Any] = {}
 
         # Check data size
         if hasattr(data, "estimate_size"):
@@ -501,9 +501,9 @@ class DataIOValidator(IOValidator):
 
     def _validate_strict(self, data: Any, **kwargs) -> ValidationResult:
         """Strict validation for data objects."""
-        errors = []
-        warnings = []
-        details = {}
+        errors: List[str] = []
+        warnings: List[str] = []
+        details: Dict[str, Any] = {}
 
         # Deep validation of data structure
         if hasattr(data, "_properties"):
@@ -522,11 +522,11 @@ class DataIOValidator(IOValidator):
 class ConfigIOValidator(IOValidator):
     """Validator for configuration I/O operations."""
 
-    def _validate_basic(self, config: Any, **kwargs) -> ValidationResult:
+    def _validate_basic(self, config: Any, **kwargs: Any) -> ValidationResult:  # type: ignore[override]
         """Basic validation for configuration objects."""
-        errors = []
-        warnings = []
-        details = {}
+        errors: List[str] = []
+        warnings: List[str] = []
+        details: Dict[str, Any] = {}
 
         # Check if config is None
         if config is None:
@@ -541,15 +541,15 @@ class ConfigIOValidator(IOValidator):
                 errors.append(f"Configuration validation failed: {e}")
 
         details["config_type"] = type(config).__name__
-        details["is_pydantic"] = hasattr(config, "model_validate")
+        details["is_pydantic"] = str(hasattr(config, "model_validate"))
 
         return ValidationResult(len(errors) == 0, errors, warnings, details)
 
-    def _validate_standard(self, config: Any, **kwargs) -> ValidationResult:
+    def _validate_standard(self, config: Any, **kwargs: Any) -> ValidationResult:  # type: ignore[override]
         """Standard validation for configuration objects."""
-        errors = []
-        warnings = []
-        details = {}
+        errors: List[str] = []
+        warnings: List[str] = []
+        details: Dict[str, Any] = {}
 
         # Check required fields
         if hasattr(config, "name") and not config.name:
@@ -564,11 +564,11 @@ class ConfigIOValidator(IOValidator):
 
         return ValidationResult(len(errors) == 0, errors, warnings, details)
 
-    def _validate_strict(self, config: Any, **kwargs) -> ValidationResult:
+    def _validate_strict(self, config: Any, **kwargs: Any) -> ValidationResult:  # type: ignore[override]
         """Strict validation for configuration objects."""
-        errors = []
-        warnings = []
-        details = {}
+        errors: List[str] = []
+        warnings: List[str] = []
+        details: Dict[str, Any] = {}
 
         # Validate all nested configurations
         if hasattr(config, "field") and config.field:

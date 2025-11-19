@@ -88,14 +88,9 @@ class FootpointGrid(ABC):
     @classmethod
     def load_from_fits(cls: Type[T], fitsname: str) -> T:
         """Load grid from FITS file."""
-        from psr_magpy.io import get_io_factory
-        from psr_magpy.io.data_io import GridIO
+        from psr_magpy.io import load_data
 
-        # Ensure registration
-        if cls not in get_io_factory()._data_registry:
-            get_io_factory().register_data_io(cls, GridIO)
-
-        return get_io_factory().load_data(cls, fitsname)
+        return load_data(cls, fitsname)
 
     @classmethod
     def _create_grid_from_header(
@@ -183,14 +178,9 @@ class FootpointGrid(ABC):
 
     def save_to_fits(self, filepath: Union[str, Path]) -> None:
         """Save grid to FITS file."""
-        from psr_magpy.io import get_io_factory
-        from psr_magpy.io.data_io import GridIO
+        from psr_magpy.io import save_data
 
-        # Ensure registration
-        if type(self) not in get_io_factory()._data_registry:
-            get_io_factory().register_data_io(type(self), GridIO)
-
-        get_io_factory().save_data(self, filepath)
+        save_data(self, filepath)
 
     def plot_footpoint_coordinates(
         self,

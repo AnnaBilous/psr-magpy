@@ -5,7 +5,7 @@ import tempfile
 import numpy as np
 from pathlib import Path
 
-from psr_magpy.io import get_io_factory
+from psr_magpy.io import save_data, load_data
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.property_system import PropertyName
@@ -42,7 +42,7 @@ def create_test_batch_files(experiment_name, n_batches=3, n_lines_per_batch=100)
         
         # Save batch file
         batch_file = lines_dir / f"{experiment_name}_batch_{batch_num:03d}_out_of_{n_batches:03d}.fits"
-        get_io_factory().save_data(field_line_set, batch_file)
+        save_data(field_line_set, batch_file)
     
     return tmp_dir, lines_dir
 
@@ -81,7 +81,7 @@ def test_load_combined_batch_data_function():
         
         # Load and combine batch files
         for batch_file in sorted(batch_files):
-            field_line_set = get_io_factory().load_data(FieldLineSet, batch_file, template=minimal_template)
+            field_line_set = load_data(FieldLineSet, batch_file, template=minimal_template)
             combined_field_line_set.append(field_line_set)
         
         # Check results
@@ -127,7 +127,7 @@ def test_template_validation_missing_columns():
         # Should raise error about missing columns
         from psr_magpy.utils.exceptions import PSRMagPyIOError
         with pytest.raises(PSRMagPyIOError, match="Template requires columns that are missing"):
-            get_io_factory().load_data(FieldLineSet, batch_file, template=template_with_missing)
+            load_data(FieldLineSet, batch_file, template=template_with_missing)
             
     finally:
         import shutil
@@ -151,7 +151,7 @@ def test_memory_efficiency_with_template():
             save_r_max=True,
             save_b_ini=True
         )
-        full_set = get_io_factory().load_data(FieldLineSet, batch_file, template=full_template)
+        full_set = load_data(FieldLineSet, batch_file, template=full_template)
         
         # Load with minimal template (only 3 properties)
         minimal_template = FieldLine(
@@ -159,7 +159,7 @@ def test_memory_efficiency_with_template():
             save_r_cyl_max=True,
             save_z_abs_max=True
         )
-        minimal_set = get_io_factory().load_data(FieldLineSet, batch_file, template=minimal_template)
+        minimal_set = load_data(FieldLineSet, batch_file, template=minimal_template)
         
         # Both should have the same number of field lines
         assert full_set.n_field_lines == minimal_set.n_field_lines == 100

@@ -331,18 +331,13 @@ class ExperimentSeriesConfig(BaseModel):
         Args:
             filename: Optional filename. If not provided, uses "{series_name}_config.yaml"
         """
-        from psr_magpy.io import get_io_factory
-        from psr_magpy.io.config_io import ExperimentSeriesConfigIO
+        from psr_magpy.io import save_config
 
         if filename is None:
             filename = str(self.get_configs_dir() / f"{self.name}_config.yaml")
 
-        # Ensure registration
-        if type(self) not in get_io_factory()._config_registry:
-            get_io_factory().register_config_io(type(self), ExperimentSeriesConfigIO)
-
         # Save with overwrite=True
-        get_io_factory().save_config(self, filename)
+        save_config(self, filename, overwrite=True)
 
     @classmethod
     def load(cls, config_file: Union[str, Path]) -> "ExperimentSeriesConfig":
@@ -354,25 +349,31 @@ class ExperimentSeriesConfig(BaseModel):
         Returns:
             Loaded configuration
         """
-        from psr_magpy.io import get_io_factory
-        from psr_magpy.io.config_io import ExperimentSeriesConfigIO
+        from psr_magpy.io import load_config
 
-        # Ensure registration
-        if cls not in get_io_factory()._config_registry:
-            get_io_factory().register_config_io(cls, ExperimentSeriesConfigIO)
-
-        return get_io_factory().load_config(cls, config_file)
+        return load_config(cls, config_file)
 
     def print_yaml(self):
         """Print configuration as pretty YAML to screen."""
-        from psr_magpy.io import get_io_factory
         from psr_magpy.io.config_io import ExperimentSeriesConfigIO
+        from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy
+        from psr_magpy.io.validator import ConfigIOValidator
+        from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
 
-        # Ensure registration
-        if type(self) not in get_io_factory()._config_registry:
-            get_io_factory().register_config_io(type(self), ExperimentSeriesConfigIO)
-
-        io_instance = get_io_factory().create_config_io(type(self))
+        validator = ConfigIOValidator(
+            validation_level=ValidationLevel.STANDARD,
+            recovery_strategy=RecoveryStrategy.RETRY_ONCE,
+        )
+        memory_monitor = MemoryMonitor(
+            threshold=MemoryThreshold.MODERATE,
+            safety_margin_mb=100.0,
+            enable_checks=True,
+            enable_warnings=True,
+        )
+        io_instance = ExperimentSeriesConfigIO(
+            validator=validator,
+            memory_monitor=memory_monitor,
+        )
         io_instance.print_config(self)
 
     def print_experiment_summary(

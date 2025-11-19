@@ -7,7 +7,7 @@ field line calculations with support for progress bars and detailed logging.
 import time
 import psutil
 from contextlib import contextmanager
-from typing import Optional, Any, Union
+from typing import Optional, Any, Union, Protocol
 from pathlib import Path
 
 from tqdm import tqdm
@@ -15,6 +15,35 @@ from tqdm import tqdm
 from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
+
+
+class ProgressBarProtocol(Protocol):
+    """Protocol for progress bar interface."""
+    n: int
+    total: int
+    
+    def refresh(self) -> None:
+        """Refresh the progress bar display."""
+        ...
+    
+    def close(self) -> None:
+        """Close the progress bar."""
+        ...
+
+
+class _DummyProgressBar:
+    """Dummy progress bar that does nothing."""
+    def __init__(self) -> None:
+        self.n = 0
+        self.total = 0
+
+    def refresh(self) -> None:
+        """No-op refresh."""
+        pass
+
+    def close(self) -> None:
+        """No-op close."""
+        pass
 
 
 class ProgressTracker:
@@ -162,21 +191,9 @@ class ProgressTracker:
             elapsed = time.time() - self.start_time
             logger.info(f"Elapsed time: {elapsed:.1f} seconds")
 
-    def create_progress_bar(self, total: int, description: str = "Processing") -> Any:
+    def create_progress_bar(self, total: int, description: str = "Processing") -> Union[tqdm, _DummyProgressBar]:
         """Create a progress bar for tracking progress."""
         if not self.show_progress:
-            # Return a dummy progress bar that does nothing
-            class _DummyProgressBar:
-                def __init__(self):
-                    self.n = 0
-                    self.total = 0
-
-                def refresh(self):
-                    pass
-
-                def close(self):
-                    pass
-
             return _DummyProgressBar()
         self._progress_bar = tqdm(
             total=total, desc=description, unit="items", disable=not self.show_progress
@@ -207,7 +224,7 @@ class ProgressTracker:
             )
 
     def log_batch_completion(
-        self, batch_idx: int, processed: int, total: int, field_line_set=None
+        self, batch_idx: int, processed: int, total: int, field_line_set: Optional[Any] = None
     ) -> None:
         """Log the completion of a batch with memory usage information."""
         logger.info(f"Completed batch {batch_idx + 1}: {processed}/{total} field lines")

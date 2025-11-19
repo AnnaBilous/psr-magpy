@@ -1,10 +1,11 @@
 import glob
 import psutil
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 from multiprocessing import Pool
 
 import numpy as np
+from numpy.typing import NDArray
 from pathlib import Path
 
 from psr_magpy.grid.grid import FootpointGrid
@@ -12,9 +13,10 @@ from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.tracing_parameters import PerformanceParameters
+from psr_magpy.line.progress_tracker import ProgressTracker
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyGridError
-from psr_magpy.io import get_io_factory
+from psr_magpy.io import save_data
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -92,7 +94,7 @@ class MemoryManager:
 
         # Process trial batch with verification disabled
         # Use random indices for better representation of the grid
-        trial_indices = np.random.choice(grid.nline, size=n_trial, replace=False)
+        trial_indices: NDArray[np.int64] = np.random.choice(grid.nline, size=n_trial, replace=False)
         trial_grid = grid.subset_grid(trial_indices)
         trial_results = self._process_trial_batch(trial_grid, template, temp_tracer)
 
@@ -227,7 +229,7 @@ class MemoryManager:
         )
 
         # Write to FITS using new I/O system
-        get_io_factory().save_data(
+        save_data(
             self._results_in_memory, batch_filename, overwrite=True
         )
 
@@ -242,7 +244,7 @@ class MemoryManager:
         self._results_in_memory = None
         self._results_in_memory_size = 0.0
 
-    def rename_batch_files(self, filename: str, progress_tracker=None) -> None:
+    def rename_batch_files(self, filename: str, progress_tracker: Optional[ProgressTracker] = None) -> None:
         """Organize batch files using BatchFileManager."""
         from psr_magpy.io.batch_file_manager import BatchFileManager
 

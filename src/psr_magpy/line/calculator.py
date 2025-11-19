@@ -1,7 +1,7 @@
 import time
 import gc
 from multiprocessing import Pool
-from typing import Optional, Union
+from typing import Optional, Union, Tuple, Any
 import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
 from pathlib import Path
@@ -14,14 +14,17 @@ from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyTracingError, PSRMagPyGridError
-from psr_magpy.io import get_io_factory
+from psr_magpy.io import save_data
 
 logger = get_logger(__name__)
 
 
-def _trace_single_line_wrapper(args):
+def _trace_single_line_wrapper(args: Tuple[Any, CartesianRepresentation, int, FieldLine]) -> FieldLine:
     """Wrapper function for multiprocessing field line tracing."""
-    tracer, r_initial, footpoint_id, template = args
+    from psr_magpy.line.tracer import FieldLineTracer
+    tracer = args[0]
+    assert isinstance(tracer, FieldLineTracer), "First argument must be FieldLineTracer"
+    r_initial, footpoint_id, template = args[1], args[2], args[3]
     return tracer.trace_single_line(r_initial, footpoint_id, template)
 
 
@@ -70,7 +73,8 @@ class FieldLineCalculator:
 
         return can_skip
 
-    def _estimate_memory(self, template):
+    def _estimate_memory(self, template: FieldLine) -> Tuple[float, float]:
+        """Estimate memory requirements for field line calculation."""
         trial_size, completion_time = self.context.estimate_memory_requirements(
             template
         )
@@ -80,7 +84,8 @@ class FieldLineCalculator:
         )
         return trial_size, completion_time
 
-    def _configure_batch(self, trial_size):
+    def _configure_batch(self, trial_size: float) -> int:
+        """Configure optimal batch size based on memory estimation."""
         # Get total number of field lines for batch size calculation
         total_field_lines = self.context.grid.nline
         optimal_batch_size = self.context.memory_manager.calculate_batch_size(
@@ -90,7 +95,7 @@ class FieldLineCalculator:
         self.context.progress_tracker.log_calculation_start()
         return optimal_batch_size
 
-    def _finalize_results(self, results):
+    def _finalize_results(self, results: Optional[FieldLineSet]) -> Optional[Union[FieldLineSet, LightFieldLineSet]]:
         elapsed = (
             time.time() - self.context.progress_tracker.start_time
             if self.context.progress_tracker.start_time
@@ -258,7 +263,7 @@ class FieldLineCalculator:
                     )
 
                     # Save final batch
-                    get_io_factory().save_data(
+                    save_data(
                         self.context.memory_manager.results_in_memory,
                         final_batch_filename,
                         overwrite=True,

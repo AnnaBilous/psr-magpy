@@ -9,7 +9,7 @@ import time
 
 from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
 from psr_magpy.io.validator import DataIOValidator, ValidationLevel
-from psr_magpy.io.factory import IOFactory
+from psr_magpy.io import save_data, load_data, save_config, load_config
 from psr_magpy.grid.grid import SphericalGrid
 from psr_magpy.experiment.experiment_config import ExperimentConfig
 
@@ -33,14 +33,14 @@ class TestMemoryMonitorIOIntegration:
         
         try:
             # Save with memory monitoring
-            IOFactory.save_data(grid, grid_path)
+            save_data(grid, grid_path)
             
             # Check load safety before loading
             load_result = monitor.check_load_safety(grid_path, "load")
             assert load_result.is_safe is True
             
             # Load with memory monitoring
-            loaded_grid = IOFactory.load_data(type(grid), grid_path)
+            loaded_grid = load_data(type(grid), grid_path)
             
             # Verify round-trip
             assert loaded_grid.nline == grid.nline
@@ -65,7 +65,7 @@ class TestMemoryMonitorIOIntegration:
         
         try:
             # Save with memory monitoring
-            IOFactory.save_config(config, config_path)
+            save_config(config, config_path)
             
             # Ensure file is written and non-empty
             assert config_path.exists()
@@ -76,7 +76,7 @@ class TestMemoryMonitorIOIntegration:
             assert config_path.stat().st_size > 0
             
             # Load with memory monitoring
-            loaded_config = IOFactory.load_config(ExperimentConfig, config_path)
+            loaded_config = load_config(ExperimentConfig, config_path)
             
             # Verify round-trip
             assert loaded_config.name == config.name

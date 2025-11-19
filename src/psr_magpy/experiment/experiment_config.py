@@ -508,44 +508,39 @@ class ExperimentConfig:
             filepath.unlink()
             logger.debug(f"Deleted existing config file: {filepath}")
         
-        # Ensure I/O module is imported for registration
-        import psr_magpy.io
-        from psr_magpy.io import get_io_factory
-        from psr_magpy.io.config_io import ExperimentConfigIO
+        from psr_magpy.io import save_config
 
-        # Ensure registration
-        if type(self) not in get_io_factory()._config_registry:
-            get_io_factory().register_config_io(type(self), ExperimentConfigIO)
-
-        get_io_factory().save_config(self, filepath)
+        save_config(self, filepath)
 
     def print_yaml(self):
         """Print configuration as pretty YAML to screen."""
-        # Ensure I/O module is imported for registration
-        import psr_magpy.io
-        from psr_magpy.io import get_io_factory
         from psr_magpy.io.config_io import ExperimentConfigIO
+        from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy
+        from psr_magpy.io.validator import ConfigIOValidator
+        from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
 
-        # Ensure registration
-        if type(self) not in get_io_factory()._config_registry:
-            get_io_factory().register_config_io(type(self), ExperimentConfigIO)
-
-        io_instance = get_io_factory().create_config_io(type(self))
+        validator = ConfigIOValidator(
+            validation_level=ValidationLevel.STANDARD,
+            recovery_strategy=RecoveryStrategy.RETRY_ONCE,
+        )
+        memory_monitor = MemoryMonitor(
+            threshold=MemoryThreshold.MODERATE,
+            safety_margin_mb=100.0,
+            enable_checks=True,
+            enable_warnings=True,
+        )
+        io_instance = ExperimentConfigIO(
+            validator=validator,
+            memory_monitor=memory_monitor,
+        )
         io_instance.print_config(self)
 
     @classmethod
     def load(cls, filepath: Union[str, Path]) -> "ExperimentConfig":
         """Load configuration from YAML file."""
-        # Ensure I/O module is imported for registration
-        import psr_magpy.io
-        from psr_magpy.io import get_io_factory
-        from psr_magpy.io.config_io import ExperimentConfigIO
+        from psr_magpy.io import load_config
 
-        # Ensure registration
-        if cls not in get_io_factory()._config_registry:
-            get_io_factory().register_config_io(cls, ExperimentConfigIO)
-
-        return get_io_factory().load_config(cls, filepath)
+        return load_config(cls, filepath)
 
     def load_combined_batch_data(
         self, template: FieldLine, lines_dir: Optional[str] = None
@@ -562,7 +557,7 @@ class ExperimentConfig:
         """
         import glob
         from psr_magpy.line.field_line_set import FieldLineSet
-        from psr_magpy.io import get_io_factory
+        from psr_magpy.io import load_data
 
         # Determine lines directory
         if lines_dir is None:
@@ -586,7 +581,8 @@ class ExperimentConfig:
             logger.debug(f"Loading {batch_file}")
 
             # Load the field line set with template
-            field_line_set = get_io_factory().load_data(
+            from psr_magpy.io import load_data
+            field_line_set = load_data(
                 FieldLineSet, batch_file, template=template
             )
 

@@ -434,8 +434,8 @@ class TestCalculateAndSaveOFLEdges:
             assert "Precise edge calculation requires HealpixGrid" in str(e) or "Failed to calculate OFL edges" in str(e)
     
     @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
-    @patch('psr_magpy.io.get_io_factory')
-    def test_calculate_and_save_template_reversed_error_addition(self, mock_io_factory, mock_experiment_config):
+    @patch('psr_magpy.io.load_data')
+    def test_calculate_and_save_template_reversed_error_addition(self, mock_load_data, mock_experiment_config):
         """Test that reversed_error is added to template if not present."""
         mock_config = Mock()
         mock_experiment_config.load.return_value = mock_config
@@ -452,9 +452,7 @@ class TestCalculateAndSaveOFLEdges:
         mock_grid.grid_type.value = "healpix"
         mock_config.grid.create_grid.return_value = mock_grid
         
-        # Mock IO factory and field line set
-        mock_io = Mock()
-        mock_io_factory.return_value = mock_io
+        # Mock field line set
         mock_field_line_set = Mock(spec=FieldLineSet)
         mock_field_line_set.n_field_lines = 100
         
@@ -483,7 +481,7 @@ class TestCalculateAndSaveOFLEdges:
         mock_field_line_set.save_flags = mock_save_flags
         
         mock_field_line_set.subset_by_footpoint_ids.return_value = mock_field_line_set
-        mock_io.load_data.return_value = mock_field_line_set
+        mock_load_data.return_value = mock_field_line_set
         
         # Create template without reversed_error
         template_without_error = FieldLine(
@@ -522,8 +520,8 @@ class TestCalculateAndSaveOFLEdges:
                 assert result is not None
     
     @patch('psr_magpy.experiment.experiment_config.ExperimentConfig')
-    @patch('psr_magpy.io.get_io_factory')
-    def test_calculate_and_save_error_filtering(self, mock_io_factory, mock_experiment_config):
+    @patch('psr_magpy.io.load_data')
+    def test_calculate_and_save_error_filtering(self, mock_load_data, mock_experiment_config):
         """Test that footpoints with high reversed_error are filtered out."""
         mock_config = Mock()
         mock_experiment_config.load.return_value = mock_config
@@ -546,9 +544,7 @@ class TestCalculateAndSaveOFLEdges:
         mock_grid.grid_type.value = "healpix"
         mock_config.grid.create_grid.return_value = mock_grid
         
-        # Mock IO factory and field line set
-        mock_io = Mock()
-        mock_io_factory.return_value = mock_io
+        # Mock field line set
         mock_field_line_set = Mock(spec=FieldLineSet)
         mock_field_line_set.n_field_lines = 5  # Match the number of footpoints
         
@@ -589,7 +585,7 @@ class TestCalculateAndSaveOFLEdges:
             return mock_subset
         
         mock_field_line_set.subset_by_footpoint_ids = Mock(side_effect=mock_subset_by_footpoint_ids)
-        mock_io.load_data.return_value = mock_field_line_set
+        mock_load_data.return_value = mock_field_line_set
         
         # Create template with reversed_error
         template_with_error = FieldLine(

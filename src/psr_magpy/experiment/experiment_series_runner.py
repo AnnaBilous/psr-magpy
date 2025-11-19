@@ -15,7 +15,10 @@ from .experiment_runner import run_experiment
 from .experiment_result import ExperimentResult, SeriesResult
 
 from psr_magpy.utils.logging_config import get_logger, setup_logging
-from psr_magpy.io import get_io_factory
+from psr_magpy.io import save_config, load_config
+from psr_magpy.io.config_io import ExperimentSeriesConfigIO
+from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy, ConfigIOValidator
+from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -490,8 +493,7 @@ class ExperimentSeriesRunner:
             if not config_path.exists() or self.overwrite_experiments:
                 if not configs_dir.exists():
                     configs_dir.mkdir(parents=True, exist_ok=True)
-                io_instance = get_io_factory().create_config_io(type(experiment))
-                io_instance.save(experiment, config_path, overwrite=True)
+                save_config(experiment, config_path, overwrite=True)
                 logger.info(f"Saved config to: {config_path}")
             else:
                 logger.info(f"Config file already exists, skipping: {config_path}")
@@ -710,8 +712,7 @@ def run_experiment_series_from_file(
     """Run experiment series from a configuration file."""
     # Load series config
     config_file = Path(config_file)
-    io_instance = get_io_factory().create_config_io(ExperimentSeriesConfig)
-    series_config = io_instance.load(config_file)
+    series_config = load_config(ExperimentSeriesConfig, config_file)
 
     # Set input directory if provided
     if input_directory is not None:
@@ -767,8 +768,7 @@ def run_experiment_series_in_memory_from_file(
     """Run experiment series from a configuration file with results kept in memory."""
     # Load series config
     config_file = Path(config_file)
-    io_instance = get_io_factory().create_config_io(ExperimentSeriesConfig)
-    series_config = io_instance.load(config_file)
+    series_config = load_config(ExperimentSeriesConfig, config_file)
 
     # Set input directory if provided
     if input_directory is not None:

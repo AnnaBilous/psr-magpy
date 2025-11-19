@@ -5,9 +5,10 @@ Provides efficient field line tracing with configurable properties
 and integration parameters.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING
 from astropy.coordinates import CartesianRepresentation
 import numpy as np
+from numpy.typing import NDArray
 
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.field_line import FieldLine
@@ -17,7 +18,13 @@ from psr_magpy.line.field_calculator import (
     PythonFieldCalculator,
     NumbaFieldCalculator,
 )
-from psr_magpy.line.solver import ODESolver, SciPySolver, CyRKSolver
+from psr_magpy.line.solver import ODESolver, SciPySolver, CyRKSolver, Solution
+
+if TYPE_CHECKING:
+    from psr_magpy.field.multipole import MultipoleField
+else:
+    # Runtime import to avoid circular dependencies
+    from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyTracingError
 
@@ -36,23 +43,23 @@ class FieldLineTracer:
             self.surface_radius = surface_radius
             self.max_integration_radius = max_integration_radius
 
-        def hit_surface(self, t: float, r: np.ndarray, K: int) -> float:
+        def hit_surface(self, t: float, r: NDArray[np.float64], K: int) -> float:
             """Event function for hitting neutron star surface."""
             radius = float(np.sqrt(np.sum(r**2)))
 
             return radius - self.surface_radius
 
-        hit_surface.terminal = True
+        hit_surface.terminal = True  # type: ignore[attr-defined]
 
-        def hit_Rmax(self, t: float, r: np.ndarray, K: int) -> float:
+        def hit_Rmax(self, t: float, r: NDArray[np.float64], K: int) -> float:
             """Event function for hitting maximum radius."""
             radius = float(np.sqrt(np.sum(r**2)))
             return radius - self.max_integration_radius
 
-        hit_Rmax.terminal = True
+        hit_Rmax.terminal = True  # type: ignore[attr-defined]
 
     
-    def __init__(self, field: Any, params: TracingParameters) -> None:
+    def __init__(self, field: MultipoleField, params: TracingParameters) -> None:
         """Initialize the field line tracer."""
         logger.info(
             f"Initializing FieldLineTracer with max_integration_radius={params.integration.max_integration_radius}, threshold_line_distance={params.threshold_line_distance}"
@@ -66,7 +73,7 @@ class FieldLineTracer:
         # Backend validation is handled by TracingParameters validators
         field_backend = params.integration.field_backend
         if field_backend == "python":
-            self.field_calculator = PythonFieldCalculator(field)
+            self.field_calculator: FieldCalculator = PythonFieldCalculator(field)
         elif field_backend == "numba":
             self.field_calculator = NumbaFieldCalculator(field)
 
@@ -74,7 +81,7 @@ class FieldLineTracer:
         # Backend validation is handled by TracingParameters validators
         solver_backend = params.integration.solver_backend
         if solver_backend == "scipy":
-            self.solver = SciPySolver()
+            self.solver: ODESolver = SciPySolver()
         elif solver_backend == "numba":
             # TODO: Implement NumbaSolver
             raise NotImplementedError("Numba solver backend not yet implemented")
@@ -102,22 +109,22 @@ class FieldLineTracer:
         self.event_detector.surface_radius = surface_radius
         self.event_detector.max_integration_radius = max_integration_radius
 
-    def _field_for_integration(self, t: float, r: np.ndarray, K: int) -> np.ndarray:
+    def _field_for_integration(self, t: float, r: NDArray[np.float64], K: int) -> NDArray[np.float64]:
         """Wrapper for field calculation that includes unused time parameter required by ODE solvers."""
         return self.field_calculator.get_field(r, K, normalize=True)
     
-    def _field_for_integration_with_args(self, t: float, r: np.ndarray, *args) -> np.ndarray:
+    def _field_for_integration_with_args(self, t: float, r: NDArray[np.float64], *args) -> NDArray[np.float64]:
         """Wrapper that extracts K from args for solver interface."""
         K = args[0] if len(args) > 0 else 1
         return self._field_for_integration(t, r, K)
 
     def integrate_field_line(
         self,
-        r_initial: np.ndarray,
+        r_initial: NDArray[np.float64],
         K: int,
         max_integration_radius: float,
         trace_open_lines_backwards: bool,
-    ) -> Any:
+    ) -> Solution:
         """Integrate field line from initial position."""
         # Determine if this is backward integration based on starting radius
         r_initial_radius = np.sqrt(np.sum(r_initial**2))
@@ -227,6 +234,8 @@ class FieldLineTracer:
             # Fallback to linspace with minimum 2 points
             t = np.linspace(field_line.t[0], field_line.t[-1], max(int(dt), 2))
 
+        if field_line.sol is None:
+            raise PSRMagPyTracingError("Field line solution does not have dense output")
         r = field_line.sol(t)
 
         # Log final radius for debugging

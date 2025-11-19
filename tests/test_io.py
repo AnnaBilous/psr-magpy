@@ -6,7 +6,7 @@ import yaml
 from pathlib import Path
 import numpy as np
 
-from psr_magpy.io import get_data_io, get_config_io, get_io_factory
+from psr_magpy.io import save_data, load_data, save_config, load_config, detect_format
 from psr_magpy.io.base import IOUtils, DataIO, ConfigIO
 from psr_magpy.experiment.experiment_config import ExperimentConfig
 from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
@@ -107,47 +107,31 @@ class TestConfigIO:
             ConfigIO()
 
 
-class TestIOFactory:
-    """Test I/O factory."""
+class TestIODispatch:
+    """Test I/O functional dispatch."""
     
     def test_format_detection(self):
         """Test format detection."""
-        factory = get_io_factory()
-        assert factory.detect_format("test.fits") == "fits"
-        assert factory.detect_format("test.fit") == "fits"
-        assert factory.detect_format("test.yaml") == "yaml"
-        assert factory.detect_format("test.yml") == "yaml"
-        assert factory.detect_format("test.unknown") == "unknown"
+        assert detect_format("test.fits") == "fits"
+        assert detect_format("test.fit") == "fits"
+        assert detect_format("test.yaml") == "yaml"
+        assert detect_format("test.yml") == "yaml"
+        assert detect_format("test.unknown") == "unknown"
     
-    def test_factory_creation(self):
-        """Test factory instance creation."""
-        factory = get_io_factory()
-        
-        # Test data I/O creation
-        data_io = factory.create_data_io(FieldLineSet)
-        assert isinstance(data_io, DataIO)
-        
-        # Test config I/O creation
-        config_io = factory.create_config_io(ExperimentConfig)
-        assert isinstance(config_io, ConfigIO)
-    
-    def test_factory_errors(self):
-        """Test factory error handling."""
-        factory = get_io_factory()
+    def test_dispatch_errors(self):
+        """Test dispatch error handling."""
+        from psr_magpy.utils.exceptions import PSRMagPyIOError
         
         # Test unregistered data type
-        from psr_magpy.utils.exceptions import PSRMagPyIOError
-        with pytest.raises(PSRMagPyIOError, match="No I/O class registered"):
-            factory.create_data_io(dict)
+        with pytest.raises(PSRMagPyIOError, match="No IO handler"):
+            save_data({}, "test.fits")
         
         # Test unregistered config type
-        with pytest.raises(PSRMagPyIOError, match="No I/O class registered"):
-            factory.create_config_io(dict)
+        with pytest.raises(PSRMagPyIOError, match="No IO handler"):
+            load_config(dict, "test.yaml")
     
-    def test_factory_save_load(self):
-        """Test factory save/load operations."""
-        factory = get_io_factory()
-        
+    def test_dispatch_save_load(self):
+        """Test dispatch save/load operations."""
         # Test config save/load
         config = ExperimentConfig.create_dipole_example()
         
@@ -155,11 +139,11 @@ class TestIOFactory:
         
         try:
             # Save config
-            factory.save_config(config, tmp_path)
+            save_config(config, tmp_path)
             assert tmp_path.exists()
             
             # Load config
-            loaded_config = factory.load_config(ExperimentConfig, tmp_path)
+            loaded_config = load_config(ExperimentConfig, tmp_path)
             assert isinstance(loaded_config, ExperimentConfig)
             assert loaded_config.name == config.name
             
@@ -214,7 +198,6 @@ class TestTemplateFunctionality:
     
     def test_load_with_template_success(self):
         """Test loading FieldLineSet with a template that matches available columns."""
-        factory = get_io_factory()
         
         # Create a FieldLineSet with all properties
         full_template = FieldLine.template_all()
@@ -232,7 +215,7 @@ class TestTemplateFunctionality:
         tmp_path = Path(tempfile.mktemp(suffix=".fits"))
         
         try:
-            factory.save_data(field_line_set, tmp_path)
+            save_data(field_line_set, tmp_path)
             
             # Create minimal template
             minimal_template = FieldLine(
@@ -242,7 +225,7 @@ class TestTemplateFunctionality:
             )
             
             # Load with minimal template
-            loaded_set = factory.load_data(FieldLineSet, tmp_path, template=minimal_template)
+            loaded_set = load_data(FieldLineSet, tmp_path, template=minimal_template)
             
             # Check that only requested properties are loaded
             assert loaded_set.property_system.get_property(PropertyName.FOOTPOINT_ID) is not None
@@ -261,7 +244,6 @@ class TestTemplateFunctionality:
     
     def test_load_with_template_missing_columns(self):
         """Test loading with template that requires columns not present in file."""
-        factory = get_io_factory()
         
         # Create a FieldLineSet with minimal properties
         minimal_template = FieldLine(
@@ -281,7 +263,7 @@ class TestTemplateFunctionality:
         tmp_path = Path(tempfile.mktemp(suffix=".fits"))
         
         try:
-            factory.save_data(field_line_set, tmp_path)
+            save_data(field_line_set, tmp_path)
             
             # Create template that requires missing columns
             template_with_missing = FieldLine(
@@ -293,14 +275,13 @@ class TestTemplateFunctionality:
             # Should raise error about missing columns
             from psr_magpy.utils.exceptions import PSRMagPyIOError
             with pytest.raises(PSRMagPyIOError, match="Template requires columns that are missing"):
-                factory.load_data(FieldLineSet, tmp_path, template=template_with_missing)
+                load_data(FieldLineSet, tmp_path, template=template_with_missing)
                 
         finally:
             tmp_path.unlink(missing_ok=True)
     
     def test_load_without_template_original_behavior(self):
         """Test that loading without template maintains original behavior."""
-        factory = get_io_factory()
         
         # Create a FieldLineSet with some properties
         template = FieldLine(
@@ -322,10 +303,10 @@ class TestTemplateFunctionality:
         tmp_path = Path(tempfile.mktemp(suffix=".fits"))
         
         try:
-            factory.save_data(field_line_set, tmp_path)
+            save_data(field_line_set, tmp_path)
             
             # Load without template (should auto-detect from columns)
-            loaded_set = factory.load_data(FieldLineSet, tmp_path)
+            loaded_set = load_data(FieldLineSet, tmp_path)
             
             # Should load all available properties
             assert loaded_set.property_system.get_property(PropertyName.FOOTPOINT_ID) is not None
@@ -340,15 +321,31 @@ class TestTemplateFunctionality:
     
     def test_template_parameter_filtering(self):
         """Test that template parameter is filtered from I/O constructor kwargs."""
-        factory = get_io_factory()
         
         # This should not raise an error about unexpected keyword argument
-        data_io = factory.create_data_io(FieldLineSet, template="dummy_template")
+        # Test that template parameter is passed through
+        from psr_magpy.io.data_io import FieldLineSetIO
+        from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy, DataIOValidator
+        from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
+        
+        validator = DataIOValidator(
+            validation_level=ValidationLevel.STANDARD,
+            recovery_strategy=RecoveryStrategy.RETRY_ONCE,
+        )
+        memory_monitor = MemoryMonitor(
+            threshold=MemoryThreshold.MODERATE,
+            safety_margin_mb=100.0,
+            enable_checks=True,
+            enable_warnings=True,
+        )
+        data_io = FieldLineSetIO(
+            validator=validator,
+            memory_monitor=memory_monitor,
+        )
         assert isinstance(data_io, DataIO)
     
     def test_load_with_empty_template(self):
         """Test loading with template that has no enabled properties."""
-        factory = get_io_factory()
         
         # Create a FieldLineSet with some properties
         template = FieldLine(
@@ -368,13 +365,13 @@ class TestTemplateFunctionality:
         tmp_path = Path(tempfile.mktemp(suffix=".fits"))
         
         try:
-            factory.save_data(field_line_set, tmp_path)
+            save_data(field_line_set, tmp_path)
             
             # Create empty template (only footpoint_id is always enabled)
             empty_template = FieldLine()
             
             # Load with empty template
-            loaded_set = factory.load_data(FieldLineSet, tmp_path, template=empty_template)
+            loaded_set = load_data(FieldLineSet, tmp_path, template=empty_template)
             
             # Should only have footpoint_id (which is always enabled)
             assert loaded_set.property_system.get_property(PropertyName.FOOTPOINT_ID) is not None
@@ -388,7 +385,6 @@ class TestTemplateFunctionality:
     
     def test_template_with_array_list_properties(self):
         """Test loading with template that includes array list properties."""
-        factory = get_io_factory()
         
         # Create a FieldLineSet with array list properties
         template = FieldLine(
@@ -416,10 +412,10 @@ class TestTemplateFunctionality:
         tmp_path = Path(tempfile.mktemp(suffix=".fits"))
         
         try:
-            factory.save_data(field_line_set, tmp_path)
+            save_data(field_line_set, tmp_path)
             
             # Load with same template
-            loaded_set = factory.load_data(FieldLineSet, tmp_path, template=template)
+            loaded_set = load_data(FieldLineSet, tmp_path, template=template)
             
             # Check that array list properties are loaded correctly
             assert loaded_set.property_system.get_property(PropertyName.FOOTPOINT_ID) is not None
