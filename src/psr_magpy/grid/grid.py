@@ -2,7 +2,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Optional, Any, TypeVar, Type, Union, cast, List, Dict
+from typing import Optional, Any, TypeVar, Type, Union, cast, List, Dict, TYPE_CHECKING
 from pathlib import Path
 
 import healpy as hp
@@ -18,7 +18,10 @@ from astropy.io import fits as pf
 from astropy.nddata import CCDData
 
 from psr_magpy.utils.logging_config import get_logger
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, field_validator
+
+if TYPE_CHECKING:
+    from psr_magpy.experiment.experiment_config import GridConfig
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -32,6 +35,36 @@ class GridType(Enum):
     HEALPIX = "healpix"
     RANDOM = "random"
     CUSTOM = "custom"
+
+
+class SubsetGridParams(BaseModel):
+    """Parameters for creating a grid subset with validation."""
+
+    grid_indices: Union[np.ndarray, List[int]]
+    max_index: int
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    @field_validator("grid_indices", mode="before")
+    @classmethod
+    def convert_to_array(cls, v):
+        """Convert list to numpy array if needed."""
+        if isinstance(v, list):
+            return np.array(v, dtype=np.int64)
+        return v
+
+    @model_validator(mode="after")
+    def validate_indices(self):
+        """Validate that indices are non-empty and within bounds."""
+        if len(self.grid_indices) == 0:
+            raise ValueError("Cannot create subset with empty indices")
+
+        if not all(0 <= i < self.max_index for i in self.grid_indices):
+            raise ValueError(
+                f"Invalid indices. Must be between 0 and {self.max_index - 1}"
+            )
+
+        return self
 
 
 class FootpointGrid(ABC):
@@ -128,17 +161,16 @@ class FootpointGrid(ABC):
         """Create subset of grid points."""
         logger.debug(f"Creating subset: {len(grid_indices)}/{len(self.indices)} points")
 
-        # Check for empty indices
-        if len(grid_indices) == 0:
-            error_msg = "Cannot create subset with empty indices"
+        # Validate using Pydantic model
+        if self.indices is None:
+            error_msg = "Cannot create subset: grid indices are None"
             logger.error(error_msg)
             raise ValueError(error_msg)
-
-        # Validate indices
-        if not all(0 <= i < len(self.indices) for i in grid_indices):
-            error_msg = f"Invalid indices. Must be between 0 and {len(self.indices)-1}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        
+        SubsetGridParams(
+            grid_indices=grid_indices,
+            max_index=len(self.indices)
+        )
 
         # Create new grid using copy
         new_grid = self.copy()

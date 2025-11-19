@@ -62,17 +62,15 @@ class FieldLineTracer:
         self.params = params
 
         # Initialize field calculator based on backend
+        # Backend validation is handled by TracingParameters validators
         field_backend = params.integration.field_backend
         if field_backend == "python":
             self.field_calculator = PythonFieldCalculator(field)
         elif field_backend == "numba":
             self.field_calculator = NumbaFieldCalculator(field)
-        else:
-            error_msg = f"Unknown field_backend: {field_backend}. Must be 'python' or 'numba'."
-            logger.error(error_msg)
-            raise ValueError(error_msg)
 
         # Initialize solver based on backend
+        # Backend validation is handled by TracingParameters validators
         solver_backend = params.integration.solver_backend
         if solver_backend == "scipy":
             self.solver = SciPySolver()
@@ -83,10 +81,6 @@ class FieldLineTracer:
             raise NotImplementedError(error_msg)
         elif solver_backend == "cyrk":
             self.solver = CyRKSolver()
-        else:
-            error_msg = f"Unknown solver_backend: {solver_backend}. Must be 'scipy', 'numba', or 'cyrk'."
-            logger.error(error_msg)
-            raise ValueError(error_msg)
 
         # Initialize event detector
         self.event_detector = self._EventDetector(

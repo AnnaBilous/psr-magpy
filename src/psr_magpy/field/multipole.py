@@ -32,15 +32,13 @@ class MultipoleFieldParams(BaseModel):
     def validate_field_components(cls, v):
         """Validate that all components are FieldComponent instances and list is not empty."""
         if not v:
-            error_msg = "Field components list cannot be empty"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("Field components list cannot be empty")
 
         for i, component in enumerate(v):
             if not isinstance(component, FieldComponent):
-                error_msg = f"Component {i+1} is not a FieldComponent instance, got {type(component).__name__}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise ValueError(
+                    f"Component {i+1} is not a FieldComponent instance, got {type(component).__name__}"
+                )
 
         return v
 

@@ -149,29 +149,25 @@ class IntegrationParameters(BaseModel):
     def validate_radii(self):
         """Validate that threshold_line_distance is less than max_integration_radius."""
         if self.threshold_line_distance >= self.max_integration_radius:
-            error_msg = f"threshold_line_distance ({self.threshold_line_distance}) must be < max_integration_radius ({self.max_integration_radius})"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError(
+                f"threshold_line_distance ({self.threshold_line_distance}) must be < max_integration_radius ({self.max_integration_radius})"
+            )
         return self
 
     @model_validator(mode="after")
     def validate_tolerances(self):
         """Validate integration tolerances."""
         if self.rtol <= 0 or self.atol <= 0:
-            error_msg = (
+            raise ValueError(
                 f"Tolerances must be positive: rtol={self.rtol}, atol={self.atol}"
             )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
         return self
 
     @model_validator(mode="after")
     def validate_dt(self):
         """Validate that dt is reasonable."""
         if self.dt <= 0:
-            error_msg = f"dt must be positive, got {self.dt}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError(f"dt must be positive, got {self.dt}")
         if self.dt > 1.0:
             logger.warning(
                 f"Large dt value: {self.dt}. This may affect integration accuracy."
@@ -182,27 +178,27 @@ class IntegrationParameters(BaseModel):
     def validate_integration_system(self):
         """Validate integration system parameter."""
         if self.integration_system not in ["A", "B"]:
-            error_msg = f"integration_system must be 'A' or 'B', got {self.integration_system}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError(
+                f"integration_system must be 'A' or 'B', got {self.integration_system}"
+            )
         return self
 
     @model_validator(mode="after")
     def validate_field_backend(self):
         """Validate field backend parameter."""
         if self.field_backend not in ["python", "numba"]:
-            error_msg = f"field_backend must be 'python' or 'numba', got {self.field_backend}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError(
+                f"field_backend must be 'python' or 'numba', got {self.field_backend}"
+            )
         return self
 
     @model_validator(mode="after")
     def validate_solver_backend(self):
         """Validate solver backend parameter."""
         if self.solver_backend not in ["scipy", "numba", "cyrk"]:
-            error_msg = f"solver_backend must be 'scipy', 'numba', or 'cyrk', got {self.solver_backend}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError(
+                f"solver_backend must be 'scipy', 'numba', or 'cyrk', got {self.solver_backend}"
+            )
         return self
 
 
@@ -322,9 +318,7 @@ class OutputParameters(BaseModel):
     def validate_filename(self):
         """Validate filename configuration."""
         if self.save_results_to_disk and not self.filename:
-            error_msg = "Filename must be specified when save_results_to_disk is True"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise ValueError("Filename must be specified when save_results_to_disk is True")
         if not self.save_results_to_disk and self.filename:
             logger.warning("Filename specified but save_results_to_disk is False")
             raise ValueError(

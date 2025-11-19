@@ -49,20 +49,34 @@ class FieldComponentParams(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
-    @field_validator("offset_r_ns")
+    @field_validator("offset_r_ns", mode="before")
     @classmethod
     def validate_offset_vector(cls, v):
         """Validate offset vector has exactly 3 components."""
+        # Handle non-list/array types first to provide clear error message
+        if not isinstance(v, (list, np.ndarray, str)):
+            # Check if it's a type that could be converted
+            try:
+                v_array = np.asarray(v, dtype=np.float64)
+                if v_array.shape != (3,):
+                    raise ValueError(
+                        f"Offset vector must have exactly 3 components, got shape {v_array.shape}"
+                    )
+                return v_array
+            except (TypeError, ValueError):
+                raise ValueError(f"Offset must be list or array, got {type(v)}")
+        
+        if isinstance(v, str):
+            raise ValueError(f"Offset must be list or array, got {type(v)}")
+            
         if isinstance(v, (list, np.ndarray)):
             v_array = np.asarray(v, dtype=np.float64)
             if v_array.shape != (3,):
-                error_msg = f"Offset vector must have exactly 3 components, got shape {v_array.shape}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise ValueError(
+                    f"Offset vector must have exactly 3 components, got shape {v_array.shape}"
+                )
             return v_array
-        error_msg = f"Offset must be list or array, got {type(v)}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+        raise ValueError(f"Offset must be list or array, got {type(v)}")
 
 
 class FieldComponent(ABC):

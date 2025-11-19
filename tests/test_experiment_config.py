@@ -219,11 +219,14 @@ class TestCustomGridConfig:
     
     def test_with_coordinates(self):
         """Test initialization with coordinates."""
+        from astropy.coordinates import CartesianRepresentation
         coords = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
         config = CustomGridConfig(nline_ori=2, coordinates=coords)
         
         assert config.nline_ori == 2
-        assert config.coordinates == coords
+        # Coordinates are converted to CartesianRepresentation
+        assert isinstance(config.coordinates, CartesianRepresentation)
+        assert len(config.coordinates.x) == 2
 
 
 class TestGridConfig:

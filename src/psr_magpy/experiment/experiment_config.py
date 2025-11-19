@@ -50,7 +50,7 @@ logger = get_logger(__name__, console_format_brief=True)
 # Type definitions for better type safety
 
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator, field_validator
 
 
 class FieldComponentConfig(BaseModel):
@@ -172,18 +172,76 @@ class HealpixGridConfig(BaseModel):
         default=None, description="Path to saved grid file (required for subset grids)"
     )
 
+    @model_validator(mode="after")
+    def validate_nside_power_of_two(self):
+        """Validate that nside is a power of 2."""
+        if not (self.nside & (self.nside - 1) == 0):
+            raise ValueError(f"nside must be a power of 2, got {self.nside}")
+        return self
+
 
 class CustomGridConfig(BaseModel):
     """Configuration for custom grid."""
 
     nline_ori: int
-    coordinates: Optional[Any] = None  # Accept any type, validate in create_grid
+    coordinates: Optional[Any] = None
     grid_file_path: Optional[str] = Field(
         default=None,
         description="Path to saved grid file (required when saving results to disk)",
     )
 
     model_config = {"arbitrary_types_allowed": True}
+
+    @field_validator("coordinates", mode="before")
+    @classmethod
+    def validate_coordinates(cls, v):
+        """Validate and normalize coordinates format."""
+        if v is None:
+            return v
+        
+        from astropy.coordinates import CartesianRepresentation
+        import numpy as np
+        
+        if isinstance(v, list):
+            # Check if it's a list of points (each point is [x, y, z]) or [x_array, y_array, z_array]
+            if len(v) > 0:
+                first_elem = v[0]
+                # If first element is a list/array, assume it's a list of points
+                if isinstance(first_elem, (list, np.ndarray)) and len(first_elem) == 3:
+                    # Format: [[x1, y1, z1], [x2, y2, z2], ...]
+                    # Convert to [x_array, y_array, z_array] format
+                    x_coords = [point[0] for point in v]
+                    y_coords = [point[1] for point in v]
+                    z_coords = [point[2] for point in v]
+                    return CartesianRepresentation(
+                        x=np.array(x_coords),
+                        y=np.array(y_coords),
+                        z=np.array(z_coords),
+                    )
+                elif len(v) == 3:
+                    # Format: [x_array, y_array, z_array]
+                    return CartesianRepresentation(
+                        x=np.array(v[0]),
+                        y=np.array(v[1]),
+                        z=np.array(v[2]),
+                    )
+            raise ValueError(
+                f"Coordinates list must be either list of [x,y,z] points or [x_array, y_array, z_array], got {type(v)}"
+            )
+        elif isinstance(v, CartesianRepresentation):
+            return v
+        else:
+            raise ValueError(f"Coordinates must be list or CartesianRepresentation, got {type(v)}")
+
+    @model_validator(mode="after")
+    def validate_coordinates_length(self):
+        """Validate that coordinates length matches nline_ori."""
+        if self.coordinates is not None:
+            if len(self.coordinates.x) != self.nline_ori:
+                raise ValueError(
+                    f"Coordinates length {len(self.coordinates.x)} != nline_ori {self.nline_ori}"
+                )
+        return self
 
 
 class GridConfig(BaseModel):
@@ -202,7 +260,8 @@ class GridConfig(BaseModel):
         default=None, description="Custom grid parameters"
     )
 
-    def model_post_init(self, __context) -> None:
+    @model_validator(mode="after")
+    def validate_grid_type(self):
         """Validate that exactly one grid type is specified."""
         configs = [self.spherical, self.random, self.healpix, self.custom]
         non_none_configs = [c for c in configs if c is not None]
@@ -214,14 +273,14 @@ class GridConfig(BaseModel):
             logger.warning(
                 "GridConfig created with no grid type specified (likely temporary object)"
             )
-            return
+            return self
 
         if len(non_none_configs) != 1:
-            error_msg = (
+            raise ValueError(
                 f"Exactly one grid type must be specified, got {len(non_none_configs)}"
             )
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        
+        return self
 
     def get_grid_type(self) -> str:
         """Get the grid type from the configuration."""
@@ -233,11 +292,6 @@ class GridConfig(BaseModel):
             return GridType.HEALPIX.value
         elif self.custom is not None:
             return GridType.CUSTOM.value
-        else:
-            error_msg = "No grid type specified"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
     def create_grid(self) -> Optional[FootpointGrid]:
         """Create grid from config."""
         if self.random is not None:
@@ -263,24 +317,7 @@ class GridConfig(BaseModel):
                 params.pop(
                     "grid_file_path", None
                 )  # Remove file path when creating from scratch
-
-                # Handle different coordinate formats
-                if params["coordinates"] is not None:
-                    from astropy.coordinates import CartesianRepresentation
-                    import numpy as np
-
-                    if isinstance(params["coordinates"], list):
-                        # Convert list coordinates to CartesianRepresentation
-                        params["coordinates"] = CartesianRepresentation(
-                            x=np.array(params["coordinates"][0]),
-                            y=np.array(params["coordinates"][1]),
-                            z=np.array(params["coordinates"][2]),
-                        )
-                    elif not isinstance(params["coordinates"], CartesianRepresentation):
-                        error_msg = f"Coordinates must be list of lists or CartesianRepresentation, got {type(params['coordinates'])}"
-                        logger.error(error_msg)
-                        raise ValueError(error_msg)
-
+                # Coordinates are already validated and normalized by CustomGridConfig validator
                 return CustomGrid(**params)
         elif self.spherical is not None:
             config = self.spherical
@@ -333,9 +370,6 @@ class TracingConfig(BaseModel):
     dt: float = TracingDefaults.DT
     max_step: float = TracingDefaults.MAX_STEP
     method: str = TracingDefaults.METHOD
-    integration_system: str = TracingDefaults.INTEGRATION_SYSTEM
-    field_backend: str = TracingDefaults.FIELD_BACKEND
-    solver_backend: str = TracingDefaults.SOLVER_BACKEND
     trace_open_lines_backwards: bool = TracingDefaults.TRACE_OPEN_LINES_BACKWARDS
     verify_by_reversing: bool = TracingDefaults.VERIFY_BY_REVERSING
     reversed_error_threshold: float = TracingDefaults.REVERSED_ERROR_THRESHOLD
@@ -373,9 +407,6 @@ class TracingConfig(BaseModel):
             dt=self.dt,
             max_step=self.max_step,
             method=self.method,
-            integration_system=self.integration_system,
-            field_backend=self.field_backend,
-            solver_backend=self.solver_backend,
             trace_open_lines_backwards=self.trace_open_lines_backwards,
             verify_by_reversing=self.verify_by_reversing,
             reversed_error_threshold=self.reversed_error_threshold,
@@ -566,10 +597,10 @@ class ExperimentConfig:
             and combined_field_line_set.footpoint_id is not None
         ):
             footpoint_ids = combined_field_line_set.footpoint_id
-            unique_ids, counts = np.unique(footpoint_ids, return_counts=True)
-            duplicates = unique_ids[counts > 1]
-            if len(duplicates) > 0:
-                error_msg = f"Duplicate footpoint indices found: {duplicates[:10].tolist()}{'...' if len(duplicates) > 10 else ''}"
+            unique_ids = set(footpoint_ids)
+            if len(unique_ids) != len(footpoint_ids):
+                duplicates = [id for id in unique_ids if footpoint_ids.count(id) > 1]
+                error_msg = f"Duplicate footpoint indices found: {duplicates[:10]}{'...' if len(duplicates) > 10 else ''}"
                 logger.error(error_msg)
                 raise ValueError(error_msg)
             else:
