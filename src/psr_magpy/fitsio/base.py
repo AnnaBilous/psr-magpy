@@ -278,7 +278,7 @@ class FitsIO:
             n_components: int = data.shape[0]
             logger.info(f"Successfully loaded {n_components} components from HDU")
 
-            return cls(data)
+            return cls(data)  # type: ignore[call-arg]
 
         except Exception as e:
             logger.error(f"Failed to load data from FITS HDU: {e}")

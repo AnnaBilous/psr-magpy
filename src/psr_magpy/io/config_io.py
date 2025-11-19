@@ -1,7 +1,7 @@
 """YAML I/O implementations for configurations."""
 
 from pathlib import Path
-from typing import Any, Union, Dict
+from typing import Any, Union, Dict, List, cast
 import yaml
 
 from .base import ConfigIO, IOUtils
@@ -106,7 +106,7 @@ class ExperimentConfigIO(YamlIO):
             logger.error(f"Configuration validation failed: {e}")
             return False
 
-    def _prepare_for_save(self, config: Any) -> dict:
+    def _prepare_for_save(self, config: Any) -> Dict[Any, Any]:
         """Prepare experiment configuration for saving."""
         # Convert to dict, handling nested objects
         config_dict = {
@@ -120,7 +120,7 @@ class ExperimentConfigIO(YamlIO):
         }
 
         # Convert tuples and numpy arrays to lists for YAML compatibility
-        return IOUtils.convert_for_yaml(config_dict)
+        return cast(Dict[Any, Any], IOUtils.convert_for_yaml(config_dict))
 
     def _reconstruct_from_load(self, data: dict, **kwargs) -> Any:
         """Reconstruct experiment configuration from loaded data."""
@@ -200,7 +200,7 @@ class ExperimentSeriesConfigIO(YamlIO):
             logger.error(f"Configuration validation failed: {e}")
             return False
 
-    def _prepare_for_save(self, config: Any) -> dict:
+    def _prepare_for_save(self, config: Any) -> Dict[Any, Any]:
         """Prepare experiment series configuration for saving."""
         # Use Pydantic's model_dump for serialization
         config_dict = config.model_dump()
@@ -214,7 +214,7 @@ class ExperimentSeriesConfigIO(YamlIO):
             ].property_system.get_flags_dict()
 
         # Convert tuples and numpy arrays to lists for YAML compatibility
-        return IOUtils.convert_for_yaml(config_dict)
+        return cast(Dict[Any, Any], IOUtils.convert_for_yaml(config_dict))
 
     def _reconstruct_from_load(self, data: dict, **kwargs) -> Any:
         """Reconstruct experiment series configuration from loaded data."""
@@ -312,7 +312,13 @@ def reconstruct_factory_data(factory_data: Dict[str, Any]) -> Dict[str, Any]:
                 CustomGridFactoryConfig,
             )
 
-            reconstructed_grids = []
+            reconstructed_grids: List[Union[
+                SphericalGridFactoryConfig,
+                RandomGridFactoryConfig,
+                HealpixGridFactoryConfig,
+                CustomGridFactoryConfig,
+                Dict[Any, Any],
+            ]] = []
             for grid_item in grid_data["grids"]:
                 if isinstance(grid_item, dict):
                     # Determine grid type and reconstruct accordingly

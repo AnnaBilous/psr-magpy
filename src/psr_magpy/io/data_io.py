@@ -2,7 +2,7 @@
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Union, Optional
+from typing import Any, Union, Optional, List, Type
 import numpy as np
 from astropy.io import fits
 
@@ -69,7 +69,7 @@ class FieldLineSetIO(FitsIO):
     """FITS I/O for field line sets."""
 
     # List of properties that are stored as lists of arrays
-    ARRAY_LIST_PROPERTIES = []  # Will be set when we import PropertyName
+    ARRAY_LIST_PROPERTIES: List[Any] = []  # Will be set when we import PropertyName
 
     def __init__(self, field_line_set=None, validator=None, memory_monitor=None):
         super().__init__(validator=validator, memory_monitor=memory_monitor)
@@ -348,6 +348,7 @@ class FieldComponentIO(FitsIO):
     def _load_from_hdul(self, hdul: fits.HDUList, **kwargs) -> Any:
         """Load field components from FITS HDU list."""
         from psr_magpy.field.components import (
+            FieldComponent,
             MultipoleType,
             DipoleFieldComponent,
             QuadrupoleFieldComponent,
@@ -361,11 +362,12 @@ class FieldComponentIO(FitsIO):
         n_components = len(field_data)
         logger.debug(f"Found {n_components} field components in FITS file")
 
-        components = []
+        components: List[FieldComponent] = []
         for i in range(n_components):
             moment_type = MultipoleType(field_data["moment_type"][i])
             logger.debug(f"Loading component {i+1}/{n_components}: {moment_type.value}")
 
+            component_class: Type[FieldComponent]
             if moment_type == MultipoleType.DIPOLE:
                 component_class = DipoleFieldComponent
             elif moment_type == MultipoleType.QUADRUPOLE:
@@ -503,4 +505,5 @@ class GridIO(FitsIO):
         if grid_class is None:
             raise PSRMagPyIOError(f"Unknown grid type: {grid_type}")
 
-        return grid_class.from_header(header)
+        # Type ignore: from_header is a class method on grid classes, not visible to mypy on ABCMeta
+        return grid_class.from_header(header)  # type: ignore[attr-defined]

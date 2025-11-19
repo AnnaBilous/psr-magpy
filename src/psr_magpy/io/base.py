@@ -197,11 +197,11 @@ class DataIO(ABC):
     def estimate_size(self, data: Any) -> int:
         """Estimate the size of data for progress tracking."""
         if hasattr(data, "__len__"):
-            return len(data)
+            return int(len(data))
         elif hasattr(data, "n_field_lines"):
-            return data.n_field_lines
+            return int(data.n_field_lines)
         elif hasattr(data, "nline"):
-            return data.nline
+            return int(data.nline)
         else:
             return 1  # Default to 1 for unknown data types
 

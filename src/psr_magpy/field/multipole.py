@@ -172,8 +172,10 @@ class MultipoleField:
             Total magnetic field vector
         """
         F = np.zeros(3, dtype=np.float32)
+        # Convert r to float64 for get_field call (component expects float64)
+        r_float64 = np.asarray(r, dtype=np.float64)
         for component in self.field_components:
-            F += component.get_field(r)
+            F += component.get_field(r_float64).astype(np.float32)
         F *= K
         if normalize:
             mag = np.linalg.norm(F)

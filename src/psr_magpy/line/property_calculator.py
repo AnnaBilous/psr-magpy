@@ -5,7 +5,7 @@ Calculates various properties of field lines including maximum distances,
 magnetic field properties, and geometric characteristics.
 """
 
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, cast
 import numpy as np
 
 from psr_magpy.line.field_line import FieldLine
@@ -281,7 +281,7 @@ class PropertyCalculator:
         else:
             PA = None
             logger.debug("PA line saving disabled")
-        return PA
+        return cast(Optional[np.ndarray], PA)
 
     def prep_b_line(
         self, r: np.ndarray, line_R_max: float, template: FieldLine
@@ -344,13 +344,13 @@ class PropertyCalculator:
                 theta = np.rad2deg(np.arccos(z / np.where(r_sph == 0, 1, r_sph)))
 
                 logger.debug(f"Calculated tangent theta with {len(theta)} points")
-                return theta.astype(np.float32)
+                return cast(Optional[np.ndarray], theta.astype(np.float32))
             else:
                 theta = np.array([], dtype=np.float32)
                 logger.debug(
                     "Line did not reach threshold_line_distance, saving empty tangent theta array"
                 )
-                return theta
+                return cast(Optional[np.ndarray], theta)
         else:
             logger.debug("tangent theta saving disabled")
             return None
@@ -382,13 +382,13 @@ class PropertyCalculator:
                 phi = np.rad2deg(np.arctan2(y, x))
 
                 logger.debug(f"Calculated tangent phi with {len(phi)} points")
-                return phi.astype(np.float32)
+                return cast(Optional[np.ndarray], phi.astype(np.float32))
             else:
                 phi = np.array([], dtype=np.float32)
                 logger.debug(
                     "Line did not reach threshold_line_distance, saving empty tangent phi array"
                 )
-                return phi
+                return cast(Optional[np.ndarray], phi)
         else:
             logger.debug("tangent phi saving disabled")
             return None

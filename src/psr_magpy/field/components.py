@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import NamedTuple, Union, List
+from typing import NamedTuple, Union, List, cast
 from functools import cached_property
 
 import numpy as np
@@ -172,7 +172,7 @@ class FieldComponent(ABC):
         NDArray[np.float64]
             3x3 rotation matrix (float64) for transforming vectors from magnetic to spin frame.
         """
-        return self.rotate_magn_to_spin_frame.as_matrix().astype(np.float64)
+        return cast(NDArray[np.float64], self.rotate_magn_to_spin_frame.as_matrix().astype(np.float64))
 
     @cached_property
     def numba_compatible_rotation_matrix_inv(self) -> NDArray[np.float64]:
@@ -187,7 +187,7 @@ class FieldComponent(ABC):
         NDArray[np.float64]
             3x3 rotation matrix (float64) for transforming vectors from spin to magnetic frame.
         """
-        return self.rotate_spin_to_magn_frame.as_matrix().astype(np.float64)
+        return cast(NDArray[np.float64], self.rotate_spin_to_magn_frame.as_matrix().astype(np.float64))
 
     @abstractmethod
     def _calculate_field(
@@ -232,7 +232,7 @@ class FieldComponent(ABC):
         """Transform coordinates from spin frame to magnetic frame."""
         r_offset_spin_frame = r_spin_frame - self.moment_offset_vector
         r_magn_frame = self.rotate_spin_to_magn_frame.apply(r_offset_spin_frame)
-        return r_magn_frame
+        return cast(NDArray[np.float64], r_magn_frame)
 
     def get_field(self, r_spin_frame: NDArray[np.float64]) -> NDArray[np.float64]:
         """Calculate the magnetic field at a given position in the spin frame."""
@@ -312,7 +312,7 @@ class DipoleFieldComponent(FieldComponent):
             )
 
             field = self.rotate_magn_to_spin_frame.apply(B_magnetic_frame)
-            return field
+            return cast(NDArray[np.float64], field)
 
         except Exception as e:
             raise PSRMagPyFieldError(f"Error in dipole field calculation: {e}") from e
@@ -368,7 +368,7 @@ class QuadrupoleFieldComponent(FieldComponent):
             )
 
             field = self.rotate_magn_to_spin_frame.apply(B_magnetic_frame)
-            return field
+            return cast(NDArray[np.float64], field)
 
         except Exception as e:
             raise PSRMagPyFieldError(f"Error in quadrupole field calculation: {e}") from e

@@ -1,8 +1,8 @@
 """Field line set module."""
 
 from dataclasses import dataclass
-from typing import Optional
-from typing import List, Union
+from typing import Optional, List, Union, cast, Any
+from numpy.typing import NDArray
 from sys import getsizeof
 import numpy as np
 
@@ -337,13 +337,13 @@ class FieldLineSet(FieldLine):
                     continue
 
                 # Calculate statistics across all arrays
-                all_values = []
+                all_values_list: List[Any] = []
                 for arr in values:
                     if arr is not None and len(arr) > 0:
-                        all_values.extend(arr.flatten())
+                        all_values_list.extend(arr.flatten())
 
-                if all_values:
-                    all_values = np.array(all_values)
+                if all_values_list:
+                    all_values = np.array(all_values_list)
                     print(
                         f"  {prop.key_name}:\tArrays: {len(values)} Total points: {len(all_values)}\t Min: {all_values.min():.3e}\t Max: {all_values.max():.3e}"
                     )
@@ -372,17 +372,18 @@ class FieldLineSet(FieldLine):
         """Get property value with enabled check."""
         # Convert string to PropertyName if needed
         if isinstance(property_name, str):
+            property_name_str = property_name
             try:
                 # First try using the string as an enum name (e.g., 'R_MAX')
-                property_name = PropertyName[property_name.upper()]
+                property_name = PropertyName[property_name_str.upper()]
             except KeyError:
                 # If that fails, try to find by key_name (e.g., 'r_max')
                 for prop in PropertyName:
-                    if prop.key_name == property_name.lower():
+                    if prop.key_name == property_name_str.lower():
                         property_name = prop
                         break
                 else:
-                    logger.warning(f"Unknown property name: {property_name}")
+                    logger.warning(f"Unknown property name: {property_name_str}")
                     return None
 
         # Check if property is enabled
@@ -449,7 +450,7 @@ class FieldLineSet(FieldLine):
         # Return OFL footpoint indices
         ofl_footpoint_ids = footpoint_ids[open_fl_crit].astype(int)
 
-        return ofl_footpoint_ids
+        return cast(NDArray[Any], ofl_footpoint_ids)
 
     def subset_by_footpoint_ids(self, footpoint_ids: List[int]) -> "FieldLineSet":
         """
@@ -517,15 +518,16 @@ class FieldLineSet(FieldLine):
 
             # Special handling for properties that are lists of arrays
             if prop in self.ARRAY_LIST_PROPERTIES:
-                subset_data = [
+                subset_data_list = [
                     source_data[i] for i in matching_indices if i < len(source_data)
                 ]
-                subset.property_system._properties[prop] = subset_data
+                subset.property_system._properties[prop] = subset_data_list
             else:
                 # For numpy arrays, use advanced indexing
                 if isinstance(source_data, np.ndarray):
-                    subset_data = source_data[matching_indices]
-                    subset.property_system._properties[prop] = subset_data
+                    subset_data_array: Union[np.ndarray, List[Any]] = source_data[matching_indices]
+                    # _properties can hold both lists and numpy arrays
+                    subset.property_system._properties[prop] = subset_data_array
                 else:
                     # For other types, use list comprehension
                     subset_data = [

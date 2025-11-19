@@ -7,7 +7,7 @@ with configurable thresholds and safety checks.
 import psutil
 import numpy as np
 from pathlib import Path
-from typing import Optional, Dict, Any, Union, Tuple
+from typing import Optional, Dict, Any, Union, Tuple, List
 from dataclasses import dataclass
 from enum import Enum
 
@@ -185,17 +185,17 @@ class MemoryMonitor:
 
             # Use built-in size estimation if available
             if hasattr(data, "estimate_size"):
-                size_bytes = data.estimate_size()
-                return size_bytes / (1024 * 1024)
+                size_bytes_est = data.estimate_size()
+                return float(size_bytes_est) / (1024 * 1024)
 
             # Use nbytes for numpy arrays
             if hasattr(data, "nbytes"):
-                return data.nbytes / (1024 * 1024)
+                return float(data.nbytes) / (1024 * 1024)
 
             # Use getsizeof for other objects
             import sys
 
-            size_bytes = sys.getsizeof(data)
+            size_bytes: int = sys.getsizeof(data)
 
             # For containers, estimate recursively
             if hasattr(data, "__len__") and len(data) > 0:
@@ -205,16 +205,16 @@ class MemoryMonitor:
                     sample_bytes = sum(
                         sys.getsizeof(item) for item in data[:sample_size]
                     )
-                    estimated_bytes = sample_bytes * len(data) / sample_size
+                    estimated_bytes = float(sample_bytes * len(data)) / sample_size
                     return estimated_bytes / (1024 * 1024)
                 elif isinstance(data, dict):
                     # Estimate based on key-value pairs
                     total_bytes = sum(
                         sys.getsizeof(k) + sys.getsizeof(v) for k, v in data.items()
                     )
-                    return total_bytes / (1024 * 1024)
+                    return float(total_bytes) / (1024 * 1024)
 
-            return size_bytes / (1024 * 1024)
+            return float(size_bytes) / (1024 * 1024)
 
         except Exception as e:
             logger.warning(f"Could not estimate data size: {e}")
@@ -308,9 +308,9 @@ class MemoryMonitor:
             f"  Threshold: {threshold_mb:.1f}MB (level: {self.threshold.value})"
         )
 
-    def suggest_optimization(self, required_mb: float) -> list:
+    def suggest_optimization(self, required_mb: float) -> List[str]:
         """Suggest optimizations for memory usage."""
-        suggestions = []
+        suggestions: List[str] = []
         memory_info = self.get_memory_info()
 
         # Only suggest optimizations for operations requiring more than 100MB

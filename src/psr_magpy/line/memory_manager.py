@@ -297,6 +297,52 @@ class MemoryManager:
         """Get current memory usage in MB."""
         return self._results_in_memory_size / (1024 * 1024)
 
+    def finalize_batches(
+        self, filename: str, final_batch_idx: int, progress_tracker: Optional[ProgressTracker] = None
+    ) -> None:
+        """Finalize batch processing by writing final batch and renaming files.
+        
+        Parameters
+        ----------
+        filename : str
+            Base filename for batch files
+        final_batch_idx : int
+            Index of the final batch (for naming)
+        progress_tracker : Optional[ProgressTracker]
+            Progress tracker for logging
+        """
+        if not filename:
+            return
+
+        # Write final results in memory to disk (if any)
+        if (
+            self._results_in_memory is not None
+            and self._results_in_memory.n_field_lines > 0
+        ):
+            # Write final batch with proper batch number
+            filename_path = Path(filename)
+            final_batch_filename = (
+                filename_path.parent
+                / f"{filename_path.stem}_batch_{final_batch_idx:03d}.fits"
+            )
+
+            # Save final batch
+            save_data(
+                self._results_in_memory,
+                final_batch_filename,
+                overwrite=True,
+            )
+            logger.info(
+                f"Wrote final batch with {self._results_in_memory.n_field_lines} field lines to {final_batch_filename}"
+            )
+
+            # Mark that batch files were created
+            self._batch_files_created = True
+
+        # Rename all batch files (after all batches are written)
+        if self._batch_files_created:
+            self.rename_batch_files(filename, progress_tracker)
+
     @property
     def batch_files_created(self) -> bool:
         """Whether any batch files were created during processing."""

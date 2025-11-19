@@ -6,7 +6,7 @@ Python and Numba-compiled backends.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Callable
+from typing import Optional, Callable, cast
 import numpy as np
 from numpy.typing import NDArray
 
@@ -230,7 +230,7 @@ class NumbaFieldCalculator(FieldCalculator):
         r_f64 = np.asarray(r, dtype=np.float64)
         
         # Call Numba-compiled function
-        return get_total_field_numba(
+        return cast(NDArray[np.float64], get_total_field_numba(
             r_f64,
             K,
             normalize,
@@ -240,4 +240,4 @@ class NumbaFieldCalculator(FieldCalculator):
             self._rotation_matrices_inv,
             self._offset_vectors,
             self._moment_types,
-        )
+        ))

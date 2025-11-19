@@ -1,20 +1,16 @@
 import time
-import gc
 from multiprocessing import Pool
 from typing import Optional, Union, Tuple, Any
 import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
-from pathlib import Path
 
 from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet, LightFieldLineSet
-from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.utils.logging_config import get_logger
-from psr_magpy.utils.exceptions import PSRMagPyTracingError, PSRMagPyGridError
-from psr_magpy.io import save_data
+from psr_magpy.utils.exceptions import PSRMagPyGridError
 
 logger = get_logger(__name__)
 
@@ -53,11 +49,18 @@ class FieldLineCalculator:
                     "Skipping memory estimation and batch calculation - processing all field lines at once"
                 )
                 optimal_batch_size = self.context.grid.nline or 1
-                self._process_in_batches(template, optimal_batch_size)
             else:
                 trial_size, completion_time = self._estimate_memory(template)
                 optimal_batch_size = self._configure_batch(trial_size)
-                self._process_in_batches(template, optimal_batch_size)
+
+            # Process batches using batch processor
+            self.context.batch_processor.process_batches(
+                grid=self.context.grid,
+                template=template,
+                batch_size=optimal_batch_size,
+                process_batch_fn=self._create_batch_processor_fn(template),
+                params=self.context.params,
+            )
 
             results = self.context.memory_manager.results_in_memory
             return self._finalize_results(results)
@@ -170,32 +173,13 @@ class FieldLineCalculator:
                 ),
             )
 
-    def _process_in_batches(self, template: FieldLine, batch_size: int) -> None:
-        """Process field lines in batches."""
-        nline = self.context.grid.nline
-        if nline is None:
-            raise PSRMagPyGridError("Grid nline is None, cannot process batches")
-        if self.context.grid.indices is None:
-            raise PSRMagPyGridError("Grid indices is None, cannot process batches")
-
-        logger.info(f"Processing {nline} field lines in batches of {batch_size}")
-        batch_idx = 0
-        total_processed = 0
-
-        # Create progress bar for total lines
-        progress_bar = self.context.progress_tracker.create_progress_bar(
-            total=nline, description="Field lines"
-        )
-
-        while total_processed < nline:
-            start_idx = total_processed
-            batch_indices = np.arange(start_idx, min(start_idx + batch_size, nline))
-
-            self.context.progress_tracker.log_batch_start(
-                batch_idx, start_idx, start_idx + len(batch_indices), nline
-            )
-
-            batch_grid = self.context.grid.subset_grid(batch_indices)
+    def _create_batch_processor_fn(self, template: FieldLine):
+        """Create a function for batch processing that tracks errors.
+        
+        Returns a function that processes a batch and tracks errors.
+        """
+        def process_batch_with_error_tracking(batch_grid: FootpointGrid) -> FieldLineSet:
+            """Process a batch and track errors."""
             batch_results = self._process_batch(batch_grid, template)
 
             # Track global maximum reversed error from this batch
@@ -208,7 +192,7 @@ class FieldLineCalculator:
                     self.global_max_reversed_error, batch_max_error
                 )
                 logger.debug(
-                    f"Batch {batch_idx}: max reversed error = {batch_max_error:.6f}, global max = {self.global_max_reversed_error:.6f}"
+                    f"Max reversed error = {batch_max_error:.6f}, global max = {self.global_max_reversed_error:.6f}"
                 )
 
             # Track global maximum dotprod error from this batch
@@ -221,65 +205,12 @@ class FieldLineCalculator:
                     self.global_max_dotprod_error, batch_max_error
                 )
                 logger.debug(
-                    f"Batch {batch_idx}: max dotprod error = {batch_max_error:.6f}, global max = {self.global_max_dotprod_error:.6f}"
+                    f"Max dotprod error = {batch_max_error:.6f}, global max = {self.global_max_dotprod_error:.6f}"
                 )
 
-            self.context.add_results(
-                batch_results, self.context.params.output.filename or "", batch_idx
-            )
+            return batch_results
 
-            total_processed += len(batch_indices)
-            batch_idx += 1
-
-            # Update progress bar
-            progress_bar.n = total_processed
-            progress_bar.refresh()
-
-            self.context.progress_tracker.log_batch_completion(
-                batch_idx,
-                total_processed,
-                nline,
-                self.context.memory_manager.results_in_memory,
-            )
-
-        # Close progress bar
-        progress_bar.close()
-
-        # Handle final batch and rename batch files after all batches are processed
-        if self.context.params.output.save_results_to_disk:
-            filename = self.context.params.output.filename
-            if filename:
-                # Write final results in memory to disk (if any)
-                if (
-                    self.context.memory_manager.results_in_memory is not None
-                    and self.context.memory_manager.results_in_memory.n_field_lines > 0
-                ):
-
-                    # Write final batch with proper batch number
-                    filename_path = Path(filename)
-                    final_batch_filename = (
-                        filename_path.parent
-                        / f"{filename_path.stem}_batch_{batch_idx:03d}.fits"
-                    )
-
-                    # Save final batch
-                    save_data(
-                        self.context.memory_manager.results_in_memory,
-                        final_batch_filename,
-                        overwrite=True,
-                    )
-                    logger.info(
-                        f"Wrote final batch with {self.context.memory_manager.results_in_memory.n_field_lines} field lines to {final_batch_filename}"
-                    )
-
-                    # Mark that batch files were created
-                    self.context.memory_manager._batch_files_created = True
-
-                # Then: Rename all batch files (after all batches are written)
-                if self.context.memory_manager.batch_files_created:
-                    self.context.memory_manager.rename_batch_files(
-                        filename, self.context.progress_tracker
-                    )
+        return process_batch_with_error_tracking
 
     def _process_batch(
         self,

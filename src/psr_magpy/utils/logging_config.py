@@ -7,7 +7,10 @@ import os
 
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union, Dict, List
+from typing import Optional, Union, Dict, List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from colorlog import ColoredFormatter
 
 # Try to import colorlog for colored console output
 try:
@@ -173,7 +176,7 @@ def setup_logging(
 
     # Use colored formatter for console if available and requested
     if HAS_COLORLOG and use_colors:
-        color_formatter = colorlog.ColoredFormatter(
+        color_formatter: Union[logging.Formatter, "ColoredFormatter"] = colorlog.ColoredFormatter(
             "%(log_color)s" + console_format,
             datefmt=date_format,
             log_colors={

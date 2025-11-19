@@ -15,7 +15,7 @@ from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyTracingError
 
 try:
-    from CyRK import pysolve_ivp
+    from CyRK import pysolve_ivp  # type: ignore[attr-defined]
     CYRK_AVAILABLE = True
 except ImportError:
     CYRK_AVAILABLE = False

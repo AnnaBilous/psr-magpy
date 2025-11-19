@@ -13,6 +13,7 @@ from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.memory_manager import MemoryManager
 from psr_magpy.line.progress_tracker import ProgressTracker
+from psr_magpy.line.batch_processor import BatchProcessor, MemoryAwareBatchProcessor
 from psr_magpy.line.field_line import FieldLine
 
 from psr_magpy.utils.logging_config import get_logger
@@ -68,6 +69,13 @@ class CalculationContext:
             f"Created ProgressTracker with verbose={self.params.performance.verbose}, show_progress={self.params.performance.progress_bar}"
         )
 
+        # Initialize batch processor
+        self._batch_processor = MemoryAwareBatchProcessor(
+            memory_manager=self._memory_manager,
+            progress_tracker=self._progress_tracker,
+        )
+        logger.debug("Created MemoryAwareBatchProcessor")
+
     @property
     def tracer(self) -> FieldLineTracer:
         """Get the field line tracer."""
@@ -82,6 +90,11 @@ class CalculationContext:
     def progress_tracker(self) -> ProgressTracker:
         """Get the progress tracker."""
         return self._progress_tracker
+
+    @property
+    def batch_processor(self) -> BatchProcessor:
+        """Get the batch processor."""
+        return self._batch_processor
 
     def estimate_memory_requirements(
         self, template: FieldLine, n_trial: int = 10

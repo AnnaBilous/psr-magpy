@@ -3,7 +3,10 @@
 Replaces factory pattern with simple type-based dispatch.
 """
 
-from typing import Any, Type, Union
+from typing import Any, Type, Union, TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from .data_io import FieldLineSetIO, FieldComponentIO, GridIO
 from pathlib import Path
 
 from .data_io import FieldLineSetIO, FieldComponentIO, GridIO
@@ -40,10 +43,12 @@ def _create_config_validator(
     **kwargs,
 ) -> ConfigIOValidator:
     """Create config IO validator."""
+    # Filter out parameters that shouldn't go to validator constructor
+    validator_kwargs = {k: v for k, v in kwargs.items() if k not in ("overwrite",)}
     return ConfigIOValidator(
         validation_level=validation_level,
         recovery_strategy=recovery_strategy,
-        **kwargs,
+        **validator_kwargs,
     )
 
 
@@ -101,32 +106,33 @@ def _get_config_io_class(config_type: Type):
 
 def _create_data_io_instance(
     data: Any,
-    io_class: Type,
+    io_class: Type[Union[FieldLineSetIO, FieldComponentIO, GridIO]],
     validation_level: ValidationLevel = ValidationLevel.STANDARD,
     recovery_strategy: RecoveryStrategy = RecoveryStrategy.RETRY_ONCE,
     memory_threshold: MemoryThreshold = MemoryThreshold.MODERATE,
     safety_margin_mb: float = 100.0,
     progress_tracker=None,
     **kwargs,
-):
+) -> Union[FieldLineSetIO, FieldComponentIO, GridIO]:
     """Create data IO instance with appropriate parameters."""
-    validator = _create_validator(validation_level, recovery_strategy, **kwargs)
-    memory_monitor = _create_memory_monitor(memory_threshold, safety_margin_mb)
-
-    # Filter out parameters that shouldn't go to constructor
+    # Filter out parameters that shouldn't go to validator/IO constructor
+    validator_kwargs = {k: v for k, v in kwargs.items() if k not in ("template", "overwrite")}
     io_kwargs = {k: v for k, v in kwargs.items() if k not in ("template", "overwrite")}
 
+    validator = _create_validator(validation_level, recovery_strategy, **validator_kwargs)
+    memory_monitor = _create_memory_monitor(memory_threshold, safety_margin_mb)
+
     # Handle different constructor signatures
+    # Only FieldComponentIO accepts progress_tracker parameter
     if io_class == FieldLineSetIO:
-        return io_class(
+        return io_class(  # type: ignore[call-arg]
             field_line_set=data,
             validator=validator,
             memory_monitor=memory_monitor,
-            progress_tracker=progress_tracker,
             **io_kwargs,
         )
     elif io_class == FieldComponentIO:
-        return io_class(
+        return io_class(  # type: ignore[call-arg]
             field=data,
             validator=validator,
             memory_monitor=memory_monitor,
@@ -134,11 +140,10 @@ def _create_data_io_instance(
             **io_kwargs,
         )
     else:  # GridIO
-        return io_class(
+        return io_class(  # type: ignore[call-arg]
             data=data,
             validator=validator,
             memory_monitor=memory_monitor,
-            progress_tracker=progress_tracker,
             **io_kwargs,
         )
 
@@ -236,6 +241,8 @@ def load_data(
     )
 
     # Map type to IO class
+    # Type annotation: io_class can be any of the IO classes
+    io_class: Type[Union[FieldLineSetIO, FieldComponentIO, GridIO]]
     if issubclass(data_type, FieldLineSet):
         io_class = FieldLineSetIO
     elif issubclass(data_type, MultipoleField):
@@ -245,22 +252,23 @@ def load_data(
     else:
         raise PSRMagPyIOError(f"No IO handler registered for data type: {data_type.__name__}")
 
-    validator = _create_validator(validation_level, recovery_strategy, **kwargs)
-    memory_monitor = _create_memory_monitor(memory_threshold, safety_margin_mb)
-
-    # Filter out parameters that shouldn't go to constructor
+    # Filter out parameters that shouldn't go to validator/IO constructor
+    validator_kwargs = {k: v for k, v in kwargs.items() if k not in ("template", "overwrite")}
     io_kwargs = {k: v for k, v in kwargs.items() if k != "template"}
 
+    validator = _create_validator(validation_level, recovery_strategy, **validator_kwargs)
+    memory_monitor = _create_memory_monitor(memory_threshold, safety_margin_mb)
+
     # Create IO instance
+    # Only FieldComponentIO accepts progress_tracker parameter
     if io_class == FieldLineSetIO:
         io_instance = io_class(
             validator=validator,
             memory_monitor=memory_monitor,
-            progress_tracker=progress_tracker,
             **io_kwargs,
         )
     elif io_class == FieldComponentIO:
-        io_instance = io_class(
+        io_instance = io_class(  # type: ignore[call-arg]
             validator=validator,
             memory_monitor=memory_monitor,
             progress_tracker=progress_tracker,
@@ -270,7 +278,6 @@ def load_data(
         io_instance = io_class(
             validator=validator,
             memory_monitor=memory_monitor,
-            progress_tracker=progress_tracker,
             **io_kwargs,
         )
 
