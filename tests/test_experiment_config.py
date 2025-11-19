@@ -6,17 +6,16 @@ import yaml
 from pathlib import Path
 from typing import Dict, Any
 
-from psr_magpy.experiment.experiment_config import (
-    ExperimentConfig,
-    FieldConfig,
+from psr_magpy.experiment.experiment_config import ExperimentConfig
+from psr_magpy.experiment.field_config import FieldConfig, FieldComponentConfig
+from psr_magpy.experiment.grid_config import (
     GridConfig,
-    TracingConfig,
-    FieldComponentConfig,
     SphericalGridConfig,
     RandomGridConfig,
     HealpixGridConfig,
     CustomGridConfig,
 )
+from psr_magpy.experiment.tracing_config import TracingConfig
 from psr_magpy.experiment.factory_configs import (
     FieldFactoryConfig,
     GridFactoryConfig,

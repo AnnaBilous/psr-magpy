@@ -11,10 +11,9 @@ from psr_magpy.experiment.factory_configs import (
     RandomGridFactoryConfig, CustomGridFactoryConfig,
     FieldFactoryConfig, TracingFactoryConfig
 )
-from psr_magpy.experiment.experiment_config import (
-    FieldConfig, GridConfig, TracingConfig,
-    RandomGridConfig, CustomGridConfig
-)
+from psr_magpy.experiment.field_config import FieldConfig
+from psr_magpy.experiment.grid_config import GridConfig, RandomGridConfig, CustomGridConfig
+from psr_magpy.experiment.tracing_config import TracingConfig
 from psr_magpy.line import FieldLine
 
 def test_random_grid_warning(caplog):

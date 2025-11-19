@@ -10,13 +10,10 @@ import yaml
 from pathlib import Path
 import shutil
 
-from .experiment_config import (
-    ExperimentConfig,
-    FieldConfig,
-    GridConfig,
-    TracingConfig,
-    SphericalGridConfig,
-)
+from .experiment_config import ExperimentConfig
+from .field_config import FieldConfig
+from .grid_config import GridConfig, SphericalGridConfig
+from .tracing_config import TracingConfig
 from .factory_configs import (
     FieldFactoryConfig,
     GridFactoryConfig,
@@ -687,7 +684,7 @@ class ExperimentSeriesConfig(BaseModel):
             ValueError: If directories don't exist or experiments can't be processed
         """
         from psr_magpy.grid.grid import create_fine_resolution_subset_from_coarse_OFL
-        from psr_magpy.experiment.experiment_config import GridConfig, HealpixGridConfig
+        from psr_magpy.experiment.grid_config import GridConfig, HealpixGridConfig
 
         # Verify coarse directories
         coarse_status = coarse_series_config.verify_directories(create_if_missing=False)

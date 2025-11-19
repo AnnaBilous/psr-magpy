@@ -17,7 +17,7 @@ from psr_magpy.experiment.factory_configs import (
     FieldFactoryConfig, GridFactoryConfig, TracingFactoryConfig,
     FieldComponentFactoryConfig, SphericalGridFactoryConfig
 )
-from psr_magpy.experiment.experiment_config import FieldComponentConfig
+from psr_magpy.experiment.field_config import FieldComponentConfig
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.experiment.experiment_result import ExperimentResult

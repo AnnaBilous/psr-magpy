@@ -22,7 +22,8 @@ from psr_magpy.utils.exceptions import PSRMagPyGridError, PSRMagPyValidationErro
 from pydantic import BaseModel, Field, model_validator, field_validator
 
 if TYPE_CHECKING:
-    from psr_magpy.experiment.experiment_config import GridConfig, ExperimentConfig
+    from psr_magpy.experiment.grid_config import GridConfig
+    from psr_magpy.experiment.experiment_config import ExperimentConfig
     from psr_magpy.line.field_line import FieldLine
 
 logger = get_logger(__name__, console_format_brief=True)
@@ -730,7 +731,7 @@ def create_fine_resolution_subset_from_coarse_OFL(
         ValueError: If OFL data cannot be loaded or grids cannot be created
     """
     from psr_magpy.line.field_line import FieldLine
-    from psr_magpy.experiment.experiment_config import GridConfig, HealpixGridConfig
+    from psr_magpy.experiment.grid_config import GridConfig, HealpixGridConfig
 
     # Use minimal template if not provided
     if template is None:
@@ -868,7 +869,7 @@ def create_subset_grid_config(
     GridConfig
         Configuration for the subset grid
     """
-    from psr_magpy.experiment.experiment_config import (
+    from psr_magpy.experiment.grid_config import (
         GridConfig,
         SphericalGridConfig,
         HealpixGridConfig,

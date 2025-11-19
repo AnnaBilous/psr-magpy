@@ -7,16 +7,15 @@ parameter inputs for creating multiple experiment variations.
 from typing import List, Union, Dict, Any, Optional, Tuple
 from pydantic import BaseModel
 
-from .experiment_config import (
-    FieldComponentConfig,
-    FieldConfig,
+from .field_config import FieldComponentConfig, FieldConfig
+from .grid_config import (
     SphericalGridConfig,
     RandomGridConfig,
     HealpixGridConfig,
     CustomGridConfig,
     GridConfig,
-    TracingConfig,
 )
+from .tracing_config import TracingConfig
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyValidationError, PSRMagPyGridError

@@ -1,16 +1,15 @@
 """Experiment module for managing field line calculations."""
 
-from .experiment_config import (
-    ExperimentConfig,
-    FieldConfig,
+from .experiment_config import ExperimentConfig
+from .field_config import FieldConfig, FieldComponentConfig
+from .grid_config import (
     GridConfig,
-    TracingConfig,
-    FieldComponentConfig,
     SphericalGridConfig,
     RandomGridConfig,
     HealpixGridConfig,
     CustomGridConfig,
 )
+from .tracing_config import TracingConfig
 from .experiment_metadata import create_experiment_metadata
 from .experiment_series import ExperimentSeriesConfig
 from .experiment_series_runner import (

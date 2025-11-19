@@ -5,11 +5,9 @@ and naming conventions for experiment series.
 """
 
 from typing import Dict, Any
-from psr_magpy.experiment.experiment_config import (
-    FieldConfig,
-    GridConfig,
-    TracingConfig,
-)
+from psr_magpy.experiment.field_config import FieldConfig
+from psr_magpy.experiment.grid_config import GridConfig
+from psr_magpy.experiment.tracing_config import TracingConfig
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.utils.logging_config import get_logger
 

@@ -13,10 +13,9 @@ from psr_magpy.experiment.factory_configs import (
     FieldFactoryConfig, GridFactoryConfig, TracingFactoryConfig,
     RandomGridFactoryConfig
 )
-from psr_magpy.experiment.experiment_config import (
-    FieldConfig, GridConfig, TracingConfig,
-    RandomGridConfig, CustomGridConfig, FieldComponentConfig
-)
+from psr_magpy.experiment.field_config import FieldConfig, FieldComponentConfig
+from psr_magpy.experiment.grid_config import GridConfig, RandomGridConfig, CustomGridConfig
+from psr_magpy.experiment.tracing_config import TracingConfig
 from psr_magpy.line import FieldLine
 
 def create_test_series_config(tmp_path):

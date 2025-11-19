@@ -25,8 +25,10 @@ from .experiment import (
     FieldComponentConfig,
     CustomGridConfig,
     GridConfig,
+    TracingConfig,
+    FieldConfig,
+    HealpixGridConfig,
 )
-from .experiment.experiment_config import TracingConfig, FieldConfig, HealpixGridConfig
 from .experiment.factory_configs import (
     FieldComponentFactoryConfig,
     FieldFactoryConfig,

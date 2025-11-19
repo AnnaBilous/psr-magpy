@@ -124,12 +124,10 @@ class ExperimentConfigIO(YamlIO):
 
     def _reconstruct_from_load(self, data: dict, **kwargs) -> Any:
         """Reconstruct experiment configuration from loaded data."""
-        from psr_magpy.experiment.experiment_config import (
-            ExperimentConfig,
-            FieldConfig,
-            GridConfig,
-            TracingConfig,
-        )
+        from psr_magpy.experiment.experiment_config import ExperimentConfig
+        from psr_magpy.experiment.field_config import FieldConfig
+        from psr_magpy.experiment.grid_config import GridConfig
+        from psr_magpy.experiment.tracing_config import TracingConfig
         from psr_magpy.line.field_line import FieldLine
 
         # Reconstruct template
