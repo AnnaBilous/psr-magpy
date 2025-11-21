@@ -1,11 +1,12 @@
 import time
 from multiprocessing import Pool
-from typing import Optional, Union, Tuple, Any
+from typing import Optional, Union, Tuple, Any, TYPE_CHECKING
 import numpy as np
 from astropy.coordinates.representation import CartesianRepresentation
 
 from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.field_line_set import FieldLineSet, LightFieldLineSet
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.calculation_context import CalculationContext
@@ -15,7 +16,7 @@ from psr_magpy.utils.exceptions import PSRMagPyGridError
 logger = get_logger(__name__)
 
 
-def _trace_single_line_wrapper(args: Tuple[Any, CartesianRepresentation, int, FieldLine]) -> FieldLine:
+def _trace_single_line_wrapper(args: Tuple[Any, CartesianRepresentation, int, Union[FieldLineTemplate, FieldLine]]) -> FieldLine:
     """Wrap field line tracing for multiprocessing."""
     from psr_magpy.line.tracer import FieldLineTracer
     tracer = args[0]
@@ -40,14 +41,15 @@ class FieldLineCalculator:
 
     def get_field_lines(
         self,
-        template: FieldLine,
+        template: Union[FieldLineTemplate, FieldLine],
     ) -> Optional[Union[FieldLineSet, LightFieldLineSet]]:
         """Calculate field lines for all grid points.
         
         Parameters
         ----------
-        template : FieldLine
-            FieldLine template specifying which properties to save.
+        template : Union[FieldLineTemplate, FieldLine]
+            Template or FieldLine specifying which properties to save.
+            FieldLine is accepted for backwards compatibility.
         
         Returns
         -------
@@ -88,7 +90,7 @@ class FieldLineCalculator:
 
         return can_skip
 
-    def _estimate_memory(self, template: FieldLine) -> Tuple[float, float]:
+    def _estimate_memory(self, template: Union[FieldLineTemplate, FieldLine]) -> Tuple[float, float]:
         """Estimate memory requirements for field line calculation."""
         trial_size, completion_time = self.context.estimate_memory_requirements(
             template
@@ -185,7 +187,7 @@ class FieldLineCalculator:
                 ),
             )
 
-    def _create_batch_processor_fn(self, template: FieldLine):
+    def _create_batch_processor_fn(self, template: Union[FieldLineTemplate, FieldLine]):
         """Create a function for batch processing that tracks errors.
         
         Returns a function that processes a batch and tracks errors.
@@ -227,7 +229,7 @@ class FieldLineCalculator:
     def _process_batch(
         self,
         subset_grid: FootpointGrid,
-        template: FieldLine,
+        template: Union[FieldLineTemplate, FieldLine],
     ) -> FieldLineSet:
         logger.debug(
             f"Processing batch with {subset_grid.nline} field lines using {self.context.params.performance.n_cores} cores"

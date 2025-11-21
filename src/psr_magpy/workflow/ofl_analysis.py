@@ -7,6 +7,7 @@ import numpy as np
 from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
 from psr_magpy.experiment.experiment_config import ExperimentConfig
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyIOError
@@ -19,7 +20,7 @@ def analyze_ofl_from_series(
     R_LC: float,
     h_LC_coeff: float = 3**1.5 / 2.0,
     experiment_numbers: Optional[List[int]] = None,
-    template: Optional[FieldLine] = None,
+    template: Optional[FieldLineTemplate] = None,
 ) -> Dict[int, Dict[str, Any]]:
     """Analyze OFL footpoints from an experiment series.
 
@@ -35,8 +36,8 @@ def analyze_ofl_from_series(
         Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
     experiment_numbers : Optional[List[int]], optional
         Optional list of experiment numbers to analyze. Default is None.
-    template : Optional[FieldLine], optional
-        Optional FieldLine template. Defaults to template_OFL_subset.
+    template : Optional[FieldLineTemplate], optional
+        Optional FieldLineTemplate. Defaults to template_OFL_subset.
 
     Returns
     -------
@@ -52,7 +53,7 @@ def analyze_ofl_from_series(
         }
     """
     if template is None:
-        template = FieldLine.template_OFL_subset()
+        template = FieldLineTemplate.template_OFL_subset()
 
     # Verify directories
     status = series_config.verify_directories(create_if_missing=False)

@@ -27,6 +27,7 @@ from .factory_configs import (
 from .experiment_metadata import create_experiment_metadata, generate_experiment_name
 from psr_magpy.io.config_io import reconstruct_from_yaml
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyExperimentError, PSRMagPyIOError
 
@@ -46,7 +47,7 @@ class ExperimentSeriesConfig(BaseModel):
     field: Union[FieldConfig, FieldFactoryConfig]
     grid: Union[GridConfig, GridFactoryConfig]
     tracing: Union[TracingConfig, TracingFactoryConfig]
-    template: Union[FieldLine, TemplateFactoryConfig]
+    template: Union[FieldLineTemplate, FieldLine, TemplateFactoryConfig]
     description: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     output_dir: Optional[str] = "."
@@ -869,7 +870,7 @@ def create_simple_series(
     field: Union[FieldConfig, FieldFactoryConfig],
     grid: Union[GridConfig, GridFactoryConfig],
     tracing: Union[TracingConfig, TracingFactoryConfig],
-    template: Union[FieldLine, TemplateFactoryConfig],
+    template: Union[FieldLineTemplate, FieldLine, TemplateFactoryConfig],
     output_dir: Optional[str] = None,
     description: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,

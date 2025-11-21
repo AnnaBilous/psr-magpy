@@ -66,18 +66,42 @@ def rng():
 
 @pytest.fixture(scope="session", autouse=True)
 def cleanup_test_directories():
-    """Clean up test directories at the end of test session."""
+    """Clean up test directories at the end of test session.
+    
+    This fixture automatically cleans up any test directories created in the
+    project root when tests don't properly set output_dir or use temp directories.
+    """
     yield  # Run all tests
     
     # Clean up test directories after all tests complete
     import shutil
     
-    test_dirs = ["test_experiment", "test_series"]
-    for dir_name in test_dirs:
-        test_dir = Path(dir_name)
-        if test_dir.exists():
-            try:
-                shutil.rmtree(test_dir)
-                print(f"Cleaned up test directory: {test_dir}")
-            except Exception as e:
-                print(f"Warning: Could not clean up {test_dir}: {e}")
+    # Get project root (parent of tests directory)
+    project_root = Path(__file__).parent.parent.parent
+    
+    # Patterns for test directories that might be created
+    # These match common test directory names when output_dir is not set
+    test_dir_patterns = [
+        "test_experiment*",
+        "test_series*",
+        "test_*_series*",
+        "test_*_experiment*",
+        "simple_series*",  # From test_experiment_config.py
+    ]
+    
+    cleaned = []
+    for pattern in test_dir_patterns:
+        # Search in project root only (not in subdirectories)
+        for test_dir in project_root.glob(pattern):
+            if test_dir.is_dir() and test_dir.exists():
+                try:
+                    shutil.rmtree(test_dir)
+                    cleaned.append(str(test_dir))
+                    print(f"Cleaned up test directory: {test_dir}")
+                except Exception as e:
+                    print(f"Warning: Could not clean up {test_dir}: {e}")
+    
+    if cleaned:
+        print(f"Cleaned up {len(cleaned)} test directory(ies)")
+    else:
+        print("No test directories to clean up")

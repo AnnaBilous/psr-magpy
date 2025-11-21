@@ -23,6 +23,7 @@ from psr_magpy.experiment.factory_configs import (
 )
 from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.grid.grid import SphericalGrid, RandomGrid, HealpixGrid, CustomGrid
 from psr_magpy.line.tracing_parameters import TracingParameters
@@ -428,7 +429,7 @@ class TestExperimentConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_properties_along_line()
+        template = FieldLineTemplate.template_properties_along_line()
         
         config = ExperimentConfig(
             name="test_experiment",
@@ -453,7 +454,7 @@ class TestExperimentConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_properties_along_line()
+        template = FieldLineTemplate.template_properties_along_line()
         
         config = ExperimentConfig(
             name="test_experiment",
@@ -475,7 +476,7 @@ class TestExperimentConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig(max_integration_radius=15.0, dt=0.1)
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         
         config = ExperimentConfig(
             name="save_load_test",
@@ -533,7 +534,7 @@ class TestExperimentConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_properties_along_line()
+        template = FieldLineTemplate.template_properties_along_line()
         
         config = ExperimentConfig(
             name="yaml_print_test",
@@ -613,14 +614,14 @@ class TestTemplateFactoryConfig:
     
     def test_basic_initialization(self):
         """Test basic initialization."""
-        template1 = FieldLine.template_properties_along_line()
-        template2 = FieldLine.template_all()
+        template1 = FieldLineTemplate.template_properties_along_line()
+        template2 = FieldLineTemplate.template_all()
         
         config = TemplateFactoryConfig(templates=[template1, template2])
         
         assert len(config.templates) == 2
-        assert isinstance(config.templates[0], FieldLine)
-        assert isinstance(config.templates[1], FieldLine)
+        assert isinstance(config.templates[0], FieldLineTemplate)
+        assert isinstance(config.templates[1], FieldLineTemplate)
 
 
 class TestExperimentSeriesConfig:
@@ -633,7 +634,7 @@ class TestExperimentSeriesConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_properties_along_line()
+        template = FieldLineTemplate.template_properties_along_line()
         
         config = ExperimentSeriesConfig(
             name="test_series",
@@ -683,7 +684,7 @@ class TestExperimentSeriesConfig:
         ])
         grid = GridConfig(spherical=SphericalGridConfig(nlon=5, nlat=10))
         tracing = TracingConfig()
-        template = FieldLine.template_properties_along_line()
+        template = FieldLineTemplate.template_properties_along_line()
         
         config = ExperimentSeriesConfig(
             name="simple_series",
@@ -761,7 +762,7 @@ class TestIntegration:
             skip_memory_estimation=True,
             save_results_to_disk=False
         )
-        template = FieldLine.template_properties_along_line()
+        template = FieldLineTemplate.template_properties_along_line()
         
         config = ExperimentConfig(
             name="integration_test",
@@ -821,7 +822,7 @@ class TestIntegration:
             save_results_to_disk=True,
             filename="test_output.fits"
         )
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         
         config = ExperimentConfig(
             name="yaml_roundtrip_test",

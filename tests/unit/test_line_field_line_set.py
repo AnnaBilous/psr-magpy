@@ -20,6 +20,7 @@ if str(project_root) not in sys.path:
 
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.field_line import FieldLine, PropertyName
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.property_system import PropertyValidationError
 import logging
 from tests.fixtures.conftest import setup_test_logger
@@ -34,8 +35,8 @@ class TestFieldLineSetInitialization:
         
         # Create sample field lines for testing
         self.template_basic = FieldLine(save_r_line=True, save_r_max=True)
-        self.template_all = FieldLine.template_all()
-        self.template_coords = FieldLine.template_line_coordinates_only()
+        self.template_all = FieldLineTemplate.template_all()
+        self.template_coords = FieldLineTemplate.template_line_coordinates_only()
         
         # Create sample field line data
         self.sample_field_line = self._create_sample_field_line(self.template_basic)
@@ -272,7 +273,7 @@ class TestFieldLineSetProperties:
         self.logger = setup_test_logger("test_field_line_set_properties")
         
         # Create field line set with all properties
-        self.template = FieldLine.template_all()
+        self.template = FieldLineTemplate.template_all()
         self.field_line_set = FieldLineSet(
             self._create_sample_field_line(self.template),
             copy_data=True
@@ -482,7 +483,7 @@ class TestFieldLineSetMemoryEstimation:
         self.logger = setup_test_logger("test_field_line_set_memory")
         
         # Create field line set with various data sizes
-        self.template = FieldLine.template_all()
+        self.template = FieldLineTemplate.template_all()
         self.field_line_set = FieldLineSet(
             self._create_large_sample_field_line(self.template),
             copy_data=True
@@ -750,7 +751,7 @@ class TestFieldLineSetCopy:
         self.logger = setup_test_logger("test_field_line_set_copy")
         
         # Create template and sample data
-        self.template = FieldLine.template_all()
+        self.template = FieldLineTemplate.template_all()
         self.field_line_set = FieldLineSet(
             self._create_complex_field_line(self.template, 1),
             copy_data=True

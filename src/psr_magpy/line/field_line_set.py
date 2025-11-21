@@ -1,7 +1,7 @@
 """Field line set module."""
 
 from dataclasses import dataclass
-from typing import Optional, List, Union, cast, Any
+from typing import Optional, List, Union, cast, Any, TYPE_CHECKING
 from numpy.typing import NDArray
 from sys import getsizeof
 import numpy as np
@@ -9,6 +9,7 @@ import numpy as np
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyValidationError, PSRMagPyPropertyError
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.property_system import PropertyName
 
 
@@ -56,13 +57,24 @@ class FieldLineSet(FieldLine):
     ]
 
     def __init__(
-        self, field_lines: Union[List[FieldLine], FieldLine], copy_data: bool = True
+        self, 
+        field_lines: Union[List[FieldLine], FieldLine, FieldLineTemplate],
+        copy_data: bool = True
     ) -> None:
-        """Initialize a FieldLineSet from a list of field lines or a single field line."""
+        """Initialize a FieldLineSet from a list of field lines, a single field line, or a template.
+        
+        Parameters
+        ----------
+        field_lines : Union[List[FieldLine], FieldLine, FieldLineTemplate]
+            Field lines to initialize from, or a template when copy_data=False.
+        copy_data : bool
+            If True, copy data from field_lines. If False and field_lines is a template,
+            initialize empty FieldLineSet with template structure.
+        """
         logger.debug(f"Initializing FieldLineSet with {type(field_lines).__name__}")
 
         # Get template and validate input
-        template = self._get_template(field_lines)
+        template = self._get_template(field_lines, copy_data)
 
         # Use PropertySystem from parent class
         super().__init__(**template.property_system.get_flags_dict())
@@ -123,18 +135,27 @@ class FieldLineSet(FieldLine):
         return copy_instance
 
     def _get_template(
-        self, field_lines: Union[List[FieldLine], FieldLine]
-    ) -> FieldLine:
+        self, 
+        field_lines: Union[List[FieldLine], FieldLine, FieldLineTemplate],
+        copy_data: bool = True
+    ) -> Union[FieldLine, FieldLineTemplate]:
         """Get template field line and validate input."""
+        
         if isinstance(field_lines, list):
             if not field_lines:
                 raise PSRMagPyValidationError("Empty field_lines list provided")
             return field_lines[0]
+        elif isinstance(field_lines, FieldLineTemplate):
+            if copy_data:
+                raise PSRMagPyValidationError(
+                    "Cannot copy data from FieldLineTemplate. Use copy_data=False or provide FieldLine instances."
+                )
+            return field_lines
         elif isinstance(field_lines, FieldLine):
             return field_lines
         else:
             raise PSRMagPyValidationError(
-                f"Expected FieldLine or list of FieldLine, got {type(field_lines).__name__}"
+                f"Expected FieldLine, FieldLineTemplate, or list of FieldLine, got {type(field_lines).__name__}"
             )
 
     def append(

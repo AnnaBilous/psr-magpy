@@ -5,13 +5,14 @@ Provides efficient field line tracing with configurable properties
 and integration parameters.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 from astropy.coordinates import CartesianRepresentation
 import numpy as np
 from numpy.typing import NDArray
 
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.property_calculator import PropertyCalculator
 from psr_magpy.line.field_calculator import (
     FieldCalculator,
@@ -178,10 +179,17 @@ class FieldLineTracer:
         self,
         r_initial: CartesianRepresentation,
         footpoint_id: int,
-        template: FieldLine,
+        template: Union[FieldLineTemplate, FieldLine],
         save_dR: bool = False,
     ) -> FieldLine:
-        """Trace a single field line from the given initial position."""
+        """Trace a single field line from the given initial position.
+        
+        Parameters
+        ----------
+        template : Union[FieldLineTemplate, FieldLine]
+            Template or FieldLine defining which properties to save.
+            FieldLine is accepted for backwards compatibility.
+        """
         r_initial_array = r_initial.xyz.value
 
         # Create output with automatic reversed_error flag if verification is enabled
@@ -191,7 +199,10 @@ class FieldLineTracer:
             template_flags["save_reversed_error"] = True
             output = FieldLine(**template_flags)
         else:
-            output = template.copy_structure()
+            if isinstance(template, FieldLineTemplate):
+                output = FieldLine.from_template(template)
+            else:
+                output = template.copy_structure()
 
         output.set_property(footpoint_id=int(footpoint_id))
 

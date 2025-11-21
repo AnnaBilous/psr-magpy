@@ -17,6 +17,7 @@ from .grid_config import (
 )
 from .tracing_config import TracingConfig
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyValidationError, PSRMagPyGridError
 from psr_magpy.line.tracing_parameters import TracingDefaults
@@ -234,13 +235,13 @@ class TracingFactoryConfig(BaseModel):
 class TemplateFactoryConfig(BaseModel):
     """Factory configuration for templates with flexible parameter inputs."""
 
-    templates: List[FieldLine]
+    templates: List[FieldLineTemplate]
 
     model_config = {"arbitrary_types_allowed": True}
 
     @classmethod
     def from_yaml_dict(cls, data: Dict[str, Any]) -> "TemplateFactoryConfig":
-        """Create TemplateFactoryConfig from YAML dictionary with FieldLine reconstruction."""
+        """Create TemplateFactoryConfig from YAML dictionary with FieldLineTemplate reconstruction."""
         if "templates" in data:
             templates = []
             for template_data in data["templates"]:
@@ -248,10 +249,9 @@ class TemplateFactoryConfig(BaseModel):
                     isinstance(template_data, dict)
                     and "property_system" in template_data
                 ):
-                    # Reconstruct FieldLine from property system flags
+                    # Reconstruct FieldLineTemplate from property system flags
                     flags = template_data["property_system"]
-                    template = FieldLine()
-
+                    
                     # Define default values for new properties (backwards compatibility)
                     default_flags = {
                         "save_b_line": False,
@@ -259,37 +259,23 @@ class TemplateFactoryConfig(BaseModel):
                         "save_tangent_theta": False,
                         "save_tangent_phi": False,
                     }
-
-                    # Apply flags from YAML, with defaults for missing properties
-                    for prop_name, enabled in flags.items():
-                        if hasattr(template.property_system.save_flags, prop_name):
-                            setattr(
-                                template.property_system.save_flags, prop_name, enabled
-                            )
-                        else:
-                            logger.warning(
-                                f"Property {prop_name} not found in FieldLine property_system.save_flags"
-                            )
-
-                    # Apply defaults for missing new properties
-                    for prop_name, default_value in default_flags.items():
-                        if prop_name not in flags:
-                            if hasattr(template.property_system.save_flags, prop_name):
-                                setattr(
-                                    template.property_system.save_flags,
-                                    prop_name,
-                                    default_value,
-                                )
-                                logger.debug(
-                                    f"Applied default {default_value} for missing property {prop_name}"
-                                )
-                            else:
-                                logger.warning(
-                                    f"Default property {prop_name} not found in FieldLine property_system.save_flags"
-                                )
+                    
+                    # Merge flags with defaults
+                    merged_flags = {**default_flags, **flags}
+                    
+                    # Create template with merged flags
+                    template = FieldLineTemplate(**merged_flags)
+                    templates.append(template)
+                elif isinstance(template_data, FieldLineTemplate):
+                    # Already a FieldLineTemplate object
+                    templates.append(template_data)
+                elif isinstance(template_data, FieldLine):
+                    # Backwards compatibility: convert FieldLine to FieldLineTemplate
+                    flags = template_data.property_system.get_flags_dict()
+                    template = FieldLineTemplate(**flags)
                     templates.append(template)
                 else:
-                    # Assume it's already a FieldLine object
+                    # Assume it's already a FieldLineTemplate object
                     templates.append(template_data)
             data["templates"] = templates
 
@@ -654,11 +640,15 @@ def expand_tracing_configs(
 
 
 def expand_template_configs(
-    template_config: Union[FieldLine, TemplateFactoryConfig]
-) -> List[FieldLine]:
+    template_config: Union[FieldLineTemplate, FieldLine, TemplateFactoryConfig]
+) -> List[FieldLineTemplate]:
     """Expand template configuration into all possible combinations."""
-    if isinstance(template_config, FieldLine):
+    if isinstance(template_config, FieldLineTemplate):
         return [template_config]
+    elif isinstance(template_config, FieldLine):
+        # Backwards compatibility: convert FieldLine to FieldLineTemplate
+        flags = template_config.property_system.get_flags_dict()
+        return [FieldLineTemplate(**flags)]
 
     # Handle TemplateFactoryConfig
     return template_config.templates

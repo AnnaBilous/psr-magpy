@@ -4,28 +4,27 @@ This package provides functionality for tracing magnetic field lines
 through 3D space, including integration, property calculation,
 and result management.
 
-**FieldLine Dual Role:**
+**Configuration and Data Separation:**
 
-FieldLine objects serve two distinct purposes in the system:
-
-1. **Configuration Templates** (Primary):
-   - Define which properties to save during tracing
-   - Used as templates: FieldLine.template_all(), FieldLine.template_OFL_calc()
+1. **FieldLineTemplate** (Configuration):
+   - Defines which properties to save during tracing
+   - Used as templates: FieldLineTemplate.template_all(), FieldLineTemplate.template_OFL_calc()
    - Stored as YAML configuration files
    - Human-readable configuration format
 
-2. **Data Containers** (Secondary):
-   - Hold actual field line data (coordinates, properties)
+2. **FieldLine** (Data Container):
+   - Holds actual field line data (coordinates, properties)
    - Combined into FieldLineSet for bulk storage
    - Stored as FITS files (scientific data format)
 
 **I/O Distinction:**
-- Configuration FieldLines → YAML files
-- Data FieldLines → FITS files via FieldLineSet
+- FieldLineTemplate → YAML files (configuration)
+- FieldLine/FieldLineSet → FITS files (scientific data)
 """
 
 from .tracer import FieldLineTracer
 from .field_line import FieldLine
+from .field_line_template import FieldLineTemplate
 from .field_line_set import FieldLineSet
 from .property_system import PropertySystem, PropertyName, SaveFlags
 from .tracing_parameters import (
@@ -49,6 +48,7 @@ from .solver import SolverError
 
 __all__ = [
     "FieldLine",
+    "FieldLineTemplate",
     "FieldLineSet",
     "FieldLineTracer",
     "TracingParameters",

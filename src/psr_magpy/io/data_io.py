@@ -201,9 +201,18 @@ class FieldLineSetIO(FitsIO):
         logger.debug(f"Added header keyword: {keyword} = {value}")
 
     def _load_from_hdul(self, hdul: fits.HDUList, **kwargs) -> Any:
-        """Load field line set from FITS HDU list."""
+        """Load field line set from FITS HDU list.
+        
+        Parameters
+        ----------
+        **kwargs
+            template : Union[FieldLineTemplate, FieldLine], optional
+                Template specifying which properties to load.
+                If not provided, template is auto-created from FITS columns.
+        """
         from psr_magpy.line.field_line_set import FieldLineSet
         from psr_magpy.line.field_line import FieldLine
+        from psr_magpy.line.field_line_template import FieldLineTemplate
         from psr_magpy.line.property_system import PropertyName
         import psutil
 
@@ -234,11 +243,13 @@ class FieldLineSetIO(FitsIO):
             )
         else:
             # Create template based on column names (original behavior)
-            template = FieldLine()
+            # Use FieldLineTemplate for consistency
+            template_flags = {}
             for prop in PropertyName:
                 flag_enabled = prop.name in column_names
-                setattr(template.save_flags, prop.flag_name, flag_enabled)
+                template_flags[prop.flag_name] = flag_enabled
                 logger.debug(f"Template: setting {prop.flag_name} to {flag_enabled}")
+            template = FieldLineTemplate(**template_flags)
 
         # Create empty FieldLineSet with template
         field_line_set = FieldLineSet(template, copy_data=False)

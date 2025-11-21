@@ -8,6 +8,7 @@ from .field_config import FieldConfig, FieldComponentConfig
 from .grid_config import GridConfig, SphericalGridConfig
 from .tracing_config import TracingConfig
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyValidationError
@@ -24,7 +25,7 @@ class ExperimentConfig:
     field: FieldConfig
     grid: GridConfig
     tracing: TracingConfig
-    template: FieldLine
+    template: Union[FieldLineTemplate, FieldLine]
     description: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
@@ -33,6 +34,10 @@ class ExperimentConfig:
         logger.debug(f"Initializing experiment: {self.name}")
         if self.description:
             logger.debug(f"Description: {self.description}")
+
+        # Convert FieldLineTemplate to FieldLine if needed (for mutability)
+        if isinstance(self.template, FieldLineTemplate):
+            self.template = FieldLine.from_template(self.template)
 
         # Automatically enable save_reversed_error if verify_by_reversing is enabled
         if (
@@ -212,7 +217,8 @@ class ExperimentConfig:
             overwrite=TracingDefaults.OVERWRITE,
         )
 
-        template = FieldLine.template_all()
+        from psr_magpy.line.field_line_template import FieldLineTemplate
+        template = FieldLineTemplate.template_all()
 
         return cls(
             name="dipole_example",

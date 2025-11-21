@@ -1,32 +1,31 @@
 import logging
-from typing import Optional, Any, Union
+import warnings
+from typing import Optional, Any, Union, TYPE_CHECKING
 
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.line.property_system import PropertySystem, PropertyName
+
+if TYPE_CHECKING:
+    from psr_magpy.line.field_line_template import FieldLineTemplate
 
 logger = get_logger(__name__, console_format_brief=True)
 
 
 class FieldLine:
-    """Base class for field lines with configurable properties.
+    """Data container for field line tracing results.
 
-    FieldLine objects serve two distinct roles in the system:
+    FieldLine holds actual field line data (coordinates, properties, etc.)
+    from individual field line tracing operations. Field lines are combined
+    into FieldLineSet for bulk data storage.
 
-    1. **Configuration Templates** (Primary Role):
-       - Define which properties to save during field line tracing
-       - Used as templates to configure the tracing process
-       - Stored as YAML configuration files
-       - Examples: FieldLine.template_all(), FieldLine.template_OFL_calc()
+    **Role in I/O System:**
+    - **Data Container**: Holds actual field line data (coordinates, properties, etc.)
+    - **FITS Storage**: Data is stored in FITS format via FieldLineSet
+    - **Individual Results**: Used to store single field line results
 
-    2. **Data Containers** (Secondary Role):
-       - Hold actual field line data (coordinates, properties, etc.)
-       - Used to store individual field line results
-       - Combined into FieldLineSet for bulk data storage
-       - Stored as FITS files via FieldLineSet
-
-    The distinction is important for I/O operations:
-    - Configuration FieldLines → YAML (human-readable config)
-    - Data FieldLines → FITS (scientific data format)
+    **Configuration:**
+    Use FieldLineTemplate to configure which properties to save during tracing.
+    Create FieldLine instances from templates using FieldLine.from_template().
     """
 
     def __init__(self, **kwargs):
@@ -126,93 +125,177 @@ class FieldLine:
         return new_instance
 
     @classmethod
-    def template_all(cls) -> "FieldLine":
+    def from_template(cls, template: "FieldLineTemplate") -> "FieldLine":
+        """Create a FieldLine instance from a FieldLineTemplate.
+
+        Parameters
+        ----------
+        template : FieldLineTemplate
+            Template defining which properties to save.
+
+        Returns
+        -------
+        FieldLine
+            New FieldLine instance with same configuration as template.
+
+        Examples
+        --------
+        >>> template = FieldLineTemplate.template_all()
+        >>> field_line = FieldLine.from_template(template)
+        """
+        flags_dict = template.property_system.get_flags_dict()
+        return cls(**flags_dict)
+
+    @classmethod
+    def template_all(cls) -> "FieldLineTemplate":
         """Create configuration template with all properties enabled.
 
-        This template defines which properties to save during field line tracing.
-        Used as configuration, not for storing actual field line data.
+        .. deprecated:: 
+            Use FieldLineTemplate.template_all() instead.
+            This method will be removed in a future version.
+
+        Returns
+        -------
+        FieldLineTemplate
+            Template with all properties enabled.
         """
-        return cls(
-            save_r_line=True,
-            save_pa_line=True,
-            save_r_max=True,
-            save_r_cyl_max=True,
-            save_z_abs_max=True,
-            save_b_ini=True,
-            save_b_r_ini_angle=True,
-            save_b_line=True,
-            save_curvature_line=True,
-            save_tangent_theta=True,
-            save_tangent_phi=True,
+        from psr_magpy.line.field_line_template import FieldLineTemplate
+
+        warnings.warn(
+            "FieldLine.template_all() is deprecated. Use FieldLineTemplate.template_all() instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return FieldLineTemplate.template_all()
 
     @classmethod
-    def template_all_except_along_line(cls) -> "FieldLine":
+    def template_all_except_along_line(cls) -> "FieldLineTemplate":
         """Create configuration template with all properties enabled except line coordinates and PA.
 
-        This template defines which properties to save during field line tracing.
-        Used as configuration, not for storing actual field line data.
+        .. deprecated:: 
+            Use FieldLineTemplate.template_all_except_along_line() instead.
+            This method will be removed in a future version.
+
+        Returns
+        -------
+        FieldLineTemplate
+            Template with all properties except line coordinates and PA.
         """
-        return cls(
-            save_r_max=True,
-            save_r_cyl_max=True,
-            save_z_abs_max=True,
-            save_b_ini=True,
-            save_b_r_ini_angle=True,
+        from psr_magpy.line.field_line_template import FieldLineTemplate
+
+        warnings.warn(
+            "FieldLine.template_all_except_along_line() is deprecated. Use FieldLineTemplate.template_all_except_along_line() instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return FieldLineTemplate.template_all_except_along_line()
 
     @classmethod
-    def template_OFL_calc(cls) -> "FieldLine":
-        """Create configuration template with properties for open field line calculation (r_max, r_cyl_max, z_abs_max).
+    def template_OFL_calc(cls) -> "FieldLineTemplate":
+        """Create configuration template with properties for open field line calculation.
 
-        This template defines which properties to save during field line tracing.
-        Used as configuration, not for storing actual field line data.
+        .. deprecated:: 
+            Use FieldLineTemplate.template_OFL_calc() instead.
+            This method will be removed in a future version.
+
+        Returns
+        -------
+        FieldLineTemplate
+            Template with r_max, r_cyl_max, z_abs_max enabled.
         """
-        return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True)
+        from psr_magpy.line.field_line_template import FieldLineTemplate
+
+        warnings.warn(
+            "FieldLine.template_OFL_calc() is deprecated. Use FieldLineTemplate.template_OFL_calc() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return FieldLineTemplate.template_OFL_calc()
 
     @classmethod
-    def template_OFL_subset(cls) -> "FieldLine":
+    def template_OFL_subset(cls) -> "FieldLineTemplate":
         """Create minimal configuration template for OFL subset grid creation.
 
-        Includes only footpoint_id (always enabled), r_cyl_max, and z_abs_max.
-        This is the minimal template needed for extracting OFL footpoints from
-        existing field line data to create subset grids.
+        .. deprecated:: 
+            Use FieldLineTemplate.template_OFL_subset() instead.
+            This method will be removed in a future version.
 
-        This template defines which properties to save during field line tracing.
-        Used as configuration, not for storing actual field line data.
+        Returns
+        -------
+        FieldLineTemplate
+            Template with r_cyl_max and z_abs_max enabled.
         """
-        return cls(save_r_cyl_max=True, save_z_abs_max=True)
+        from psr_magpy.line.field_line_template import FieldLineTemplate
 
-    @classmethod
-    def template_line_coordinates_only(cls) -> "FieldLine":
-        """Create configuration template with line coordinates only (r_line).
-
-        This template defines which properties to save during field line tracing.
-        Used as configuration, not for storing actual field line data.
-        """
-        return cls(save_r_line=True)
-
-    @classmethod
-    def template_properties_along_line(cls) -> "FieldLine":
-        """Create configuration template with line coordinates and PA (r_line, pa_line).
-
-        This template defines which properties to save during field line tracing.
-        Used as configuration, not for storing actual field line data.
-        """
-        return cls(
-            save_r_line=True,
-            save_pa_line=True,
-            save_b_line=True,
-            save_curvature_line=True,
-            save_tangent_theta=True,
-            save_tangent_phi=True,
+        warnings.warn(
+            "FieldLine.template_OFL_subset() is deprecated. Use FieldLineTemplate.template_OFL_subset() instead.",
+            DeprecationWarning,
+            stacklevel=2,
         )
+        return FieldLineTemplate.template_OFL_subset()
 
     @classmethod
-    def template_surface_field_properties(cls) -> "FieldLine":
-        """Create configuration template with surface properties (b_ini, b_r_ini_angle).
+    def template_line_coordinates_only(cls) -> "FieldLineTemplate":
+        """Create configuration template with line coordinates only.
 
-        This template defines which properties to save during field line tracing.
-        Used as configuration, not for storing actual field line data.
+        .. deprecated:: 
+            Use FieldLineTemplate.template_line_coordinates_only() instead.
+            This method will be removed in a future version.
+
+        Returns
+        -------
+        FieldLineTemplate
+            Template with r_line enabled.
         """
-        return cls(save_b_ini=True, save_b_r_ini_angle=True)
+        from psr_magpy.line.field_line_template import FieldLineTemplate
+
+        warnings.warn(
+            "FieldLine.template_line_coordinates_only() is deprecated. Use FieldLineTemplate.template_line_coordinates_only() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return FieldLineTemplate.template_line_coordinates_only()
+
+    @classmethod
+    def template_properties_along_line(cls) -> "FieldLineTemplate":
+        """Create configuration template with line coordinates and PA.
+
+        .. deprecated:: 
+            Use FieldLineTemplate.template_properties_along_line() instead.
+            This method will be removed in a future version.
+
+        Returns
+        -------
+        FieldLineTemplate
+            Template with r_line, pa_line, b_line, curvature_line, tangent properties enabled.
+        """
+        from psr_magpy.line.field_line_template import FieldLineTemplate
+
+        warnings.warn(
+            "FieldLine.template_properties_along_line() is deprecated. Use FieldLineTemplate.template_properties_along_line() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return FieldLineTemplate.template_properties_along_line()
+
+    @classmethod
+    def template_surface_field_properties(cls) -> "FieldLineTemplate":
+        """Create configuration template with surface properties.
+
+        .. deprecated:: 
+            Use FieldLineTemplate.template_surface_field_properties() instead.
+            This method will be removed in a future version.
+
+        Returns
+        -------
+        FieldLineTemplate
+            Template with b_ini and b_r_ini_angle enabled.
+        """
+        from psr_magpy.line.field_line_template import FieldLineTemplate
+
+        warnings.warn(
+            "FieldLine.template_surface_field_properties() is deprecated. Use FieldLineTemplate.template_surface_field_properties() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return FieldLineTemplate.template_surface_field_properties()

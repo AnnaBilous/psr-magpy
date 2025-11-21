@@ -128,7 +128,7 @@ class ExperimentConfigIO(YamlIO):
         from psr_magpy.experiment.field_config import FieldConfig
         from psr_magpy.experiment.grid_config import GridConfig
         from psr_magpy.experiment.tracing_config import TracingConfig
-        from psr_magpy.line.field_line import FieldLine
+        from psr_magpy.line.field_line_template import FieldLineTemplate
 
         # Reconstruct template
         template_data = data.get("template", {})
@@ -147,7 +147,7 @@ class ExperimentConfigIO(YamlIO):
                     f"Applied default {default_value} for missing property {prop_name} in experiment config"
                 )
 
-        template = FieldLine(**template_data)
+        template = FieldLineTemplate(**template_data)
 
         # Reconstruct field
         field = FieldConfig.model_validate(data["field"])
