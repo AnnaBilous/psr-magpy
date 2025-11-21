@@ -28,17 +28,27 @@ def create_fine_subset_workflow(
     3. Optionally runs the fine resolution experiment series
     4. Returns updated fine series config
 
-    Args:
-        coarse_series_config: Coarse resolution series config
-        fine_series_config: Fine resolution series config
-        R_LC: Light cylinder radius for OFL calculation
-        h_LC_coeff: Height coefficient for OFL calculation
-        experiment_numbers: Optional list of experiment numbers to process
-        run_fine_series: If True, run the fine series after creating subsets
-        **run_kwargs: Additional arguments passed to run_experiment_series
+    Parameters
+    ----------
+    coarse_series_config : ExperimentSeriesConfig
+        Coarse resolution series config.
+    fine_series_config : ExperimentSeriesConfig
+        Fine resolution series config.
+    R_LC : float
+        Light cylinder radius for OFL calculation.
+    h_LC_coeff : float, optional
+        Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+    experiment_numbers : Optional[List[int]], optional
+        Optional list of experiment numbers to process. Default is None.
+    run_fine_series : bool, optional
+        If True, run the fine series after creating subsets. Default is True.
+    **run_kwargs : Any
+        Additional arguments passed to run_experiment_series.
 
-    Returns:
-        Updated fine series config with subset grids
+    Returns
+    -------
+    ExperimentSeriesConfig
+        Updated fine series config with subset grids.
 
     Example:
         >>> fine_config = create_fine_subset_workflow(

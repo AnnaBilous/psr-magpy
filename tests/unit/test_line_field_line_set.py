@@ -14,14 +14,15 @@ from unittest.mock import Mock, patch, MagicMock
 from astropy.coordinates.representation import CartesianRepresentation
 
 # Add project root to path
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.field_line import FieldLine, PropertyName
 from psr_magpy.line.property_system import PropertyValidationError
-from tests.utils import setup_test_logger, rng
+import logging
+from tests.fixtures.conftest import setup_test_logger
 
 
 class TestFieldLineSetInitialization:

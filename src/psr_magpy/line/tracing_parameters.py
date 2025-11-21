@@ -256,7 +256,7 @@ class PerformanceParameters(BaseModel):
 
     @model_validator(mode="after")
     def setup_cores(self):
-        """Setup and validate the number of CPU cores to use."""
+        """Set up and validate the number of CPU cores to use."""
         available_cores = psutil.cpu_count(logical=False) or psutil.cpu_count()
         logger.debug(f"Available physical cores: {available_cores}")
 

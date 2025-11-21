@@ -340,11 +340,15 @@ class ExperimentSeriesRunner:
     def _format_duration(self, seconds: float) -> str:
         """Format duration in appropriate units.
 
-        Args:
-            seconds: Duration in seconds
+        Parameters
+        ----------
+        seconds : float
+            Duration in seconds.
 
-        Returns:
-            Formatted string like "10.5s", "2.5min", "1.2h", or "3.5d"
+        Returns
+        -------
+        str
+            Formatted string like "10.5s", "2.5min", "1.2h", or "3.5d".
         """
         if seconds < 60:
             return f"{seconds:.1f}s"
@@ -663,8 +667,22 @@ def run_experiment_series(
     continue_on_failure: bool = True,
     create_directories: bool = True,
 ) -> SeriesResult:
-    """Convenience function to run an experiment series."""
-
+    """Run an experiment series.
+    
+    Parameters
+    ----------
+    series_config : ExperimentSeriesConfig
+        Configuration for the experiment series.
+    continue_on_failure : bool, optional
+        Whether to continue if an experiment fails. Default is True.
+    create_directories : bool, optional
+        Whether to create output directories. Default is True.
+    
+    Returns
+    -------
+    SeriesResult
+        Results from running the experiment series.
+    """
     # Check if any experiments have save_results_to_disk=False and warn user
     experiments = series_config.create_experiment_series(
         save_configs=False, create_directories=False
@@ -741,7 +759,26 @@ def run_experiment_series_in_memory(
     save_grids: bool = False,
     continue_on_failure: bool = True,
 ) -> SeriesResult:
-    """Convenience function to run an experiment series with results kept in memory."""
+    """Run an experiment series with results kept in memory.
+    
+    Parameters
+    ----------
+    series_config : ExperimentSeriesConfig
+        Configuration for the experiment series.
+    keep_results : bool, optional
+        Whether to keep results in memory. Default is True.
+    max_memory_mb : Optional[int], optional
+        Maximum memory in MB. Default is None.
+    save_grids : bool, optional
+        Whether to save grids. Default is False.
+    continue_on_failure : bool, optional
+        Whether to continue if an experiment fails. Default is True.
+    
+    Returns
+    -------
+    SeriesResult
+        Results from running the experiment series.
+    """
     runner = InMemoryExperimentSeriesRunner(
         series_config=series_config,
         keep_results=keep_results,

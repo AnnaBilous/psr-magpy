@@ -28,6 +28,7 @@ extensions = [
     'sphinx_rtd_theme',
     'nbsphinx',
     'matplotlib.sphinxext.plot_directive',
+    # 'sphinx_autodoc_typehints',  # Disabled due to type hint compatibility issues
 ]
 
 # Napoleon settings for NumPy docstrings
@@ -49,14 +50,23 @@ napoleon_attr_annotations = True
 # Autodoc settings
 autodoc_member_order = 'bysource'
 autodoc_typehints = 'description'
+autodoc_typehints_format = 'short'  # Use short format for type hints
 autodoc_default_options = {
     'members': True,
+    'undoc-members': False,  # Don't show undocumented members
+    'inherited-members': False,  # Don't show inherited members
     'show-inheritance': True,
-    'undoc-members': True,
     'special-members': '__init__',
 }
+autosummary_generate = True  # Generate autosummary files
+autosummary_imported_members = False
 
-# Intersphinx mapping
+# Type hints settings
+typehints_fully_qualified = False
+always_document_param_types = False
+typehints_document_rtype = True
+
+# Intersphinx mapping (optional - will fail gracefully if servers are unavailable)
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://numpy.org/doc/stable', None),
@@ -64,13 +74,18 @@ intersphinx_mapping = {
     'matplotlib': ('https://matplotlib.org/stable', None),
     'astropy': ('https://docs.astropy.org/en/stable', None),
 }
+intersphinx_disabled_reftypes = ['std:label']  # Disable some ref types to reduce errors
 
 # HTML output settings
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 html_css_files = ['custom.css']
-html_logo = '_static/logo.png'
-html_favicon = '_static/favicon.ico'
+# Logo and favicon are optional - only set if files exist
+import os
+if os.path.exists(os.path.join(html_static_path[0], 'logo.png')):
+    html_logo = '_static/logo.png'
+if os.path.exists(os.path.join(html_static_path[0], 'favicon.ico')):
+    html_favicon = '_static/favicon.ico'
 html_theme_options = {
     'logo_only': False,
     'display_version': True,

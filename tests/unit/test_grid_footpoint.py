@@ -5,7 +5,7 @@ import numpy as np
 from pathlib import Path
 import tempfile
 
-from utils import setup_test_logger
+from tests.fixtures.conftest import setup_test_logger
 from psr_magpy.grid.grid import HealpixGrid, SphericalGrid, RandomGrid, GridType
 
 logger = setup_test_logger(__name__)

@@ -32,13 +32,16 @@ class FieldLine:
     def __init__(self, **kwargs):
         """Initialize field line with optional save flags.
 
-        Args:
-            **kwargs: Boolean flags for which properties to save.
-                     save_footpoint_id will always be True regardless of input.
+        Parameters
+        ----------
+        **kwargs : bool
+            Boolean flags for which properties to save.
+            save_footpoint_id will always be True regardless of input.
 
-                     Examples:
-                     - save_r_line=True, save_r_max=True
-                     - save_footpoint_id=True (always enabled)
+        Examples
+        --------
+        >>> field_line = FieldLine(save_r_line=True, save_r_max=True)
+        >>> # save_footpoint_id is always enabled
         """
         # Initialize property system, ensuring footpoint_id is True
         kwargs["save_footpoint_id"] = True
@@ -68,29 +71,44 @@ class FieldLine:
     def get_property(self, prop: Union[PropertyName, str]) -> Optional[Any]:
         """Get a property value if it's enabled.
 
-        Args:
-            prop: Property to get, either as PropertyName enum or string
-                 (e.g., PropertyName.R_MAX or 'r_max')
+        Parameters
+        ----------
+        prop : Union[PropertyName, str]
+            Property to get, either as PropertyName enum or string
+            (e.g., PropertyName.R_MAX or 'r_max').
 
-        Returns:
-            Property value or None if not enabled/set
+        Returns
+        -------
+        Optional[Any]
+            Property value or None if not enabled/set.
 
-        Raises:
-            ValueError: If property is not enabled but accessed
-            KeyError: If string property name is not valid
+        Raises
+        ------
+        ValueError
+            If property is not enabled but accessed.
+        KeyError
+            If string property name is not valid.
         """
         return self.property_system.get_property(prop)
 
     def set_property(self, **kwargs: Any) -> None:
         """Set multiple property values if they're enabled.
 
-        Args:
-            **kwargs: Property values to set, where keys are PropertyName.key_name
-                     Example: set_property(r_line=coordinates, r_max=max_value)
+        Parameters
+        ----------
+        **kwargs : Any
+            Property values to set, where keys are PropertyName.key_name.
 
-        Raises:
-            ValueError: If any property is not enabled but attempted to be set
-            KeyError: If property name is not valid
+        Examples
+        --------
+        >>> field_line.set_property(r_line=coordinates, r_max=max_value)
+
+        Raises
+        ------
+        ValueError
+            If any property is not enabled but attempted to be set.
+        KeyError
+            If property name is not valid.
         """
         self.property_system.set_property(**kwargs)
 

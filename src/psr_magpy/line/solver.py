@@ -37,6 +37,7 @@ class SolverError(PSRMagPyTracingError):
     original_error : Exception
         The original exception raised by the solver (if any).
     """
+    
     def __init__(self, message: str, solver_name: str, original_error: Optional[Exception] = None):
         self.solver_name = solver_name
         self.original_error = original_error
@@ -71,6 +72,7 @@ class Solution:
     y_events : Optional[list]
         List of arrays containing solution values at event times (if events were provided).
     """
+    
     t: np.ndarray
     y: np.ndarray
     nfev: int

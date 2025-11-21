@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyIOError
+from psr_magpy.line.progress_tracker import ProgressReporter
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -37,14 +38,14 @@ class BatchFileManager:
         output_directory: Optional[Path] = None,
         organize_files: bool = True,
         cleanup_batch_files: bool = False,
-        progress_tracker=None,
+        progress_reporter: Optional[ProgressReporter] = None,
     ):
         """Initialize batch file manager."""
         self.base_filename = Path(base_filename)
         self.output_directory = output_directory or self.base_filename.parent
         self.organize_files = organize_files
         self._cleanup_enabled = cleanup_batch_files
-        self.progress_tracker = progress_tracker
+        self.progress_reporter = progress_reporter
 
         logger.debug(
             f"Initialized BatchFileManager: base={self.base_filename}, "
@@ -144,14 +145,14 @@ class BatchFileManager:
 
         logger.info(f"Organizing {len(batch_files)} batch files in {output_dir}")
 
-        if self.progress_tracker:
-            self.progress_tracker.log_io_start("organize", output_dir, len(batch_files))
+        if self.progress_reporter:
+            self.progress_reporter.report_io_start_simple("organize", output_dir, len(batch_files))
 
         try:
             # Move and rename batch files with retry logic
             for i, batch_info in enumerate(batch_files):
-                if self.progress_tracker:
-                    self.progress_tracker.update_io_progress(
+                if self.progress_reporter:
+                    self.progress_reporter.update_io_progress(
                         i, len(batch_files), f"Moving {batch_info.path.name}"
                     )
 
@@ -202,9 +203,10 @@ class BatchFileManager:
                                 f"Failed to move {batch_info.path} after {max_retries} attempts: {e}"
                             ) from e
 
-            if self.progress_tracker:
-                self.progress_tracker.log_io_completion(
-                    "organize", output_dir, 0.0, len(batch_files)
+            if self.progress_reporter:
+                elapsed = time.time() - (self.progress_reporter.start_time or time.time())
+                self.progress_reporter.report_io_completion(
+                    "organize", output_dir, elapsed, len(batch_files)
                 )
 
             logger.info(
@@ -265,15 +267,15 @@ class BatchFileManager:
 
         logger.info(f"Cleaning up {len(batch_files)} batch files")
 
-        if self.progress_tracker:
-            self.progress_tracker.log_io_start(
+        if self.progress_reporter:
+            self.progress_reporter.report_io_start_simple(
                 "cleanup", Path("batch_files"), len(batch_files)
             )
 
         try:
             for i, batch_info in enumerate(batch_files):
-                if self.progress_tracker:
-                    self.progress_tracker.update_io_progress(
+                if self.progress_reporter:
+                    self.progress_reporter.update_io_progress(
                         i, len(batch_files), f"Cleaning up {batch_info.path.name}"
                     )
 
@@ -285,9 +287,10 @@ class BatchFileManager:
                         f"Failed to delete batch file {batch_info.path}: {e}"
                     )
 
-            if self.progress_tracker:
-                self.progress_tracker.log_io_completion(
-                    "cleanup", Path("batch_files"), 0.0, len(batch_files)
+            if self.progress_reporter:
+                elapsed = time.time() - (self.progress_reporter.start_time or time.time())
+                self.progress_reporter.report_io_completion(
+                    "cleanup", Path("batch_files"), elapsed, len(batch_files)
                 )
 
             logger.info("Batch file cleanup completed")

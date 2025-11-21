@@ -115,7 +115,7 @@ class GridFactoryConfig(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     def model_dump(self, **kwargs):
-        """Custom model_dump to preserve grid type information."""
+        """Dump model to dictionary, preserving grid type information."""
         data = super().model_dump(**kwargs)
 
         # Convert grid configs to preserve type information
@@ -148,7 +148,7 @@ class GridFactoryConfig(BaseModel):
 
     @classmethod
     def model_validate(cls, obj):
-        """Custom model_validate to handle grid type information in YAML."""
+        """Validate model, handling grid type information in YAML."""
         if isinstance(obj, dict) and "grids" in obj:
             # Convert grid type dictionaries back to config objects
             grids_data = []

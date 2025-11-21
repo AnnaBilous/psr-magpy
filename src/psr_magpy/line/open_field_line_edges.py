@@ -25,11 +25,15 @@ class OFLEdgeCalculator:
     def __init__(self, grid: FootpointGrid, h_LC_coeff: float = 3**1.5 / 2.0, precise_edges: bool = False):
         """Initialize calculator.
 
-        Args:
-            grid: Grid object
-            h_LC_coeff: Height coefficient for OFL calculation
+        Parameters
+        ----------
+        grid : FootpointGrid
+            Grid object.
+        h_LC_coeff : float, optional
+            Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+        precise_edges : bool, optional
+            If True, use precise edge calculation method. Default is False.
         """
-
         self.grid = grid
         self.h_LC_coeff = h_LC_coeff
         self.precise_edges = precise_edges
@@ -39,14 +43,21 @@ class OFLEdgeCalculator:
     ) -> OFLEdgeResult:
         """Calculate OFL edges for multiple R_LC values.
 
-        Args:
-            lines: FieldLineSet with calculated field lines
-            P_ms: Pulsar periods in ms (alternative to R_LC)
-            R_LC: Light cylinder radii (alternative to R_LC)
-            R_LC_edge_coefficient: Edge coefficient (float or list matching R_LC length)
+        Parameters
+        ----------
+        lines : FieldLineSet
+            FieldLineSet with calculated field lines.
+        P_ms : optional
+            Pulsar periods in ms (alternative to R_LC). Default is None.
+        R_LC : optional
+            Light cylinder radii (alternative to P_ms). Default is None.
+        R_LC_edge_coefficient : Union[float, List[float]], optional
+            Edge coefficient (float or list matching R_LC length). Default is 1.02.
 
-        Returns:
-            OFLEdgeResult with R_LC values and edge footpoint arrays
+        Returns
+        -------
+        OFLEdgeResult
+            OFLEdgeResult with R_LC values and edge footpoint arrays.
         """
         if self.precise_edges:
             return get_OFL_edges_precise(self.grid, lines, P_ms, R_LC, self.h_LC_coeff)
@@ -57,13 +68,19 @@ class OFLEdgeCalculator:
 def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
     """Find edge footpoints in OFL region.
 
-    Args:
-        grid: Grid object
-        ftp_ids: Footpoint IDs of OFL region
-        ftp_ids_inner: Inner region footpoint IDs to exclude
+    Parameters
+    ----------
+    grid : FootpointGrid
+        Grid object.
+    ftp_ids : np.ndarray
+        Footpoint IDs of OFL region.
+    ftp_ids_inner : optional
+        Inner region footpoint IDs to exclude. Default is None.
 
-    Returns:
-        Edge footpoint IDs as numpy array
+    Returns
+    -------
+    np.ndarray
+        Edge footpoint IDs as numpy array.
     """
     assert (
         grid.grid_type.value == "healpix"
@@ -151,18 +168,24 @@ def get_OFL_edges_precise(
 
     Note: P_ms and R_LC are automatically sorted in descending order.
 
-    Args:
-        grid: Grid object
-        lines: FieldLineSet with calculated field lines
-        P_ms: Pulsar periods in ms (alternative to R_LC)
-        R_LC: Light cylinder radii (alternative to P_ms)
-        h_LC_coeff: Height coefficient for OFL calculation
+    Parameters
+    ----------
+    grid : FootpointGrid
+        Grid object.
+    lines : FieldLineSet
+        FieldLineSet with calculated field lines.
+    P_ms : Optional[Union[float, np.ndarray]], optional
+        Pulsar periods in ms (alternative to R_LC). Default is None.
+    R_LC : Optional[Union[float, np.ndarray]], optional
+        Light cylinder radii (alternative to P_ms). Default is None.
+    h_LC_coeff : float, optional
+        Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
 
-
-    Returns:
-        OFLEdgeResult with R_LC values and edge footpoint arrays
+    Returns
+    -------
+    OFLEdgeResult
+        OFLEdgeResult with R_LC values and edge footpoint arrays.
     """
-
     # Validate input
     if P_ms is None and R_LC is None:
         raise ValueError("Either P_ms or R_LC must be provided")
@@ -213,20 +236,31 @@ def get_OFL_edges_approximate(
     h_LC_coeff=3**1.5 / 2.0,
     R_LC_edge_coefficient: Union[float, List[float]] = 1.02,
 ):
-    """Calculate OFL edges using approximate method. Edge field lines are defined
-    as open lines for given R_LC, but not for R_LC * R_LC_edge_coefficient.
+    """Calculate OFL edges using approximate method.
+    
+    Edge field lines are defined as open lines for given R_LC, but not for
+    R_LC * R_LC_edge_coefficient.
 
-    Args:
-        grid: Grid object
-        lines: FieldLineSet with calculated field lines
-        P_ms: Pulsar periods in ms (alternative to R_LC)
-        R_LC: Light cylinder radii (alternative to P_ms)
-        h_LC_coeff: Height coefficient for OFL calculation
+    Parameters
+    ----------
+    grid : FootpointGrid
+        Grid object.
+    lines : FieldLineSet
+        FieldLineSet with calculated field lines.
+    P_ms : optional
+        Pulsar periods in ms (alternative to R_LC). Default is None.
+    R_LC : optional
+        Light cylinder radii (alternative to P_ms). Default is None.
+    h_LC_coeff : float, optional
+        Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+    R_LC_edge_coefficient : Union[float, List[float]], optional
+        Edge coefficient. Default is 1.02.
 
-    Returns:
-        OFLEdgeResult with R_LC values and edge footpoint arrays
+    Returns
+    -------
+    OFLEdgeResult
+        OFLEdgeResult with R_LC values and edge footpoint arrays.
     """
-
     # Validate input
     if P_ms is None and R_LC is None:
         raise ValueError("Either P_ms or R_LC must be provided")
@@ -297,23 +331,47 @@ def calculate_and_save_OFL_edges(
     If R_LC_edge_coefficient is a list, it will be reordered to maintain
     correspondence with the sorted R_LC values.
 
-    Args:
-        experiment_config_path: Path to experiment configuration file
-        lines_dir: Directory containing field line batch files
-        template: FieldLine template specifying which properties to save
-        R_LC_values: Array of light cylinder radii for edge calculation
-        output_path: Path where to save the filtered edge lines FITS file
-        h_LC_coeff: Height coefficient for OFL calculation
-        trim_lines: Whether to trim field lines to light cylinder before saving
-        trim_type: Trimming method ("sphere" or "cylinder")
-        trim_radius: Radius for trimming (light cylinder radius)
+    Parameters
+    ----------
+    experiment_config_path : Union[str, Path]
+        Path to experiment configuration file.
+    lines_dir : Union[str, Path]
+        Directory containing field line batch files.
+    template : FieldLine
+        FieldLine template specifying which properties to save.
+    R_LC_values : np.ndarray
+        Array of light cylinder radii for edge calculation.
+    output_path : Union[str, Path]
+        Path where to save the filtered edge lines FITS file.
+    h_LC_coeff : float, optional
+        Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+    trim_lines : bool, optional
+        Whether to trim field lines to light cylinder before saving. Default is False.
+    trim_type : str, optional
+        Trimming method ("sphere" or "cylinder"). Default is "sphere".
+    trim_radius : float, optional
+        Radius for trimming (light cylinder radius). Default is 5.0.
+    precise_edges : bool, optional
+        If True, use precise edge calculation method. Default is False.
+    R_LC_edge_coefficient : float, optional
+        Edge coefficient. Default is 1.02.
 
-    Returns:
-        OFLEdgeResult: Result from edge calculation
+    Returns
+    -------
+    OFLEdgeResult
+        Result containing R_LC values and edge footpoint arrays.
 
-    Raises:
-        ValueError: If data loading fails or no edge footpoints found
-        FileNotFoundError: If experiment config or lines directory not found
+    Returns
+    -------
+    OFLEdgeResult
+        Result from edge calculation.
+
+    Raises
+    ------
+    ValueError
+        If data loading fails or no edge footpoints found.
+    FileNotFoundError
+        If experiment config or lines directory not found.
     """
     from psr_magpy.experiment.experiment_config import ExperimentConfig
     from psr_magpy.io import load_data
@@ -568,21 +626,34 @@ def calculate_and_save_OFL_regions(
 
     Note: R_LC_values are automatically sorted in descending order.
 
-    Args:
-        experiment_config_path: Path to experiment configuration file
-        lines_dir: Directory containing field line batch files
-        template: FieldLine template specifying which properties to save
-        R_LC_values: Array of light cylinder radii for region calculation
-        output_path: Path where to save the filtered region lines FITS file
-        h_LC_coeff: Height coefficient for OFL calculation
-        trim_lines: Whether to trim field lines to light cylinder before saving
-        trim_type: Trimming method ("sphere" or "cylinder")
-        trim_radius: Radius for trimming (light cylinder radius)
+    Parameters
+    ----------
+    experiment_config_path : Union[str, Path]
+        Path to experiment configuration file.
+    lines_dir : Union[str, Path]
+        Directory containing field line batch files.
+    template : FieldLine
+        FieldLine template specifying which properties to save.
+    R_LC_values : np.ndarray
+        Array of light cylinder radii for region calculation.
+    output_path : Union[str, Path]
+        Path where to save the filtered region lines FITS file.
+    h_LC_coeff : float, optional
+        Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+    trim_lines : bool, optional
+        Whether to trim field lines to light cylinder before saving. Default is False.
+    trim_type : str, optional
+        Trimming method ("sphere" or "cylinder"). Default is "sphere".
+    trim_radius : float, optional
+        Radius for trimming (light cylinder radius). Default is 5.0.
 
-    Returns:
-        OFLEdgeResult: Result from region calculation (edge_footpoints contains all OFL footpoints)
+    Returns
+    -------
+    OFLEdgeResult
+        Result from region calculation (edge_footpoints contains all OFL footpoints).
 
-    Raises:
+    Raises
+    ------
         ValueError: If data loading fails or no OFL footpoints found
         FileNotFoundError: If experiment config or lines directory not found
     """

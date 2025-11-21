@@ -368,18 +368,29 @@ def plot_field_lines_2d(
 ) -> Axes:
     """Plot field lines in 2D plane.
 
-    Args:
-        field: Field object
-        plane: Plane to plot in ("xy", "yz", or "xz")
-        fixed_coord: Value of fixed coordinate
-        x_range: Range for x-axis
-        y_range: Range for y-axis
-        n_points: Number of points per dimension
-        ax: Optional matplotlib axes
-        **kwargs: Additional plotting arguments
+    Parameters
+    ----------
+    field : MultipoleField
+        Field object.
+    plane : str
+        Plane to plot in ("xy", "yz", or "xz").
+    fixed_coord : float
+        Value of fixed coordinate.
+    x_range : Tuple[float, float]
+        Range for x-axis.
+    y_range : Tuple[float, float]
+        Range for y-axis.
+    n_points : int, optional
+        Number of points per dimension. Default is 100.
+    ax : Optional[Axes], optional
+        Optional matplotlib axes. Default is None.
+    **kwargs : Any
+        Additional plotting arguments.
 
-    Returns:
-        Matplotlib axes
+    Returns
+    -------
+    Axes
+        Matplotlib axes.
     """
     if ax is None:
         ax = plt.gca()

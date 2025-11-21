@@ -25,14 +25,22 @@ def analyze_ofl_from_series(
 
     Loads OFL data from each experiment and extracts footpoint statistics.
 
-    Args:
-        series_config: Experiment series config
-        R_LC: Light cylinder radius for OFL calculation
-        h_LC_coeff: Height coefficient for OFL calculation
-        experiment_numbers: Optional list of experiment numbers to analyze
-        template: Optional FieldLine template (defaults to template_OFL_subset)
+    Parameters
+    ----------
+    series_config : ExperimentSeriesConfig
+        Experiment series config.
+    R_LC : float
+        Light cylinder radius for OFL calculation.
+    h_LC_coeff : float, optional
+        Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+    experiment_numbers : Optional[List[int]], optional
+        Optional list of experiment numbers to analyze. Default is None.
+    template : Optional[FieldLine], optional
+        Optional FieldLine template. Defaults to template_OFL_subset.
 
-    Returns:
+    Returns
+    -------
+    Dict[int, Dict[str, Any]]
         Dictionary mapping experiment numbers to OFL statistics:
         {
             exp_num: {

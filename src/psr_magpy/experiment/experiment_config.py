@@ -48,10 +48,13 @@ class ExperimentConfig:
     def save(self, filepath: Union[str, Path], overwrite: bool = False) -> None:
         """Save configuration to YAML file.
 
-        Args:
-            filepath: Path where to save the configuration file
-            overwrite: If True, delete existing file before saving. If False and file exists,
-                      raises FileExistsError (handled by underlying I/O system).
+        Parameters
+        ----------
+        filepath : Union[str, Path]
+            Path where to save the configuration file.
+        overwrite : bool, optional
+            If True, delete existing file before saving. If False and file exists,
+            raises FileExistsError (handled by underlying I/O system). Default is False.
         """
         filepath = Path(filepath)
         
@@ -100,12 +103,17 @@ class ExperimentConfig:
         """
         Load and combine batch files for this experiment.
 
-        Args:
-            template: FieldLine template specifying which properties to load
-            lines_dir: Optional path to lines directory (defaults to experiment's output dir)
+        Parameters
+        ----------
+        template : FieldLine
+            FieldLine template specifying which properties to load.
+        lines_dir : Optional[str], optional
+            Optional path to lines directory. Defaults to experiment's output dir.
 
-        Returns:
-            FieldLineSet: Combined field line set with specified properties
+        Returns
+        -------
+        Optional[FieldLineSet]
+            Combined field line set with specified properties.
         """
         import glob
         from psr_magpy.line.field_line_set import FieldLineSet

@@ -35,7 +35,7 @@ from .tracing_parameters import (
     OutputParameters,
 )
 from .property_calculator import PropertyCalculator
-from .progress_tracker import ProgressTracker
+from .progress_tracker import ProgressTracker, ProgressReporter
 from .memory_manager import MemoryManager
 from .calculation_context import CalculationContext
 from .calculator import FieldLineCalculator
@@ -60,6 +60,7 @@ __all__ = [
     "SaveFlags",
     "MemoryManager",
     "ProgressTracker",
+    "ProgressReporter",
     "CalculationContext",
     "FieldLineCalculator",
     "OFLEdgeCalculator",

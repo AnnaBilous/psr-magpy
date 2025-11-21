@@ -253,11 +253,15 @@ class ExperimentSeriesConfigIO(YamlIO):
 def reconstruct_from_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
     """Reconstruct nested objects from YAML data.
 
-    Args:
-        data: Dictionary loaded from YAML
+    Parameters
+    ----------
+    data : Dict[str, Any]
+        Dictionary loaded from YAML.
 
-    Returns:
-        Dictionary with reconstructed objects
+    Returns
+    -------
+    Dict[str, Any]
+        Dictionary with reconstructed objects.
     """
     if "factories" in data:
         factories_data = data["factories"]
@@ -278,11 +282,15 @@ def reconstruct_from_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
 def reconstruct_factory_data(factory_data: Dict[str, Any]) -> Dict[str, Any]:
     """Reconstruct individual factory data.
 
-    Args:
-        factory_data: Factory data dictionary
+    Parameters
+    ----------
+    factory_data : Dict[str, Any]
+        Factory data dictionary.
 
-    Returns:
-        Reconstructed factory data
+    Returns
+    -------
+    Dict[str, Any]
+        Reconstructed factory data.
     """
     # Reconstruct template
     if "template" in factory_data and isinstance(factory_data["template"], dict):

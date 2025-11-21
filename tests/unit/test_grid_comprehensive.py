@@ -12,7 +12,7 @@ from astropy import units as u
 from astropy.coordinates import CartesianRepresentation, PhysicsSphericalRepresentation
 from astropy.io import fits as pf
 
-from utils import setup_test_logger, temp_dir, rng
+from tests.fixtures.conftest import setup_test_logger, temp_dir, rng
 from psr_magpy.grid.grid import (
     FootpointGrid, GridType, SphericalGrid, HealpixGrid, 
     RandomGrid, CustomGrid, SphericalGridParams, HealpixGridParams,

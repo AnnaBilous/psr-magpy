@@ -89,8 +89,10 @@ class FieldLineSet(FieldLine):
     def copy(self) -> "FieldLineSet":
         """Create a deep copy of the FieldLineSet.
 
-        Returns:
-            FieldLineSet: A new FieldLineSet with copied data
+        Returns
+        -------
+        FieldLineSet
+            A new FieldLineSet with copied data.
         """
         logger.debug(f"Creating copy of FieldLineSet with {self.n_field_lines} lines")
 
@@ -426,12 +428,17 @@ class FieldLineSet(FieldLine):
         """
         Get the footpoints of the Open Field Lines (OFL).
 
-        Args:
-            R_LC: Light cylinder radius
-            h_LC_coeff: Height coefficient for LC (default: 3^1.5 / 2.0)
+        Parameters
+        ----------
+        R_LC : float
+            Light cylinder radius.
+        h_LC_coeff : float, optional
+            Height coefficient for LC. Default is 3^1.5 / 2.0.
 
-        Returns:
-            np.ndarray: Array of OFL footpoint indices
+        Returns
+        -------
+        np.ndarray
+            Array of OFL footpoint indices.
         """
         R_cyl_max = self.r_cyl_max
         z_abs_max = self.z_abs_max
@@ -456,14 +463,20 @@ class FieldLineSet(FieldLine):
         """
         Create a subset of the FieldLineSet containing only field lines with the specified footpoint IDs.
 
-        Args:
-            footpoint_ids: List of footpoint IDs to include in the subset
+        Parameters
+        ----------
+        footpoint_ids : List[int]
+            List of footpoint IDs to include in the subset.
 
-        Returns:
-            FieldLineSet: New FieldLineSet containing only the specified field lines
+        Returns
+        -------
+        FieldLineSet
+            New FieldLineSet containing only the specified field lines.
 
-        Raises:
-            ValueError: If footpoint_id property is not enabled or footpoint_ids is empty
+        Raises
+        ------
+        ValueError
+            If footpoint_id property is not enabled or footpoint_ids is empty.
         """
         # Convert numpy array to list if needed
         if isinstance(footpoint_ids, np.ndarray):
@@ -547,15 +560,19 @@ class FieldLineSet(FieldLine):
         """
         Trim field lines to points before light cylinder penetration.
 
-        Args:
-            R_LC: Light cylinder radius
-            h_LC_coeff: Height coefficient for cylinder trimming
-            trim_type: "cylinder" or "sphere" trimming method
+        Parameters
+        ----------
+        R_LC : float
+            Light cylinder radius.
+        h_LC_coeff : float, optional
+            Height coefficient for cylinder trimming. Default is 3^1.5 / 2.0.
+        trim_type : str, optional
+            Trimming method: "cylinder" or "sphere". Default is "cylinder".
 
-        Returns:
-            None (modifies self in-place)
+        Notes
+        -----
+        Modifies self in-place.
         """
-
         assert trim_type in [
             "cylinder",
             "sphere",

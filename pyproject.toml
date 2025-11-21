@@ -40,6 +40,14 @@ dev = [
     "black>=22.0.0",
     "flake8>=4.0.0",
     "mypy>=1.0.0",
+    "pydocstyle>=6.0.0",
+]
+docs = [
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "sphinx-autodoc-typehints>=1.19.0",
+    "myst-parser>=0.18.0",
+    "nbsphinx>=0.9.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -86,4 +94,9 @@ module = [
     "scipy.*",
     "astropy.*",
 ]
-ignore_missing_imports = true 
+ignore_missing_imports = true
+
+[tool.pydocstyle]
+convention = "numpy"
+add-ignore = ["D100", "D104"]
+match = "(?!test_).*\\.py"

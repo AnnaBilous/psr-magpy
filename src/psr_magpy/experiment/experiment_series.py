@@ -54,7 +54,18 @@ class ExperimentSeriesConfig(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     def model_dump(self, **kwargs):
-        """Custom model_dump to ensure grid type information is preserved."""
+        """Dump model to dictionary, preserving grid type information.
+        
+        Parameters
+        ----------
+        **kwargs
+            Additional arguments passed to parent model_dump.
+        
+        Returns
+        -------
+        dict
+            Model data as dictionary.
+        """
         data = super().model_dump(**kwargs)
 
         # Ensure grid type information is preserved
@@ -71,12 +82,19 @@ class ExperimentSeriesConfig(BaseModel):
     ) -> List[ExperimentConfig]:
         """Create experiment series from configuration.
 
-        Args:
-            save_configs: Whether to save individual experiment configs
-            delete_existing_configs: Whether to delete existing configs
+        Parameters
+        ----------
+        save_configs : bool, optional
+            Whether to save individual experiment configs. Default is True.
+        delete_existing_configs : bool, optional
+            Whether to delete existing configs. Default is False.
+        create_directories : bool, optional
+            Whether to create directory structure. Default is True.
 
-        Returns:
-            List of experiment configurations
+        Returns
+        -------
+        List[ExperimentConfig]
+            List of experiment configurations.
         """
         logger.info("Creating experiment series: %s", self.name)
 
@@ -163,8 +181,10 @@ class ExperimentSeriesConfig(BaseModel):
     def get_configs_dir(self) -> Path:
         """Get path to configs directory.
 
-        Returns:
-            Path to configs directory
+        Returns
+        -------
+        Path
+            Path to configs directory.
         """
         output_dir = self.output_dir or "."
         return Path(output_dir) / self.name / self.CONFIGS_DIR
@@ -195,17 +215,17 @@ class ExperimentSeriesConfig(BaseModel):
     ) -> Dict[str, Dict[str, Any]]:
         """Verify existence of standard directories and optionally create them.
 
-        Args:
-            create_if_missing: If True, create directories that don't exist
+        Parameters
+        ----------
+        create_if_missing : bool, optional
+            If True, create directories that don't exist. Default is False.
 
-        Returns:
-            Dictionary with status for each directory type:
-            {
-                'configs': {'exists': bool, 'path': Path, 'created': bool},
-                'grids': {'exists': bool, 'path': Path, 'created': bool},
-                'lines': {'exists': bool, 'path': Path, 'created': bool},
-                'logs': {'exists': bool, 'path': Path, 'created': bool}
-            }
+        Returns
+        -------
+        Dict[str, Dict[str, Any]]
+            Dictionary with status for each directory type. Keys are 'configs',
+            'grids', 'lines', 'logs'. Each value is a dict with 'exists' (bool),
+            'path' (Path), and 'created' (bool) keys.
         """
         status = {}
         directories = {
@@ -243,11 +263,15 @@ class ExperimentSeriesConfig(BaseModel):
     def get_experiment_config_path(self, experiment_number: int) -> Path:
         """Get the full path to a specific experiment config file.
 
-        Args:
-            experiment_number: The experiment number (0-based)
+        Parameters
+        ----------
+        experiment_number : int
+            The experiment number (0-based).
 
-        Returns:
-            Path to the experiment config file
+        Returns
+        -------
+        Path
+            Path to the experiment config file.
         """
         # Try regular config first, then subset config
         regular_path = self.get_configs_dir() / f"{self.name}_{experiment_number:03d}.yaml"
@@ -266,12 +290,17 @@ class ExperimentSeriesConfig(BaseModel):
     ) -> Optional["ExperimentConfig"]:
         """Safely get experiment by index with validation.
 
-        Args:
-            index: Experiment index (0-based)
-            experiments: Optional list of experiments. If None, creates series.
+        Parameters
+        ----------
+        index : int
+            Experiment index (0-based).
+        experiments : Optional[List[ExperimentConfig]], optional
+            Optional list of experiments. If None, creates series. Default is None.
 
-        Returns:
-            ExperimentConfig if index is valid, None otherwise
+        Returns
+        -------
+        Optional[ExperimentConfig]
+            ExperimentConfig if index is valid, None otherwise.
         """
         if experiments is None:
             experiments = self.create_experiment_series(save_configs=False)
@@ -287,11 +316,15 @@ class ExperimentSeriesConfig(BaseModel):
     def load_experiment_config(self, experiment_number: int) -> "ExperimentConfig":
         """Load a specific experiment config by number.
 
-        Args:
-            experiment_number: The experiment number (0-based)
+        Parameters
+        ----------
+        experiment_number : int
+            The experiment number (0-based).
 
-        Returns:
-            Loaded experiment configuration
+        Returns
+        -------
+        ExperimentConfig
+            Loaded experiment configuration.
         """
         from psr_magpy.experiment.experiment_config import ExperimentConfig
 
@@ -301,11 +334,15 @@ class ExperimentSeriesConfig(BaseModel):
     def get_total_experiments_from_summary(self) -> int:
         """Get the total number of experiments from the summary YAML file.
 
-        Returns:
-            Total number of experiments from summary
+        Returns
+        -------
+        int
+            Total number of experiments from summary.
 
-        Raises:
-            FileNotFoundError: If summary.yaml does not exist
+        Raises
+        ------
+        FileNotFoundError
+            If summary.yaml does not exist.
             KeyError: If 'total_experiments' key is missing from summary
         """
         output_dir = self.output_dir or "."
@@ -325,8 +362,10 @@ class ExperimentSeriesConfig(BaseModel):
     def save(self, filename: Optional[str] = None) -> None:
         """Save configuration to YAML file in the configs directory.
 
-        Args:
-            filename: Optional filename. If not provided, uses "{series_name}_config.yaml"
+        Parameters
+        ----------
+        filename : Optional[str], optional
+            Optional filename. If not provided, uses "{series_name}_config.yaml". Default is None.
         """
         from psr_magpy.io import save_config
 
@@ -340,11 +379,15 @@ class ExperimentSeriesConfig(BaseModel):
     def load(cls, config_file: Union[str, Path]) -> "ExperimentSeriesConfig":
         """Load configuration from YAML file.
 
-        Args:
-            config_file: Path to configuration file
+        Parameters
+        ----------
+        config_file : Union[str, Path]
+            Path to configuration file.
 
-        Returns:
-            Loaded configuration
+        Returns
+        -------
+        ExperimentSeriesConfig
+            Loaded configuration.
         """
         from psr_magpy.io import load_config
 
@@ -378,9 +421,12 @@ class ExperimentSeriesConfig(BaseModel):
     ):
         """Print a summary of experiments with changing parameters highlighted.
 
-        Args:
-            show_changing_only: If True, only show parameters that vary between experiments
-            max_experiments: Maximum number of experiments to display (to avoid overwhelming output)
+        Parameters
+        ----------
+        show_changing_only : bool, optional
+            If True, only show parameters that vary between experiments. Default is True.
+        max_experiments : int, optional
+            Maximum number of experiments to display (to avoid overwhelming output). Default is 20.
         """
         experiments = self.create_experiment_series()
 
@@ -511,11 +557,15 @@ class ExperimentSeriesConfig(BaseModel):
     def load_experiments(self) -> List[ExperimentConfig]:
         """Load experiment configurations from saved config files.
 
-        Returns:
-            List of experiment configurations
+        Returns
+        -------
+        List[ExperimentConfig]
+            List of experiment configurations.
 
-        Raises:
-            ValueError: If configs directory doesn't exist or no configs found
+        Raises
+        ------
+        ValueError
+            If configs directory doesn't exist or no configs found.
         """
         configs_dir = self.get_configs_dir()
         if not configs_dir.exists():
@@ -544,8 +594,10 @@ class ExperimentSeriesConfig(BaseModel):
     def create_directory_structure(self, delete_existing_configs: bool = False) -> None:
         """Create output directory structure.
 
-        Args:
-            delete_existing_configs: Whether to delete existing configs directory
+        Parameters
+        ----------
+        delete_existing_configs : bool, optional
+            Whether to delete existing configs directory. Default is False.
         """
         if self.output_dir is None:
             # Create series directory
@@ -609,8 +661,10 @@ class ExperimentSeriesConfig(BaseModel):
     def _create_experiments(self) -> List[ExperimentConfig]:
         """Create all experiment configurations from factory configs.
 
-        Returns:
-            List of experiment configurations
+        Returns
+        -------
+        List[ExperimentConfig]
+            List of experiment configurations.
         """
         # Expand all factory configs
         field_configs = expand_field_configs(self.field)
@@ -669,19 +723,28 @@ class ExperimentSeriesConfig(BaseModel):
         Processes all experiments in the coarse series, extracts OFL footpoints,
         creates fine resolution subset grids, and updates fine experiment configs.
 
-        Args:
-            coarse_series_config: Coarse resolution series config
-            R_LC: Light cylinder radius for OFL calculation
-            h_LC_coeff: Height coefficient for OFL calculation
-            experiment_numbers: Optional list of experiment numbers to process.
-                               If None, processes all experiments.
-            save_configs: If True, save updated experiment configs
+        Parameters
+        ----------
+        coarse_series_config : ExperimentSeriesConfig
+            Coarse resolution series config.
+        R_LC : float
+            Light cylinder radius for OFL calculation.
+        h_LC_coeff : float, optional
+            Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+        experiment_numbers : Optional[List[int]], optional
+            Optional list of experiment numbers to process. If None, processes all experiments. Default is None.
+        save_configs : bool, optional
+            If True, save updated experiment configs. Default is True.
 
-        Returns:
-            Updated fine series config with subset grids
+        Returns
+        -------
+        ExperimentSeriesConfig
+            Updated fine series config with subset grids.
 
-        Raises:
-            ValueError: If directories don't exist or experiments can't be processed
+        Raises
+        ------
+        ValueError
+            If directories don't exist or experiments can't be processed.
         """
         from psr_magpy.grid.grid import create_fine_resolution_subset_from_coarse_OFL
         from psr_magpy.experiment.grid_config import GridConfig, HealpixGridConfig
@@ -817,20 +880,32 @@ def create_simple_series(
     This function simplifies the creation of ExperimentSeriesConfig when you
     don't need complex parameter variations.
 
-    Args:
-        name: Series name
-        field: Field configuration (single or factory)
-        grid: Grid configuration (single or factory)
-        tracing: Tracing configuration (single or factory)
-        template: Field line template (single or factory)
-        output_dir: Optional output directory (defaults to current directory)
-        description: Optional series description
-        metadata: Optional metadata dictionary
+    Parameters
+    ----------
+    name : str
+        Series name.
+    field : Union[FieldConfig, FieldFactoryConfig]
+        Field configuration (single or factory).
+    grid : Union[GridConfig, GridFactoryConfig]
+        Grid configuration (single or factory).
+    tracing : Union[TracingConfig, TracingFactoryConfig]
+        Tracing configuration (single or factory).
+    template : Union[FieldLine, TemplateFactoryConfig]
+        Field line template (single or factory).
+    output_dir : Optional[str], optional
+        Optional output directory. Defaults to current directory.
+    description : Optional[str], optional
+        Optional series description. Default is None.
+    metadata : Optional[Dict[str, Any]], optional
+        Optional metadata dictionary. Default is None.
 
-    Returns:
-        ExperimentSeriesConfig instance
+    Returns
+    -------
+    ExperimentSeriesConfig
+        ExperimentSeriesConfig instance.
 
-    Example:
+    Examples
+    --------
         >>> field = FieldConfig(components=[...])
         >>> grid = GridConfig(healpix=HealpixGridConfig(nside=128))
         >>> tracing = TracingConfig()

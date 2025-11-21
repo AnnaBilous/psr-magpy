@@ -9,7 +9,7 @@ from astropy.io import fits
 import pytest
 
 from psr_magpy.io.batch_file_manager import BatchFileManager, BatchFileInfo
-from psr_magpy.line.progress_tracker import ProgressTracker
+from psr_magpy.line.progress_tracker import ProgressReporter
 
 
 class TestBatchFileManager:
@@ -169,16 +169,16 @@ class TestBatchFileManager:
         assert len(remaining_files) == 3
     
     def test_with_progress_tracker(self):
-        """Test BatchFileManager with progress tracker."""
+        """Test BatchFileManager with progress reporter."""
         self.create_sample_batch_files(2)
         
-        progress_tracker = ProgressTracker(verbose=True, show_progress=True)
+        progress_reporter = ProgressReporter(verbose=True, show_progress=True)
         
         batch_manager = BatchFileManager(
             str(self.base_filename),
             organize_files=True,
             cleanup_batch_files=False,
-            progress_tracker=progress_tracker
+            progress_reporter=progress_reporter
         )
         
         # This should work without errors

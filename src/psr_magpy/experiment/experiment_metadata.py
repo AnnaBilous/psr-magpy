@@ -37,11 +37,16 @@ def create_experiment_metadata(
 def generate_experiment_name(series_name: str, experiment_count: int) -> str:
     """Generate a unique name for an experiment.
 
-    Args:
-        series_name: Name of the experiment series
-        experiment_count: Sequential number of this experiment
+    Parameters
+    ----------
+    series_name : str
+        Name of the experiment series.
+    experiment_count : int
+        Sequential number of this experiment.
 
-    Returns:
-        Unique experiment name in format: {series_name}_{experiment_count:03d}
+    Returns
+    -------
+    str
+        Unique experiment name in format: {series_name}_{experiment_count:03d}.
     """
     return f"{series_name}_{experiment_count:03d}"

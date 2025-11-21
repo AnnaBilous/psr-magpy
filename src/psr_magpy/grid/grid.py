@@ -205,7 +205,7 @@ class FootpointGrid(ABC):
             raise PSRMagPyGridError(f"Failed to set up grid: {str(e)}") from e
     
     def _set_up_grid(self) -> None:
-        """Internal method for backward compatibility. Use setup() instead."""
+        """Set up grid (internal method for backward compatibility). Use setup() instead."""
         self.setup()
 
     def subset_grid(self, grid_indices: np.ndarray) -> "FootpointGrid":
@@ -324,11 +324,16 @@ class SphericalGrid(FootpointGrid):
     def __init__(self, nlon: int, nlat: int, pole_lat: float = 0, auto_setup: bool = True):
         """Initialize spherical grid.
 
-        Args:
-            nlon: Number of longitude divisions
-            nlat: Number of latitude divisions
-            pole_lat: Latitude of grid pole in degrees (default: 0)
-            auto_setup: If True, automatically call setup() (default: True for backward compatibility)
+        Parameters
+        ----------
+        nlon : int
+            Number of longitude divisions.
+        nlat : int
+            Number of latitude divisions.
+        pole_lat : float, optional
+            Latitude of grid pole in degrees. Default is 0.
+        auto_setup : bool, optional
+            If True, automatically call setup(). Default is True for backward compatibility.
         """
         super().__init__()
         self.grid_type = GridType.SPHERICAL
@@ -345,6 +350,7 @@ class SphericalGrid(FootpointGrid):
             self.setup()
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return (
             f"SphericalGrid(nlon={self.nlon}, nlat={self.nlat}, "
             f"pole_lat={self.pole_lat.deg:.1f} deg)"
@@ -410,6 +416,13 @@ class HealpixGridParams(BaseModel):
 
     @model_validator(mode="after")
     def validate_power_of_two(self):
+        """Validate that nside is a power of 2.
+        
+        Raises
+        ------
+        ValueError
+            If nside is not a power of 2.
+        """
         if not (self.nside & (self.nside - 1) == 0):
             raise ValueError(f"nside must be a power of 2, got {self.nside}")
         return self
@@ -421,9 +434,12 @@ class HealpixGrid(FootpointGrid):
     def __init__(self, nside: int, auto_setup: bool = True):
         """Initialize HEALPix grid.
 
-        Args:
-            nside: HEALPix resolution parameter (must be power of 2)
-            auto_setup: If True, automatically call setup() (default: True for backward compatibility)
+        Parameters
+        ----------
+        nside : int
+            HEALPix resolution parameter (must be power of 2).
+        auto_setup : bool, optional
+            If True, automatically call setup(). Default is True for backward compatibility.
         """
         super().__init__()
         self.grid_type = GridType.HEALPIX
@@ -435,6 +451,7 @@ class HealpixGrid(FootpointGrid):
             self.setup()
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return f"HealpixGrid(nside={self.nside})"
 
     def _get_header_params(self) -> Dict[str, Any]:
@@ -487,9 +504,12 @@ class RandomGrid(FootpointGrid):
     def __init__(self, nline_ori: int, auto_setup: bool = True):
         """Initialize random grid.
 
-        Args:
-            nline_ori: Number of random points to generate
-            auto_setup: If True, automatically call setup() (default: True for backward compatibility)
+        Parameters
+        ----------
+        nline_ori : int
+            Number of random points to generate.
+        auto_setup : bool, optional
+            If True, automatically call setup(). Default is True for backward compatibility.
         """
         super().__init__()
         self.grid_type = GridType.RANDOM
@@ -507,6 +527,7 @@ class RandomGrid(FootpointGrid):
             self.setup()
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return f"RandomGrid(nline_ori={self.nline_ori})"
 
     def _add_params_to_header(self, header: pf.Header) -> None:
@@ -554,6 +575,13 @@ class CustomGridParams(BaseModel):
 
     @model_validator(mode="after")
     def validate_coordinates_length(self):
+        """Validate that coordinates length matches nline_ori.
+        
+        Raises
+        ------
+        ValueError
+            If coordinates length doesn't match nline_ori.
+        """
         if self.coordinates is not None:
             if len(self.coordinates.x) != self.nline_ori:
                 raise ValueError(
@@ -570,10 +598,14 @@ class CustomGrid(FootpointGrid):
     ):
         """Initialize custom grid.
 
-        Args:
-            nline_ori: Number of points in the grid
-            coordinates: Initial coordinates (optional, defaults to NaN)
-            auto_setup: If True, automatically set up indices (default: True for backward compatibility)
+        Parameters
+        ----------
+        nline_ori : int
+            Number of points in the grid.
+        coordinates : Optional[CartesianRepresentation], optional
+            Initial coordinates. Defaults to NaN if not provided.
+        auto_setup : bool, optional
+            If True, automatically set up indices. Default is True for backward compatibility.
         """
         super().__init__()
         self.grid_type = GridType.CUSTOM
@@ -592,6 +624,7 @@ class CustomGrid(FootpointGrid):
             )
 
     def __repr__(self) -> str:
+        """Return string representation."""
         return f"CustomGrid(nline_ori={self.nline_ori})"
 
     def _add_params_to_header(self, header: pf.Header) -> None:
@@ -604,11 +637,15 @@ class CustomGrid(FootpointGrid):
     def set_coordinates(self, coordinates: Optional[CartesianRepresentation]) -> None:
         """Set new coordinates for grid points.
 
-        Args:
-            coordinates: New coordinates for grid points (can be None)
+        Parameters
+        ----------
+        coordinates : Optional[CartesianRepresentation]
+            New coordinates for grid points. Can be None.
 
-        Raises:
-            ValueError: If coordinates length doesn't match nline_ori
+        Raises
+        ------
+        ValueError
+            If coordinates length doesn't match nline_ori.
         """
         if coordinates is None:
             # Create NaN coordinates
@@ -665,18 +702,25 @@ def upgrade_healpix_footpoints(
     upgrades it to fine resolution using healpix ud_grade, and returns the
     fine resolution indices.
 
-    Args:
-        coarse_nside: Healpix nside parameter for coarse resolution
-        fine_nside: Healpix nside parameter for fine resolution
-        footpoint_indices: Array of pixel indices at coarse resolution
+    Parameters
+    ----------
+    coarse_nside : int
+        Healpix nside parameter for coarse resolution.
+    fine_nside : int
+        Healpix nside parameter for fine resolution.
+    footpoint_indices : np.ndarray
+        Array of pixel indices at coarse resolution.
 
-    Returns:
-        Array of pixel indices at fine resolution corresponding to upgraded footpoints
+    Returns
+    -------
+    np.ndarray
+        Array of pixel indices at fine resolution corresponding to upgraded footpoints.
 
-    Example:
-        >>> coarse_indices = np.array([100, 200, 300])
-        >>> fine_indices = upgrade_healpix_footpoints(128, 256, coarse_indices)
-        >>> len(fine_indices)  # Typically 4x more pixels at higher resolution
+    Examples
+    --------
+    >>> coarse_indices = np.array([100, 200, 300])
+    >>> fine_indices = upgrade_healpix_footpoints(128, 256, coarse_indices)
+    >>> len(fine_indices)  # Typically 4x more pixels at higher resolution
     """
     # Create boolean map: True where OFL footpoints are located
     coarse_map = np.zeros(hp.nside2npix(coarse_nside), dtype=bool)
@@ -715,20 +759,32 @@ def create_fine_resolution_subset_from_coarse_OFL(
     5. Creates and saves subset grid
     6. Returns grid filepath and updated grid config
 
-    Args:
-        coarse_experiment: Coarse resolution experiment config
-        fine_experiment: Fine resolution experiment config
-        R_LC: Light cylinder radius for OFL calculation
-        coarse_lines_dir: Directory containing coarse experiment batch files
-        fine_grids_dir: Directory where fine subset grid will be saved
-        h_LC_coeff: Height coefficient for OFL calculation (default: 3^1.5 / 2.0)
-        template: Optional FieldLine template (defaults to template_OFL_subset)
+    Parameters
+    ----------
+    coarse_experiment : ExperimentConfig
+        Coarse resolution experiment config.
+    fine_experiment : ExperimentConfig
+        Fine resolution experiment config.
+    R_LC : float
+        Light cylinder radius for OFL calculation.
+    coarse_lines_dir : Union[str, Path]
+        Directory containing coarse experiment batch files.
+    fine_grids_dir : Union[str, Path]
+        Directory where fine subset grid will be saved.
+    h_LC_coeff : float, optional
+        Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+    template : Optional[FieldLine], optional
+        Optional FieldLine template. Defaults to template_OFL_subset.
 
-    Returns:
-        Tuple of (grid_filepath, updated_grid_config)
+    Returns
+    -------
+    Tuple[Path, GridConfig]
+        Tuple of (grid_filepath, updated_grid_config).
 
-    Raises:
-        ValueError: If OFL data cannot be loaded or grids cannot be created
+    Raises
+    ------
+    ValueError
+        If OFL data cannot be loaded or grids cannot be created.
     """
     from psr_magpy.line.field_line import FieldLine
     from psr_magpy.experiment.grid_config import GridConfig, HealpixGridConfig
@@ -814,16 +870,24 @@ def save_subset_grid(
 ) -> Path:
     """Save subset grid to file with standardized naming.
 
-    Args:
-        grid: The subset grid to save
-        experiment_name: Name of the experiment (used for filename)
-        grids_dir: Directory where grid will be saved
-        overwrite: If True, delete existing file before saving
+    Parameters
+    ----------
+    grid : FootpointGrid
+        The subset grid to save.
+    experiment_name : str
+        Name of the experiment (used for filename).
+    grids_dir : Union[str, Path]
+        Directory where grid will be saved.
+    overwrite : bool, optional
+        If True, delete existing file before saving. Default is True.
 
-    Returns:
-        Path to saved grid file
+    Returns
+    -------
+    Path
+        Path to saved grid file.
 
-    Example:
+    Examples
+    --------
         >>> grid = coarse_grid.subset_grid(indices)
         >>> grid_path = save_subset_grid(grid, "experiment_001", "/path/to/grids")
     """
@@ -850,24 +914,23 @@ def create_subset_grid_config(
     experiment_name: str,
     grid_type: str,
 ) -> "GridConfig":
-    """
-    Create a grid config for a subset grid that will be automatically saved.
+    """Create a grid config for a subset grid that will be automatically saved.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     original_grid : FootpointGrid
-        The original grid to create a subset from
+        The original grid to create a subset from.
     subset_indices : np.ndarray
-        Indices to include in the subset
+        Indices to include in the subset.
     experiment_name : str
-        Name of the experiment (used for filename)
+        Name of the experiment (used for filename).
     grid_type : str
-        Type of grid ('spherical' or 'healpix' only)
+        Type of grid ('spherical' or 'healpix' only).
 
-    Returns:
-    --------
+    Returns
+    -------
     GridConfig
-        Configuration for the subset grid
+        Configuration for the subset grid.
     """
     from psr_magpy.experiment.grid_config import (
         GridConfig,

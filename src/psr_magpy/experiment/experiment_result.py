@@ -33,11 +33,15 @@ class SeriesResult:
     def _format_duration(seconds: float) -> str:
         """Format duration in appropriate units.
 
-        Args:
-            seconds: Duration in seconds
+        Parameters
+        ----------
+        seconds : float
+            Duration in seconds.
 
-        Returns:
-            Formatted string like "10.5s", "2.5min", "1.2h", or "3.5d"
+        Returns
+        -------
+        str
+            Formatted string like "10.5s", "2.5min", "1.2h", or "3.5d".
         """
         if seconds < 60:
             return f"{seconds:.1f}s"
@@ -58,10 +62,14 @@ class SeriesResult:
     ) -> None:
         """Print formatted series result summary.
 
-        Args:
-            include_details: If True, include individual experiment results
-            max_experiments: Maximum number of experiments to show in details
-            format_duration: If True, format duration in human-readable units
+        Parameters
+        ----------
+        include_details : bool, optional
+            If True, include individual experiment results. Default is False.
+        max_experiments : int, optional
+            Maximum number of experiments to show in details. Default is 5.
+        format_duration : bool, optional
+            If True, format duration in human-readable units. Default is True.
         """
         print("✓ Experiment series completed!")
         print(f"\nSeries Results Summary:")

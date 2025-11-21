@@ -13,7 +13,7 @@ from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.tracing_parameters import PerformanceParameters
-from psr_magpy.line.progress_tracker import ProgressTracker
+from psr_magpy.line.progress_tracker import ProgressReporter
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyGridError
 from psr_magpy.io import save_data
@@ -54,7 +54,7 @@ class MemoryManager:
             )
 
     def __repr__(self) -> str:
-        """String representation of MemoryManager."""
+        """Return string representation of MemoryManager."""
         memory_mb = self._results_in_memory_size / (1024 * 1024)
         result_count = (
             self._results_in_memory.n_field_lines if self._results_in_memory else 0
@@ -244,7 +244,7 @@ class MemoryManager:
         self._results_in_memory = None
         self._results_in_memory_size = 0.0
 
-    def rename_batch_files(self, filename: str, progress_tracker: Optional[ProgressTracker] = None) -> None:
+    def rename_batch_files(self, filename: str, progress_reporter: Optional[ProgressReporter] = None) -> None:
         """Organize batch files using BatchFileManager."""
         from psr_magpy.io.batch_file_manager import BatchFileManager
 
@@ -252,7 +252,7 @@ class MemoryManager:
             base_filename=filename,
             organize_files=True,
             cleanup_batch_files=False,  # Keep batch files during organization
-            progress_tracker=progress_tracker,
+            progress_reporter=progress_reporter,
         )
 
         # Organize batch files into subdirectory
@@ -298,7 +298,7 @@ class MemoryManager:
         return self._results_in_memory_size / (1024 * 1024)
 
     def finalize_batches(
-        self, filename: str, final_batch_idx: int, progress_tracker: Optional[ProgressTracker] = None
+        self, filename: str, final_batch_idx: int, progress_reporter: Optional[ProgressReporter] = None
     ) -> None:
         """Finalize batch processing by writing final batch and renaming files.
         
@@ -308,8 +308,8 @@ class MemoryManager:
             Base filename for batch files
         final_batch_idx : int
             Index of the final batch (for naming)
-        progress_tracker : Optional[ProgressTracker]
-            Progress tracker for logging
+        progress_reporter : Optional[ProgressReporter]
+            Progress reporter for logging
         """
         if not filename:
             return
@@ -341,7 +341,7 @@ class MemoryManager:
 
         # Rename all batch files (after all batches are written)
         if self._batch_files_created:
-            self.rename_batch_files(filename, progress_tracker)
+            self.rename_batch_files(filename, progress_reporter)
 
     @property
     def batch_files_created(self) -> bool:

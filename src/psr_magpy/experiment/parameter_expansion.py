@@ -13,15 +13,20 @@ logger = get_logger(__name__, console_format_brief=True)
 def get_parameter_combinations(params: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Generate all combinations of parameters that contain lists.
 
-    Args:
-        params: Dictionary of parameters, some of which may be lists
+    Parameters
+    ----------
+    params : Dict[str, Any]
+        Dictionary of parameters, some of which may be lists.
 
-    Returns:
-        List of parameter dictionaries, one for each combination
+    Returns
+    -------
+    List[Dict[str, Any]]
+        List of parameter dictionaries, one for each combination.
 
-    Example:
-        >>> params = {"a": 1, "b": [2, 3], "c": [4, 5]}
-        >>> get_parameter_combinations(params)
+    Examples
+    --------
+    >>> params = {"a": 1, "b": [2, 3], "c": [4, 5]}
+    >>> get_parameter_combinations(params)
         [
             {"a": 1, "b": 2, "c": 4},
             {"a": 1, "b": 2, "c": 5},

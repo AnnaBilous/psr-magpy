@@ -44,7 +44,7 @@ class FitsIO:
 
     @staticmethod
     def get_fits_format(value: Any) -> str:
-        """Helper function to determine FITS format for a value.
+        """Determine FITS format for a value.
 
         Parameters
         ----------

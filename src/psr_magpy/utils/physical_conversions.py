@@ -3,8 +3,18 @@ from typing import Union
 
 
 def get_R_LC(P_ms: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-    """Calculate the light cylinder radius (in R_NS)
-    for a given pulsar period in milliseconds."""
+    """Calculate the light cylinder radius (in R_NS) for a given pulsar period.
+    
+    Parameters
+    ----------
+    P_ms : Union[float, np.ndarray]
+        Pulsar period in milliseconds.
+    
+    Returns
+    -------
+    Union[float, np.ndarray]
+        Light cylinder radius in R_NS.
+    """
     return 4.77 * P_ms
 
 

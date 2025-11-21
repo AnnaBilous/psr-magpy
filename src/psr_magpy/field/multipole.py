@@ -153,8 +153,8 @@ class MultipoleField:
     def get_total_field(
         self, r: NDArray[np.float32], K: int = 1, normalize: bool = True
     ) -> NDArray[np.float32]:
-        """
-        Fast calculation of total magnetic field at position r.
+        """Fast calculation of total magnetic field at position r.
+        
         Assumes r is a valid 3-element float32 array. No validation or error handling.
 
         Parameters

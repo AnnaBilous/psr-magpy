@@ -21,9 +21,12 @@ class PropertyCalculator:
     def __init__(self, threshold_line_distance: float, field=None):
         """Initialize property calculator.
 
-        Args:
-            threshold_line_distance: Distance threshold for line tracing
-            field: Magnetic field object for calculating B_line and curvature_line
+        Parameters
+        ----------
+        threshold_line_distance : float
+            Distance threshold for line tracing.
+        field : optional
+            Magnetic field object for calculating B_line and curvature_line. Default is None.
         """
         self.threshold_line_distance = threshold_line_distance
         self.field = field
@@ -157,10 +160,17 @@ class PropertyCalculator:
     def prep_curvature_line(
         self, r: np.ndarray, dt: float, line_R_max: float, template: FieldLine
     ) -> Optional[np.ndarray]:
-        """
-        Curvature for a 3D parametric curve r[k] = (x,y,z) sampled at uniform steps dt.
-        Returns:
-            curvature: radius of curvature
+        """Calculate curvature for a 3D parametric curve.
+        
+        Parameters
+        ----------
+        r : np.ndarray
+            3D parametric curve r[k] = (x,y,z) sampled at uniform steps dt.
+        
+        Returns
+        -------
+        Optional[np.ndarray]
+            Radius of curvature.
         """
         if getattr(template.save_flags, PropertyName.CURVATURE_LINE.flag_name):
             if line_R_max >= self.threshold_line_distance:

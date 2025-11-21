@@ -38,6 +38,7 @@ class PSRMagPyValidationError(PSRMagPyError, ValueError):
     Raised when input validation fails (e.g., invalid parameters,
     missing required fields, type mismatches).
     """
+    
     pass
 
 
@@ -47,6 +48,7 @@ class PSRMagPyIOError(PSRMagPyError, OSError):
     Raised when file operations fail (e.g., file not found,
     permission denied, read/write errors).
     """
+    
     pass
 
 
@@ -56,6 +58,7 @@ class PSRMagPyGridError(PSRMagPyError, ValueError):
     Raised when grid operations fail (e.g., invalid grid parameters,
     coordinate errors, subset creation failures).
     """
+    
     pass
 
 
@@ -65,6 +68,7 @@ class PSRMagPyFieldError(PSRMagPyError, ValueError):
     Raised when field computation fails (e.g., invalid field components,
     calculation errors, initialization failures).
     """
+    
     pass
 
 
@@ -74,6 +78,7 @@ class PSRMagPyTracingError(PSRMagPyError, RuntimeError):
     Raised when field line integration fails (e.g., solver errors,
     integration failures, convergence issues).
     """
+    
     pass
 
 
@@ -83,6 +88,7 @@ class PSRMagPyPropertyError(PSRMagPyError, ValueError):
     Raised when property operations fail (e.g., invalid property names,
     property calculation errors, validation failures).
     """
+    
     pass
 
 
@@ -92,5 +98,6 @@ class PSRMagPyExperimentError(PSRMagPyError, RuntimeError):
     Raised when experiment operations fail (e.g., config errors,
     series creation failures, runner errors).
     """
+    
     pass
 

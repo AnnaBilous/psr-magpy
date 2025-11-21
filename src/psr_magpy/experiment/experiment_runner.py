@@ -208,7 +208,7 @@ class ExperimentRunner:
 def run_experiment(
     config: ExperimentConfig, save_grids: bool = True
 ) -> Optional[object]:
-    """Convenience function to run an experiment."""
+    """Run an experiment from configuration."""
     runner = ExperimentRunner(config, save_grids=save_grids)
     return runner.run()
 

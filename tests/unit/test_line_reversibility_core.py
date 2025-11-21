@@ -16,7 +16,7 @@ from pathlib import Path
 from astropy.coordinates import CartesianRepresentation
 
 # Add project root to path
-project_root = Path(__file__).parent.parent
+project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
@@ -27,7 +27,8 @@ from psr_magpy.line.calculator import FieldLineCalculator
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters, PerformanceParameters
-from tests.utils import setup_test_logger
+import logging
+from tests.fixtures.conftest import setup_test_logger
 
 
 class TestFieldLineReversibilityCore:

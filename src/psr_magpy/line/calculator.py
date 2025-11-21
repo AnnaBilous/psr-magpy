@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 
 def _trace_single_line_wrapper(args: Tuple[Any, CartesianRepresentation, int, FieldLine]) -> FieldLine:
-    """Wrapper function for multiprocessing field line tracing."""
+    """Wrap field line tracing for multiprocessing."""
     from psr_magpy.line.tracer import FieldLineTracer
     tracer = args[0]
     assert isinstance(tracer, FieldLineTracer), "First argument must be FieldLineTracer"
@@ -42,6 +42,18 @@ class FieldLineCalculator:
         self,
         template: FieldLine,
     ) -> Optional[Union[FieldLineSet, LightFieldLineSet]]:
+        """Calculate field lines for all grid points.
+        
+        Parameters
+        ----------
+        template : FieldLine
+            FieldLine template specifying which properties to save.
+        
+        Returns
+        -------
+        Optional[Union[FieldLineSet, LightFieldLineSet]]
+            Calculated field lines, or None if calculation fails.
+        """
         with self.context.progress_tracker.track_calculation("Field line calculation"):
             # Check if we can skip memory estimation and batch calculation
             if self._can_skip_memory_estimation():
@@ -82,7 +94,7 @@ class FieldLineCalculator:
             template
         )
         trial_size_mb = trial_size / (1024 * 1024)
-        self.context.progress_tracker.log_memory_estimation(
+        self.context.progress_reporter.report_memory_estimation(
             self.context.params.performance.n_trial, trial_size_mb, completion_time
         )
         return trial_size, completion_time
@@ -94,14 +106,14 @@ class FieldLineCalculator:
         optimal_batch_size = self.context.memory_manager.calculate_batch_size(
             trial_size, total_field_lines
         )
-        self.context.progress_tracker.log_batch_size_setting(optimal_batch_size)
-        self.context.progress_tracker.log_calculation_start()
+        self.context.progress_reporter.report_batch_size_setting(optimal_batch_size)
+        self.context.progress_reporter.report_calculation_start_simple()
         return optimal_batch_size
 
     def _finalize_results(self, results: Optional[FieldLineSet]) -> Optional[Union[FieldLineSet, LightFieldLineSet]]:
         elapsed = (
-            time.time() - self.context.progress_tracker.start_time
-            if self.context.progress_tracker.start_time
+            time.time() - self.context.progress_reporter.start_time
+            if self.context.progress_reporter.start_time
             else 0
         )
 
@@ -143,7 +155,7 @@ class FieldLineCalculator:
         # Results are saved in the final batch handling, not here
         # This prevents duplicate saving
 
-        self.context.progress_tracker.log_calculation_completion(
+        self.context.progress_reporter.report_calculation_completion(
             elapsed,
             self.context.params.output.save_results_to_disk,
             self.context.params.output.filename or "",

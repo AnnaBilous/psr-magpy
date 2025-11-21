@@ -44,7 +44,7 @@ class SaveFlags:
 
 
 class PropertyName(Enum):
-    """Enum of all available properties"""
+    """Enum of all available properties."""
 
     FOOTPOINT_ID = "save_footpoint_id"
     R_LINE = "save_r_line"
@@ -62,12 +62,12 @@ class PropertyName(Enum):
 
     @property
     def flag_name(self) -> str:
-        """Get the corresponding save flag name"""
+        """Get the corresponding save flag name."""
         return self.value
 
     @property
     def key_name(self) -> str:
-        """Get the property key name (lowercase)"""
+        """Get the property key name (lowercase)."""
         return self.name.lower()
 
 
@@ -191,11 +191,15 @@ class PropertySystem:
     def __init__(self, **kwargs):
         """Initialize property system with save flags.
 
-        Args:
-            **kwargs: Boolean flags for which properties to save.
-                     Examples:
-                     - save_r_line=True, save_r_max=True
-                     - save_footpoint_id=True (always enabled)
+        Parameters
+        ----------
+        **kwargs : bool
+            Boolean flags for which properties to save.
+
+        Examples
+        --------
+        >>> prop_system = PropertySystem(save_r_line=True, save_r_max=True)
+        >>> # save_footpoint_id is always enabled
         """
         # Process save flags
         self.save_flags = self._process_flags(**kwargs)
@@ -266,7 +270,7 @@ class PropertySystem:
         return save_flags
 
     def _validate_flags_internal(self, save_flags: SaveFlags) -> None:
-        """Internal validation of save flags.
+        """Validate save flags internally.
 
         Raises
         ------

@@ -33,8 +33,7 @@ logger = get_logger(__name__, console_format_brief=True)
 
 class FieldLineTracer:
     """Main field line tracer for magnetic field analysis."""
-
-
+    
     class _EventDetector:
         """Handles event detection for field line integration."""
 
@@ -110,11 +109,11 @@ class FieldLineTracer:
         self.event_detector.max_integration_radius = max_integration_radius
 
     def _field_for_integration(self, t: float, r: NDArray[np.float64], K: int) -> NDArray[np.float64]:
-        """Wrapper for field calculation that includes unused time parameter required by ODE solvers."""
+        """Wrap field calculation with unused time parameter for ODE solvers."""
         return self.field_calculator.get_field(r, K, normalize=True)
     
     def _field_for_integration_with_args(self, t: float, r: NDArray[np.float64], *args) -> NDArray[np.float64]:
-        """Wrapper that extracts K from args for solver interface."""
+        """Wrap field calculation, extracting K from args for solver interface."""
         K = args[0] if len(args) > 0 else 1
         return self._field_for_integration(t, r, K)
 

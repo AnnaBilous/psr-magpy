@@ -12,7 +12,7 @@ from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.memory_manager import MemoryManager
-from psr_magpy.line.progress_tracker import ProgressTracker
+from psr_magpy.line.progress_tracker import ProgressReporter
 from psr_magpy.line.batch_processor import BatchProcessor, MemoryAwareBatchProcessor
 from psr_magpy.line.field_line import FieldLine
 
@@ -46,8 +46,8 @@ class CalculationContext:
         self._tracer = FieldLineTracer(self.field, self.params)
 
         # Initialize memory manager (consolidated)
-        logger.info(
-            f"DEBUG: CalculationContext - params.performance.max_memory_mb = {self.params.performance.max_memory_mb}"
+        logger.debug(
+            f"CalculationContext - params.performance.max_memory_mb = {self.params.performance.max_memory_mb}"
         )
         self._memory_manager = MemoryManager(
             self.params.performance,
@@ -60,19 +60,20 @@ class CalculationContext:
             f"Created MemoryManager with max_memory_mb={self.params.performance.max_memory_mb}, save_results_to_disk={self.params.output.save_results_to_disk}, keep_results_in_memory={self.params.output.keep_results_in_memory}"
         )
 
-        # Initialize progress tracker with parameters from config
-        self._progress_tracker = ProgressTracker(
+        # Initialize progress reporter with parameters from config
+        self._progress_reporter = ProgressReporter(
             verbose=self.params.performance.verbose,
             show_progress=self.params.performance.progress_bar,
+            logger_name=__name__,
         )
         logger.debug(
-            f"Created ProgressTracker with verbose={self.params.performance.verbose}, show_progress={self.params.performance.progress_bar}"
+            f"Created ProgressReporter with verbose={self.params.performance.verbose}, show_progress={self.params.performance.progress_bar}"
         )
 
         # Initialize batch processor
         self._batch_processor = MemoryAwareBatchProcessor(
             memory_manager=self._memory_manager,
-            progress_tracker=self._progress_tracker,
+            progress_reporter=self._progress_reporter,
         )
         logger.debug("Created MemoryAwareBatchProcessor")
 
@@ -87,9 +88,14 @@ class CalculationContext:
         return self._memory_manager
 
     @property
-    def progress_tracker(self) -> ProgressTracker:
-        """Get the progress tracker."""
-        return self._progress_tracker
+    def progress_tracker(self) -> ProgressReporter:
+        """Get the progress reporter (backward compatibility alias)."""
+        return self._progress_reporter
+    
+    @property
+    def progress_reporter(self) -> ProgressReporter:
+        """Get the progress reporter."""
+        return self._progress_reporter
 
     @property
     def batch_processor(self) -> BatchProcessor:
@@ -109,7 +115,7 @@ class CalculationContext:
         return self.memory_manager.add_results(batch_results, filename, batch_idx)
 
     def __repr__(self) -> str:
-        """String representation."""
+        """Return string representation."""
         return (
             f"CalculationContext(field={type(self.field).__name__}, "
             f"grid={type(self.grid).__name__}, "

@@ -8,7 +8,7 @@ from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.memory_manager import MemoryManager
-from psr_magpy.line.progress_tracker import ProgressTracker
+from psr_magpy.line.progress_tracker import ProgressReporter
 from psr_magpy.line.tracing_parameters import TracingParameters
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyGridError
@@ -52,7 +52,7 @@ class MemoryAwareBatchProcessor(BatchProcessor):
     def __init__(
         self,
         memory_manager: MemoryManager,
-        progress_tracker: ProgressTracker,
+        progress_reporter: ProgressReporter,
     ):
         """Initialize memory-aware batch processor.
         
@@ -60,11 +60,11 @@ class MemoryAwareBatchProcessor(BatchProcessor):
         ----------
         memory_manager : MemoryManager
             Memory manager for handling batch results
-        progress_tracker : ProgressTracker
-            Progress tracker for logging and progress bars
+        progress_reporter : ProgressReporter
+            Progress reporter for logging and progress bars
         """
         self.memory_manager = memory_manager
-        self.progress_tracker = progress_tracker
+        self.progress_reporter = progress_reporter
         logger.debug("Initialized MemoryAwareBatchProcessor")
 
     def process_batches(
@@ -91,7 +91,7 @@ class MemoryAwareBatchProcessor(BatchProcessor):
         total_processed = 0
 
         # Create progress bar for total lines
-        progress_bar = self.progress_tracker.create_progress_bar(
+        progress_bar = self.progress_reporter.create_progress_bar(
             total=nline, description="Field lines"
         )
 
@@ -100,7 +100,7 @@ class MemoryAwareBatchProcessor(BatchProcessor):
                 start_idx = total_processed
                 batch_indices = np.arange(start_idx, min(start_idx + batch_size, nline))
 
-                self.progress_tracker.log_batch_start(
+                self.progress_reporter.report_batch_start(
                     batch_idx, start_idx, start_idx + len(batch_indices), nline
                 )
 
@@ -118,7 +118,7 @@ class MemoryAwareBatchProcessor(BatchProcessor):
                 progress_bar.n = total_processed
                 progress_bar.refresh()
 
-                self.progress_tracker.log_batch_completion(
+                self.progress_reporter.report_batch_completion(
                     batch_idx,
                     total_processed,
                     nline,
@@ -133,5 +133,5 @@ class MemoryAwareBatchProcessor(BatchProcessor):
         if params.output.save_results_to_disk:
             filename = params.output.filename
             if filename:
-                self.memory_manager.finalize_batches(filename, batch_idx, self.progress_tracker)
+                self.memory_manager.finalize_batches(filename, batch_idx, self.progress_reporter)
 

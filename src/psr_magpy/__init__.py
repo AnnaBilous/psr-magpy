@@ -44,10 +44,46 @@ from .experiment.experiment_series_runner import (
     run_experiment_series_in_memory_from_file,
 )
 
-# Common aliases for convenience
-Dipole = DipoleFieldComponent
-Quadrupole = QuadrupoleFieldComponent
-Field = MultipoleField
-Grid = SphericalGrid
-Calculator = FieldLineCalculator
-Params = TracingParameters
+__all__ = [
+    # Version
+    "__version__",
+    # Field components
+    "DipoleFieldComponent",
+    "QuadrupoleFieldComponent",
+    "MultipoleField",
+    # Grids
+    "SphericalGrid",
+    "RandomGrid",
+    "HealpixGrid",
+    "CustomGrid",
+    # Line tracing
+    "FieldLineCalculator",
+    "TracingParameters",
+    "IntegrationParameters",
+    "FieldLine",
+    # Utils
+    "get_logger",
+    "get_R_LC",
+    "get_P_ms",
+    # Experiment system
+    "ExperimentConfig",
+    "ExperimentSeriesConfig",
+    "FieldComponentConfig",
+    "CustomGridConfig",
+    "GridConfig",
+    "TracingConfig",
+    "FieldConfig",
+    "HealpixGridConfig",
+    # Factory configs
+    "FieldComponentFactoryConfig",
+    "FieldFactoryConfig",
+    "GridFactoryConfig",
+    "HealpixGridFactoryConfig",
+    "SphericalGridFactoryConfig",
+    "TracingFactoryConfig",
+    "expand_grid_configs",
+    # Experiment runners
+    "run_experiment_series",
+    "run_experiment_series_in_memory",
+    "run_experiment_series_in_memory_from_file",
+]

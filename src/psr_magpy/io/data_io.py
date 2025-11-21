@@ -185,10 +185,14 @@ class FieldLineSetIO(FitsIO):
         """
         Add a keyword to the FITS header.
 
-        Args:
-            keyword: Header keyword name
-            value: Header keyword value
-            comment: Optional comment for the keyword
+        Parameters
+        ----------
+        keyword : str
+            Header keyword name.
+        value : Any
+            Header keyword value.
+        comment : Optional[str], optional
+            Optional comment for the keyword. Default is None.
         """
         if comment:
             self.header_keywords[keyword] = (value, comment)
