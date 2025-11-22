@@ -329,12 +329,15 @@ class TestGetOFLEdgesApproximate:
 class TestCalculateAndSaveOFLEdges:
     """Test calculate_and_save_OFL_edges function."""
     
-    def setup_method(self):
+    @pytest.fixture(autouse=True)
+    def setup_test_data_dir(self, test_data_dir):
         """Set up test fixtures."""
-        self.temp_dir = tempfile.mkdtemp()
-        self.experiment_config_path = Path(self.temp_dir) / "test_config.yaml"
-        self.lines_dir = Path(self.temp_dir) / "lines"
-        self.output_path = Path(self.temp_dir) / "edge_lines.fits"
+        self.temp_dir = test_data_dir / "ofl_edge_calculator"
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.experiment_config_path = self.temp_dir / "test_config.yaml"
+        self.lines_dir = self.temp_dir / "lines"
+        self.lines_dir.mkdir(parents=True, exist_ok=True)
+        self.output_path = self.temp_dir / "edge_lines.fits"
         
         # Create template
         self.template = FieldLine(
@@ -346,10 +349,7 @@ class TestCalculateAndSaveOFLEdges:
         )
         
         self.r_lc_values = np.array([10.0, 5.0, 2.0])
-    
-    def teardown_method(self):
-        """Clean up test fixtures."""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        yield
     
     def test_calculate_and_save_function_signature(self):
         """Test that the function has the correct signature and basic structure."""
@@ -641,15 +641,14 @@ class TestCalculateAndSaveOFLEdges:
 class TestIntegration:
     """Integration tests for the complete workflow."""
     
-    def setup_method(self):
+    @pytest.fixture(autouse=True)
+    def setup_test_data_dir(self, test_data_dir):
         """Set up test fixtures."""
-        self.temp_dir = tempfile.mkdtemp()
-        self.lines_dir = Path(self.temp_dir) / "lines"
-        self.lines_dir.mkdir(exist_ok=True)
-    
-    def teardown_method(self):
-        """Clean up test fixtures."""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        self.temp_dir = test_data_dir / "ofl_edge_integration"
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.lines_dir = self.temp_dir / "lines"
+        self.lines_dir.mkdir(parents=True, exist_ok=True)
+        yield
     
     def test_full_workflow_with_mock_data(self):
         """Test the complete workflow with mock data."""

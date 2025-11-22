@@ -4,7 +4,10 @@ from typing import Optional, List
 from pathlib import Path
 
 from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
-from psr_magpy.experiment.experiment_series_runner import run_experiment_series
+from psr_magpy.experiment.experiment_series_runner import (
+    run_experiment_series,
+    DeletionStrategy,
+)
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyExperimentError
 
@@ -85,7 +88,7 @@ def create_fine_subset_workflow(
             save_individual_configs=False,
             save_grids=False,
             continue_on_failure=True,
-            delete_existing_lines_and_summary=True,
+            series_deletion_strategy=DeletionStrategy.LINES_AND_SUMMARY,
             **run_kwargs,
         )
         series_result.print_summary()

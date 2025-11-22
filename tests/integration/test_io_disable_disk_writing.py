@@ -17,6 +17,7 @@ from psr_magpy.grid.grid import SphericalGrid
 from psr_magpy.line.calculator import FieldLineCalculator
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.tracing_parameters import (
     TracingParameters, 
     IntegrationParameters, 
@@ -34,7 +35,7 @@ class TestDisableDiskWriting:
         self.dipole = DipoleFieldComponent(B_magnitude=1.0)
         self.field = MultipoleField([self.dipole])
         self.grid = SphericalGrid(nlon=6, nlat=4, pole_lat=0.0)  # 14 points
-        self.template = FieldLine.template_OFL_calc()
+        self.template = FieldLineTemplate.template_OFL_calc()
     
     def test_save_results_false_returns_memory(self):
         """Test that save_results_to_disk=False returns results in memory."""
@@ -129,31 +130,32 @@ class TestDisableDiskWriting:
         # Should not skip memory estimation (user override)
         assert calculator_no_skip._can_skip_memory_estimation() is False
     
-    def test_save_results_true_still_works(self):
+    def test_save_results_true_still_works(self, test_data_dir):
         """Test that save_results_to_disk=True still works as before."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            filename = os.path.join(temp_dir, "test_output")
-            
-            params = TracingParameters(
-                integration=IntegrationParameters(max_integration_radius=3.0, threshold_line_distance=1.0),
-                performance=PerformanceParameters(n_trial=5),
-                output=OutputParameters(
-                    save_results_to_disk=True,
-                    filename=filename
-                )
+        temp_dir = test_data_dir / "test_save_results_true"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        filename = str(temp_dir / "test_output")
+        
+        params = TracingParameters(
+            integration=IntegrationParameters(max_integration_radius=3.0, threshold_line_distance=1.0),
+            performance=PerformanceParameters(n_trial=5),
+            output=OutputParameters(
+                save_results_to_disk=True,
+                filename=filename
             )
-            
-            context = CalculationContext(self.field, self.grid, params)
-            calculator = FieldLineCalculator(context)
-            results = calculator.get_field_lines(self.template)
-            
-            # Should return results in memory
-            assert results is not None
-            assert results.n_field_lines > 0
-            
-            # Note: File saving functionality is tested elsewhere, focus on memory estimation control
+        )
+        
+        context = CalculationContext(self.field, self.grid, params)
+        calculator = FieldLineCalculator(context)
+        results = calculator.get_field_lines(self.template)
+        
+        # Should return results in memory
+        assert results is not None
+        assert results.n_field_lines > 0
+        
+        # Note: File saving functionality is tested elsewhere, focus on memory estimation control
     
-    def test_no_save_vs_save_behavior(self):
+    def test_no_save_vs_save_behavior(self, test_data_dir):
         """Test behavior difference between save and no-save modes."""
         # Test with save_results_to_disk=False
         params_no_save = TracingParameters(
@@ -167,23 +169,24 @@ class TestDisableDiskWriting:
         results_no_save = calculator_no_save.get_field_lines(self.template)
         
         # Test with save_results_to_disk=True
-        with tempfile.TemporaryDirectory() as temp_dir:
-            filename = os.path.join(temp_dir, "test_output")
-            
-            params_save = TracingParameters(
-                integration=IntegrationParameters(max_integration_radius=3.0, threshold_line_distance=1.0),
-                performance=PerformanceParameters(n_trial=5),
-                output=OutputParameters(save_results_to_disk=True, filename=filename)
-            )
-            
-            context_save = CalculationContext(self.field, self.grid, params_save)
-            calculator_save = FieldLineCalculator(context_save)
-            results_save = calculator_save.get_field_lines(self.template)
-            
-            # Both should return results
-            assert results_no_save is not None
-            assert results_save is not None
-            assert results_no_save.n_field_lines == results_save.n_field_lines
+        temp_dir = test_data_dir / "test_no_save_vs_save"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        filename = str(temp_dir / "test_output")
+        
+        params_save = TracingParameters(
+            integration=IntegrationParameters(max_integration_radius=3.0, threshold_line_distance=1.0),
+            performance=PerformanceParameters(n_trial=5),
+            output=OutputParameters(save_results_to_disk=True, filename=filename)
+        )
+        
+        context_save = CalculationContext(self.field, self.grid, params_save)
+        calculator_save = FieldLineCalculator(context_save)
+        results_save = calculator_save.get_field_lines(self.template)
+        
+        # Both should return results
+        assert results_no_save is not None
+        assert results_save is not None
+        assert results_no_save.n_field_lines == results_save.n_field_lines
             
             # Note: File saving functionality is tested elsewhere, focus on memory estimation control
     

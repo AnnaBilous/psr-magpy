@@ -15,14 +15,22 @@ from psr_magpy.line.progress_tracker import ProgressReporter
 class TestBatchFileManager:
     """Test BatchFileManager functionality."""
     
-    def setup_method(self):
+    @pytest.fixture(autouse=True)
+    def setup_test_data_dir(self, test_data_dir, request):
         """Set up test environment."""
-        self.temp_dir = tempfile.mkdtemp()
-        self.base_filename = Path(self.temp_dir) / "test_field_lines.fits"
-        
-    def teardown_method(self):
-        """Clean up test environment."""
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        import shutil
+        # Use test name to create unique directory per test
+        test_name = request.node.name
+        self.temp_dir = test_data_dir / "batch_file_manager" / test_name
+        # Clean up any existing directory
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir)
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+        self.base_filename = self.temp_dir / "test_field_lines.fits"
+        yield
+        # Clean up after test
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
     
     def create_sample_batch_files(self, n_batches=3):
         """Create sample batch files for testing."""

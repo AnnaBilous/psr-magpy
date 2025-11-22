@@ -786,12 +786,12 @@ def create_fine_resolution_subset_from_coarse_OFL(
     ValueError
         If OFL data cannot be loaded or grids cannot be created.
     """
-    from psr_magpy.line.field_line import FieldLine
+    from psr_magpy.line.field_line_template import FieldLineTemplate
     from psr_magpy.experiment.grid_config import GridConfig, HealpixGridConfig
 
     # Use minimal template if not provided
     if template is None:
-        template = FieldLine.template_OFL_subset()
+        template = FieldLineTemplate.template_OFL_subset()
 
     # Load OFL data from coarse experiment
     logger.info(f"Loading OFL data from coarse experiment: {coarse_experiment.name}")

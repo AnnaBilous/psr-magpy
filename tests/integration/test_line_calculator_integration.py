@@ -22,6 +22,7 @@ from psr_magpy.grid.grid import SphericalGrid
 from psr_magpy.line.calculator import FieldLineCalculator
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.tracing_parameters import (
     TracingParameters, 
     IntegrationParameters, 
@@ -67,7 +68,7 @@ class TestFieldLineCalculator:
         from psr_magpy.line.calculation_context import CalculationContext
         context = CalculationContext(self.field, self.grid, self.params)
         calculator = FieldLineCalculator(context)
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         results = calculator.get_field_lines(template)
         
@@ -239,7 +240,7 @@ class TestCalculatorBehavior:
         # Create field
         self.dipole = DipoleFieldComponent(B_magnitude=1.0)
         self.field = MultipoleField([self.dipole])
-        self.template = FieldLine.template_OFL_calc()
+        self.template = FieldLineTemplate.template_OFL_calc()
     
     def test_skipping_memory_estimation_produces_results(self):
         """Test that skipping memory estimation still produces valid results."""
@@ -345,7 +346,7 @@ class TestCalculatorEdgeCases:
         
         context = CalculationContext(self.field, grid, params)
         calculator = FieldLineCalculator(context)
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         # Should still work
         results = calculator.get_field_lines(template)

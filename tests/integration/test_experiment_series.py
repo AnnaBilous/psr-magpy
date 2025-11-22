@@ -20,6 +20,7 @@ from psr_magpy.experiment.factory_configs import (
 from psr_magpy.experiment.field_config import FieldComponentConfig
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.experiment.experiment_result import ExperimentResult
 
 
@@ -69,7 +70,7 @@ class TestExperimentMetadata:
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         
         metadata = create_experiment_metadata(
             "test_series", {}, 1, field_config, grid_config, tracing_config, template
@@ -151,14 +152,14 @@ class TestFactoryConfigs:
 class TestExperimentSeriesConfig:
     """Test ExperimentSeriesConfig class."""
     
-    def test_create_simple_series(self):
+    def test_create_simple_series(self, test_data_dir):
         """Test creating simple experiment series."""
         field_config = FieldConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0)
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
 
         config = ExperimentSeriesConfig(
             name="test_series",
@@ -167,7 +168,8 @@ class TestExperimentSeriesConfig:
             tracing=tracing_config,
             template=template,
             description="Test description",
-            metadata={"test_key": "test_value"}
+            metadata={"test_key": "test_value"},
+            output_dir=str(test_data_dir)
         )
 
         experiments = config.create_experiment_series()
@@ -176,12 +178,16 @@ class TestExperimentSeriesConfig:
         assert experiments[0].field == field_config
         assert experiments[0].grid == grid_config
         assert experiments[0].tracing == tracing_config
-        assert experiments[0].template == template
+        # Template is converted from FieldLineTemplate to FieldLine in ExperimentConfig.__post_init__
+        assert isinstance(experiments[0].template, FieldLine)
+        # Compare flags instead of object identity
+        if hasattr(template, 'property_system'):
+            assert experiments[0].template.property_system.get_flags_dict() == template.property_system.get_flags_dict()
         assert experiments[0].description == "Test description"
         assert experiments[0].metadata is not None
         assert experiments[0].metadata.get("test_key") == "test_value"
     
-    def test_create_series_with_factory_configs(self):
+    def test_create_series_with_factory_configs(self, test_data_dir):
         """Test creating series with factory configurations."""
         # Field factory with multiple components
         field_factory = FieldFactoryConfig(components=[
@@ -202,14 +208,15 @@ class TestExperimentSeriesConfig:
             filename="test"
         )
         
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         
         series_config = ExperimentSeriesConfig(
             name="test_series",
             field=field_factory,
             grid=grid_factory,
             tracing=tracing_factory,
-            template=template
+            template=template,
+            output_dir=str(test_data_dir)
         )
         
         experiments = series_config.create_experiment_series()
@@ -222,52 +229,54 @@ class TestExperimentSeriesConfig:
         expected_names = [f"test_series_{i:03d}" for i in range(8)]
         assert experiment_names == expected_names
     
-    def test_create_directory_structure(self):
+    def test_create_directory_structure(self, test_data_dir):
         """Test that directory structure is created correctly."""
         field_config = FieldConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0)
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         
-        with tempfile.TemporaryDirectory() as temp_dir:
-            series_config = ExperimentSeriesConfig(
-                name="test_series",
-                field=field_config,
-                grid=grid_config,
-                tracing=tracing_config,
-                template=template,
-                output_dir=temp_dir
-            )
-            
-            # Create experiments (this should create the directory structure)
-            experiments = series_config.create_experiment_series()
-            
-            # Check that directories were created
-            series_dir = Path(temp_dir) / "test_series"
-            assert series_dir.exists()
-            
-            configs_dir = series_dir / "configs"
-            assert configs_dir.exists()
-            
-            grids_dir = series_dir / "grids"
-            assert grids_dir.exists()
-            
-            lines_dir = series_dir / "lines"
-            assert lines_dir.exists()
-            
-            logs_dir = series_dir / "logs"
-            assert logs_dir.exists()
+        temp_dir = test_data_dir / "test_create_directory_structure"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        series_config = ExperimentSeriesConfig(
+            name="test_series",
+            field=field_config,
+            grid=grid_config,
+            tracing=tracing_config,
+            template=template,
+            output_dir=str(temp_dir)
+        )
+        
+        # Create experiments (this should create the directory structure)
+        experiments = series_config.create_experiment_series()
+        
+        # Check that directories were created
+        series_dir = Path(temp_dir) / "test_series"
+        assert series_dir.exists()
+        
+        configs_dir = series_dir / "configs"
+        assert configs_dir.exists()
+        
+        grids_dir = series_dir / "grids"
+        assert grids_dir.exists()
+        
+        lines_dir = series_dir / "lines"
+        assert lines_dir.exists()
+        
+        logs_dir = series_dir / "logs"
+        assert logs_dir.exists()
     
-    def test_save_and_load_config(self):
+    def test_save_and_load_config(self, test_data_dir):
         """Test saving and loading experiment series config."""
         field_config = FieldConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0)
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
 
         config = ExperimentSeriesConfig(
             name="test_series",
@@ -279,30 +288,32 @@ class TestExperimentSeriesConfig:
             metadata={"test_key": "test_value"}
         )
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Set output directory
-            config.output_dir = temp_dir
+        temp_dir = test_data_dir / "test_save_and_load_config"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Set output directory
+        config.output_dir = str(temp_dir)
 
-            # Create directory structure first
-            config.create_directory_structure()
+        # Create directory structure first
+        config.create_directory_structure()
 
-            # Save config
-            config_file = Path(temp_dir) / "test_series" / "configs" / "test_series_config.yaml"
-            config.save(str(config_file))
+        # Save config
+        config_file = Path(temp_dir) / "test_series" / "configs" / "test_series_config.yaml"
+        config.save(str(config_file))
 
-            # Check that file was created
-            assert config_file.exists()
+        # Check that file was created
+        assert config_file.exists()
 
-            # Load config
-            loaded_config = ExperimentSeriesConfig.load(str(config_file))
+        # Load config
+        loaded_config = ExperimentSeriesConfig.load(str(config_file))
 
-            # Check that loaded config matches original
-            assert loaded_config.name == config.name
-            assert loaded_config.description == config.description
-            assert loaded_config.metadata == config.metadata
-            assert loaded_config.output_dir == config.output_dir
+        # Check that loaded config matches original
+        assert loaded_config.name == config.name
+        assert loaded_config.description == config.description
+        assert loaded_config.metadata == config.metadata
+        assert loaded_config.output_dir == config.output_dir
     
-    def test_print_experiment_summary(self):
+    def test_print_experiment_summary(self, test_data_dir):
         """Test printing experiment summary."""
         field_factory = FieldFactoryConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0),
@@ -320,7 +331,7 @@ class TestExperimentSeriesConfig:
             filename="test"
         )
         
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         
         series_config = ExperimentSeriesConfig(
             name="test_series",
@@ -328,7 +339,8 @@ class TestExperimentSeriesConfig:
             grid=grid_factory,
             tracing=tracing_factory,
             template=template,
-            description="Test series"
+            description="Test series",
+            output_dir=str(test_data_dir)
         )
         
         # Test summary with all parameters
@@ -343,58 +355,64 @@ class TestExperimentSeriesConfig:
 class TestExperimentSeriesRunner:
     """Test ExperimentSeriesRunner class."""
     
-    def test_initialization(self):
+    def test_initialization(self, test_data_dir):
         """Test ExperimentSeriesRunner initialization."""
         field_config = FieldConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0)
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create the directory structure that ExperimentSeriesRunner expects
-            series_dir = Path(temp_dir) / "test_series"
-            series_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir = test_data_dir / "test_runner_initialization"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create the directory structure that ExperimentSeriesRunner expects
+        series_dir = temp_dir / "test_series"
+        series_dir.mkdir(parents=True, exist_ok=True)
 
-            series_config = ExperimentSeriesConfig(
-                name="test_series",
-                field=field_config,
-                grid=grid_config,
-                tracing=tracing_config,
-                template=template,
-                output_dir=temp_dir
-            )
+        series_config = ExperimentSeriesConfig(
+            name="test_series",
+            field=field_config,
+            grid=grid_config,
+            tracing=tracing_config,
+            template=template,
+            output_dir=str(temp_dir)
+        )
 
-            runner = ExperimentSeriesRunner(
-                series_config=series_config,
-                save_individual_configs=True,
-                continue_on_failure=True
-            )
+        runner = ExperimentSeriesRunner(
+            series_config=series_config,
+            save_individual_configs=True,
+            continue_on_failure=True
+        )
 
-            assert runner.series_config == series_config
-            assert runner.output_directory == Path(temp_dir)
+        assert runner.series_config == series_config
+        assert runner.output_directory == temp_dir
     
     @patch('psr_magpy.experiment.experiment_series_runner.run_experiment')
-    def test_run_single_experiment(self, mock_run_experiment):
+    def test_run_single_experiment(self, mock_run_experiment, test_data_dir):
         """Test running a single experiment."""
         field_config = FieldConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0)
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
 
+        temp_dir = test_data_dir / f"test_run_single_experiment_{id(self)}"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
         experiment = ExperimentSeriesConfig(
             name="test_experiment",
             field=field_config,
             grid=grid_config,
             tracing=tracing_config,
-            template=template
+            template=template,
+            output_dir=str(temp_dir)
         ).create_experiment_series()[0]
 
         # Mock successful experiment run
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         field_lines = [template] * 32  # Create 32 identical field lines
         mock_run_experiment.return_value = ExperimentResult(
             experiment_name="test_experiment_000",
@@ -402,49 +420,52 @@ class TestExperimentSeriesRunner:
             duration=1.0,
             results=FieldLineSet(field_lines)  # Use 32 field lines to match grid size
         )
+        
+        series_config = ExperimentSeriesConfig(
+            name="test_series",
+            field=field_config,
+            grid=grid_config,
+            tracing=tracing_config,
+            template=template,
+            output_dir=str(temp_dir)
+        )
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            series_config = ExperimentSeriesConfig(
-                name="test_series",
-                field=field_config,
-                grid=grid_config,
-                tracing=tracing_config,
-                template=template,
-                output_dir=temp_dir
-            )
+        # Create directory structure
+        series_config.create_experiment_series()
 
-            # Create directory structure
-            series_config.create_experiment_series()
+        runner = ExperimentSeriesRunner(
+            series_config=series_config
+        )
 
-            runner = ExperimentSeriesRunner(
-                series_config=series_config
-            )
+        results = runner._run_experiments([experiment])
 
-            results = runner._run_experiments([experiment])
-
-            assert len(results) == 1
-            assert results[0].experiment_name == "test_experiment_000"
-            assert results[0].success is True
-            assert results[0].duration > 0
-            # Results field is cleared after saving to disk
-            assert results[0].results is None
+        assert len(results) == 1
+        assert results[0].experiment_name == "test_experiment_000"
+        assert results[0].success is True
+        assert results[0].duration > 0
+        # Results field is cleared after saving to disk
+        assert results[0].results is None
     
     @patch('psr_magpy.experiment.experiment_series_runner.run_experiment')
-    def test_run_experiment_with_failure(self, mock_run_experiment):
+    def test_run_experiment_with_failure(self, mock_run_experiment, test_data_dir):
         """Test running experiment that fails."""
         field_config = FieldConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0)
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
 
+        temp_dir = test_data_dir / f"test_run_single_experiment_{id(self)}"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        
         experiment = ExperimentSeriesConfig(
             name="test_experiment",
             field=field_config,
             grid=grid_config,
             tracing=tracing_config,
-            template=template
+            template=template,
+            output_dir=str(temp_dir)
         ).create_experiment_series()[0]
 
         # Mock failed experiment run
@@ -454,79 +475,81 @@ class TestExperimentSeriesRunner:
             duration=1.0,
             error_message="Test error"
         )
+        
+        series_config = ExperimentSeriesConfig(
+            name="test_series",
+            field=field_config,
+            grid=grid_config,
+            tracing=tracing_config,
+            template=template,
+            output_dir=str(temp_dir)
+        )
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            series_config = ExperimentSeriesConfig(
-                name="test_series",
-                field=field_config,
-                grid=grid_config,
-                tracing=tracing_config,
-                template=template,
-                output_dir=temp_dir
-            )
+        # Create directory structure
+        series_config.create_experiment_series()
 
-            # Create directory structure
-            series_config.create_experiment_series()
+        runner = ExperimentSeriesRunner(
+            series_config=series_config,
+            continue_on_failure=True
+        )
 
-            runner = ExperimentSeriesRunner(
-                series_config=series_config,
-                continue_on_failure=True
-            )
+        results = runner._run_experiments([experiment])
 
-            results = runner._run_experiments([experiment])
-
-            assert len(results) == 1
-            assert results[0].experiment_name == "test_experiment_000"
-            assert results[0].success is False
-            assert results[0].duration > 0
-            assert results[0].error_message == "Test error"
+        assert len(results) == 1
+        assert results[0].experiment_name == "test_experiment_000"
+        assert results[0].success is False
+        assert results[0].duration > 0
+        assert results[0].error_message == "Test error"
     
-    def test_save_individual_configs(self):
+    def test_save_individual_configs(self, test_data_dir):
         """Test saving individual experiment configurations."""
         field_config = FieldConfig(components=[
             FieldComponentConfig(moment_type="dipole", B_magnitude=1.0)
         ])
         grid_config = GridConfig(spherical=SphericalGridConfig(nlon=10, nlat=5))
         tracing_config = TracingConfig()
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
+
+        temp_dir = test_data_dir / "test_save_individual_configs"
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
         series_config = ExperimentSeriesConfig(
             name="test_series",
             field=field_config,
             grid=grid_config,
             tracing=tracing_config,
-            template=template
+            template=template,
+            output_dir=str(temp_dir)
         )
 
         experiments = series_config.create_experiment_series()
+        
+        # Set output directory and create structure
+        series_config.output_dir = str(temp_dir)
+        series_config.create_experiment_series()
 
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Set output directory and create structure
-            series_config.output_dir = temp_dir
-            series_config.create_experiment_series()
+        runner = ExperimentSeriesRunner(
+            series_config=series_config,
+            save_individual_configs=True
+        )
 
-            runner = ExperimentSeriesRunner(
-                series_config=series_config,
-                save_individual_configs=True
-            )
+        runner._save_individual_configs(experiments)
 
-            runner._save_individual_configs(experiments)
+        # Check that configs directory was created in series subdirectory
+        configs_dir = temp_dir / "test_series" / "configs"
+        assert configs_dir.exists()
 
-            # Check that configs directory was created in series subdirectory
-            configs_dir = Path(temp_dir) / "test_series" / "configs"
-            assert configs_dir.exists()
-
-            # Check that both series and experiment config files were saved
-            config_files = list(configs_dir.glob("*.yaml"))
-            assert len(config_files) == 2
-            assert any(f.name == "test_series_config.yaml" for f in config_files)
-            assert any(f.name == "test_series_000.yaml" for f in config_files)
+        # Check that both series and experiment config files were saved
+        config_files = list(configs_dir.glob("*.yaml"))
+        assert len(config_files) == 2
+        assert any(f.name == "test_series_config.yaml" for f in config_files)
+        assert any(f.name == "test_series_000.yaml" for f in config_files)
 
 
 class TestIntegration:
     """Integration tests for experiment series."""
     
-    def test_full_series_workflow(self):
+    def test_full_series_workflow(self, test_data_dir):
         """Test complete experiment series workflow."""
         # Create a simple series with factory configs
         field_factory = FieldFactoryConfig(components=[
@@ -545,7 +568,7 @@ class TestIntegration:
             filename="test"
         )
 
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
 
         series_config = ExperimentSeriesConfig(
             name="integration_test",
@@ -554,7 +577,8 @@ class TestIntegration:
             tracing=tracing_factory,
             template=template,
             description="Integration test series",
-            metadata={"test_type": "integration"}
+            metadata={"test_type": "integration"},
+            output_dir=str(test_data_dir)
         )
 
         # Create experiments
@@ -576,48 +600,47 @@ class TestIntegration:
             # Base metadata from series_config should be preserved
             assert exp.metadata["test_type"] == "integration" 
 
-    def test_create_directory_structure_delete_existing_configs_cleans_only_configs(self):
+    def test_create_directory_structure_delete_existing_configs_cleans_only_configs(self, test_data_dir):
         """Test that delete_existing_configs=True cleans up only configs directory."""
-        import tempfile
-        import shutil
+        temp_dir = test_data_dir / "test_delete_existing_configs"
+        temp_dir.mkdir(parents=True, exist_ok=True)
         
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a config with output directory
-            config = ExperimentSeriesConfig(
+        # Create a config with output directory
+        config = ExperimentSeriesConfig(
                 name="test_series",
                 field=FieldConfig(components=[]),
                 grid=GridConfig(spherical=SphericalGridConfig(nlon=2, nlat=2)),
                 tracing=TracingConfig(),
-                template=FieldLine.template_properties_along_line(),
-                output_dir=temp_dir
-            )
-            
-            # Create initial directory structure
-            config.create_directory_structure(delete_existing_configs=False)
-            
-            # Create some dummy files in each directory
-            configs_dir = config.get_configs_dir()
-            grids_dir = config.get_grids_dir()
-            lines_dir = config.get_lines_dir()
-            
-            (configs_dir / "dummy_config.yaml").write_text("dummy")
-            (grids_dir / "dummy_grid.fits").write_text("dummy")
-            (lines_dir / "dummy_line.fits").write_text("dummy")
-            
-            # Verify files exist
-            assert (configs_dir / "dummy_config.yaml").exists()
-            assert (grids_dir / "dummy_grid.fits").exists()
-            assert (lines_dir / "dummy_line.fits").exists()
-            
-            # Now call with overwrite=True
-            config.create_directory_structure(delete_existing_configs=True)
-            
-            # Verify all directories still exist
-            assert configs_dir.exists()
-            assert grids_dir.exists()
-            assert lines_dir.exists()
-            
-            # Verify only configs directory was cleaned
-            assert not (configs_dir / "dummy_config.yaml").exists()
-            assert (grids_dir / "dummy_grid.fits").exists()  # Should still exist
-            assert (lines_dir / "dummy_line.fits").exists()  # Should still exist 
+                template=FieldLineTemplate.template_properties_along_line(),
+            output_dir=str(temp_dir)
+        )
+        
+        # Create initial directory structure
+        config.create_directory_structure(delete_existing_configs=False)
+        
+        # Create some dummy files in each directory
+        configs_dir = config.get_configs_dir()
+        grids_dir = config.get_grids_dir()
+        lines_dir = config.get_lines_dir()
+        
+        (configs_dir / "dummy_config.yaml").write_text("dummy")
+        (grids_dir / "dummy_grid.fits").write_text("dummy")
+        (lines_dir / "dummy_line.fits").write_text("dummy")
+        
+        # Verify files exist
+        assert (configs_dir / "dummy_config.yaml").exists()
+        assert (grids_dir / "dummy_grid.fits").exists()
+        assert (lines_dir / "dummy_line.fits").exists()
+        
+        # Now call with overwrite=True
+        config.create_directory_structure(delete_existing_configs=True)
+        
+        # Verify all directories still exist
+        assert configs_dir.exists()
+        assert grids_dir.exists()
+        assert lines_dir.exists()
+        
+        # Verify only configs directory was cleaned
+        assert not (configs_dir / "dummy_config.yaml").exists()
+        assert (grids_dir / "dummy_grid.fits").exists()  # Should still exist
+        assert (lines_dir / "dummy_line.fits").exists()  # Should still exist 

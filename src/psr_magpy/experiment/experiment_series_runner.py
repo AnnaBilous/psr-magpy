@@ -2,8 +2,9 @@
 
 import logging
 import time
+from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Union, cast
+from typing import List, Optional, Dict, Any, Union, cast, Set
 from collections import OrderedDict
 import shutil
 import yaml
@@ -23,6 +24,24 @@ from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
 logger = get_logger(__name__, console_format_brief=True)
 
 
+class DeletionStrategy(Enum):
+    """Strategy for deleting existing data before running experiments."""
+    NONE = "none"
+    ALL = "all"
+    EXCEPT_CONFIGS = "except_configs"
+    EXCEPT_GRIDS = "except_grids"
+    EXCEPT_CONFIGS_AND_GRIDS = "except_configs_and_grids"
+    LINES_AND_SUMMARY = "lines_and_summary"
+
+
+class OverwriteStrategy(Enum):
+    """Strategy for overwriting existing files during experiment execution."""
+    NEVER = "never"
+    ALL = "all"
+    PRESERVE_CONFIGS = "preserve_configs"
+    PRESERVE_CONFIGS_AND_GRIDS = "preserve_configs_and_grids"
+
+
 class ExperimentSeriesRunner:
     """Runs a series of experiments with progress tracking."""
 
@@ -33,15 +52,25 @@ class ExperimentSeriesRunner:
         save_individual_configs: bool = False,
         continue_on_failure: bool = True,
         experiment_numbers: Optional[List[int]] = None,
-        delete_existing_all_except_configs: bool = False,
-        delete_existing_lines_and_summary: bool = False,
-        overwrite_experiments: bool = False,
+        series_deletion_strategy: DeletionStrategy = DeletionStrategy.NONE,
+        experiment_deletion_strategy: DeletionStrategy = DeletionStrategy.NONE,
+        overwrite_strategy: OverwriteStrategy = OverwriteStrategy.NEVER,
         run_remaining: bool = False,
         create_directories: bool = True,
         log_rotation_max_bytes: float = 10 * 1024 * 1024,  # 10 MB
         log_rotation_backup_count: int = 5,
     ) -> None:
-        """Initialize runner with configuration."""
+        """Initialize runner with configuration.
+        
+        Parameters
+        ----------
+        series_deletion_strategy : DeletionStrategy
+            Strategy for deleting data at series level before running.
+        experiment_deletion_strategy : DeletionStrategy
+            Strategy for deleting data at experiment level before running.
+        overwrite_strategy : OverwriteStrategy
+            Strategy for overwriting existing files during execution.
+        """
         self.series_config = series_config
         self.output_directory = (
             Path(series_config.output_dir) if series_config.output_dir else Path(".")
@@ -50,22 +79,202 @@ class ExperimentSeriesRunner:
         self.save_individual_configs = save_individual_configs
         self.continue_on_failure = continue_on_failure
         self.experiment_numbers = experiment_numbers
-        self.delete_existing_all_except_configs = delete_existing_all_except_configs
-        self.delete_existing_lines_and_summary = delete_existing_lines_and_summary
-        self.overwrite_experiments = overwrite_experiments
         self.run_remaining = run_remaining
         self.create_directories = create_directories
         self.log_rotation_max_bytes = log_rotation_max_bytes
         self.log_rotation_backup_count = log_rotation_backup_count
+        self.series_deletion_strategy = series_deletion_strategy
+        self.experiment_deletion_strategy = experiment_deletion_strategy
+        self.overwrite_strategy = overwrite_strategy
 
         logger.info("Initialized series runner for: %s", series_config.name)
         logger.info("Output directory: %s", self.output_directory)
         logger.info("Save grids: %s", save_grids)
+        logger.info("Series deletion strategy: %s", series_deletion_strategy.value)
+        logger.info("Experiment deletion strategy: %s", self.experiment_deletion_strategy.value)
+        logger.info("Overwrite strategy: %s", overwrite_strategy.value)
         logger.info(
             "Log rotation: %.1f MB max, %d backups",
             log_rotation_max_bytes / 1024 / 1024,
             log_rotation_backup_count,
         )
+
+    def _delete_directory_contents(
+        self, directory: Path, preserve_directories: Set[str]
+    ) -> None:
+        """Delete contents of directory except preserved directories.
+        
+        Parameters
+        ----------
+        directory : Path
+            Directory to clean.
+        preserve_directories : Set[str]
+            Set of directory names to preserve.
+        """
+        if not directory.exists():
+            return
+        
+        for item in directory.iterdir():
+            if item.name not in preserve_directories:
+                if item.is_dir():
+                    shutil.rmtree(item)
+                    logger.info("Deleted directory: %s", item)
+                else:
+                    item.unlink()
+                    logger.info("Deleted file: %s", item)
+
+    def _delete_experiment_files(
+        self, experiment_name: str, strategy: DeletionStrategy
+    ) -> None:
+        """Delete files for a specific experiment.
+        
+        Parameters
+        ----------
+        experiment_name : str
+            Name of the experiment.
+        strategy : DeletionStrategy
+            Deletion strategy to apply.
+        """
+        if strategy == DeletionStrategy.NONE:
+            return
+        
+        series_dir = self.output_directory / self.series_config.name
+        if not series_dir.exists():
+            return
+        
+        if strategy == DeletionStrategy.ALL:
+            # Delete all files for this experiment
+            for subdir in [self.series_config.LINES_DIR, self.series_config.GRIDS_DIR, self.series_config.CONFIGS_DIR]:
+                file_path = series_dir / subdir / f"{experiment_name}.fits"
+                if subdir == self.series_config.CONFIGS_DIR:
+                    file_path = series_dir / subdir / f"{experiment_name}.yaml"
+                if file_path.exists():
+                    file_path.unlink()
+                    logger.info("Deleted %s file for experiment %s", subdir, experiment_name)
+        
+        elif strategy == DeletionStrategy.EXCEPT_CONFIGS:
+            # Delete lines and grids, keep configs
+            for subdir in [self.series_config.LINES_DIR, self.series_config.GRIDS_DIR]:
+                file_path = series_dir / subdir / f"{experiment_name}.fits"
+                if file_path.exists():
+                    file_path.unlink()
+                    logger.info("Deleted %s file for experiment %s", subdir, experiment_name)
+        
+        elif strategy == DeletionStrategy.EXCEPT_GRIDS:
+            # Delete lines and configs, keep grids
+            for subdir in [self.series_config.LINES_DIR]:
+                file_path = series_dir / subdir / f"{experiment_name}.fits"
+                if file_path.exists():
+                    file_path.unlink()
+                    logger.info("Deleted %s file for experiment %s", subdir, experiment_name)
+            config_path = series_dir / self.series_config.CONFIGS_DIR / f"{experiment_name}.yaml"
+            if config_path.exists():
+                config_path.unlink()
+                logger.info("Deleted config file for experiment %s", experiment_name)
+        
+        elif strategy == DeletionStrategy.EXCEPT_CONFIGS_AND_GRIDS:
+            # Delete only lines
+            file_path = series_dir / self.series_config.LINES_DIR / f"{experiment_name}.fits"
+            if file_path.exists():
+                file_path.unlink()
+                logger.info("Deleted lines file for experiment %s", experiment_name)
+        
+        elif strategy == DeletionStrategy.LINES_AND_SUMMARY:
+            # Delete only lines file
+            file_path = series_dir / self.series_config.LINES_DIR / f"{experiment_name}.fits"
+            if file_path.exists():
+                file_path.unlink()
+                logger.info("Deleted lines file for experiment %s", experiment_name)
+
+    def _apply_deletion_strategy(
+        self, strategy: DeletionStrategy, target_dir: Path, scope: str = "series"
+    ) -> None:
+        """Apply deletion strategy to target directory.
+        
+        Parameters
+        ----------
+        strategy : DeletionStrategy
+            Deletion strategy to apply.
+        target_dir : Path
+            Target directory.
+        scope : str
+            Scope of deletion ("series" or "experiment").
+        """
+        if strategy == DeletionStrategy.NONE:
+            return
+        
+        if not target_dir.exists():
+            return
+        
+        if strategy == DeletionStrategy.ALL:
+            # Delete everything except logs
+            preserve = {self.series_config.LOGS_DIR}
+            self._delete_directory_contents(target_dir, preserve)
+            logger.info("Deleted all data (except logs) at %s level", scope)
+        
+        elif strategy == DeletionStrategy.EXCEPT_CONFIGS:
+            preserve = {self.series_config.CONFIGS_DIR, self.series_config.LOGS_DIR}
+            self._delete_directory_contents(target_dir, preserve)
+            logger.info("Deleted all data (except configs and logs) at %s level", scope)
+        
+        elif strategy == DeletionStrategy.EXCEPT_GRIDS:
+            preserve = {self.series_config.GRIDS_DIR, self.series_config.LOGS_DIR}
+            self._delete_directory_contents(target_dir, preserve)
+            logger.info("Deleted all data (except grids and logs) at %s level", scope)
+        
+        elif strategy == DeletionStrategy.EXCEPT_CONFIGS_AND_GRIDS:
+            preserve = {
+                self.series_config.CONFIGS_DIR,
+                self.series_config.GRIDS_DIR,
+                self.series_config.LOGS_DIR,
+            }
+            self._delete_directory_contents(target_dir, preserve)
+            logger.info(
+                "Deleted all data (except configs, grids, and logs) at %s level", scope
+            )
+        
+        elif strategy == DeletionStrategy.LINES_AND_SUMMARY:
+            # Delete only lines directory and summary files
+            lines_dir = target_dir / self.series_config.LINES_DIR
+            if lines_dir.exists():
+                shutil.rmtree(lines_dir)
+                logger.info("Deleted lines directory at %s level", scope)
+            
+            summary_files = list(target_dir.glob("*_results_summary.yaml"))
+            for summary_file in summary_files:
+                summary_file.unlink()
+                logger.info("Deleted summary file: %s", summary_file)
+
+    def _should_overwrite_file(
+        self, file_path: Path, file_type: str = "lines"
+    ) -> bool:
+        """Determine if a file should be overwritten based on strategy.
+        
+        Parameters
+        ----------
+        file_path : Path
+            Path to the file.
+        file_type : str
+            Type of file ("lines", "grids", "configs").
+        
+        Returns
+        -------
+        bool
+            True if file should be overwritten.
+        """
+        if self.overwrite_strategy == OverwriteStrategy.NEVER:
+            return False
+        
+        if self.overwrite_strategy == OverwriteStrategy.ALL:
+            return True
+        
+        if self.overwrite_strategy == OverwriteStrategy.PRESERVE_CONFIGS:
+            return file_type != "configs"
+        
+        if self.overwrite_strategy == OverwriteStrategy.PRESERVE_CONFIGS_AND_GRIDS:
+            return file_type not in ("configs", "grids")
+        
+        return False
 
     def _run_experiments(
         self, experiments: List[ExperimentConfig]
@@ -83,11 +292,19 @@ class ExperimentSeriesRunner:
                 "Running experiment %d/%d: %s", i, len(experiments), experiment.name
             )
 
+            # Apply experiment-level deletion if specified
+            if self.experiment_deletion_strategy != DeletionStrategy.NONE:
+                self._delete_experiment_files(
+                    experiment.name, self.experiment_deletion_strategy
+                )
+
             # Check if already completed
             result_file = lines_dir / f"{experiment.name}.fits"
-            if result_file.exists() and not self.overwrite_experiments:
+            if result_file.exists() and not self._should_overwrite_file(
+                result_file, file_type="lines"
+            ):
                 logger.info(
-                    "Experiment %s already completed. Skipping (use overwrite_experiments=True to rerun).",
+                    "Experiment %s already completed. Skipping (use overwrite_strategy to rerun).",
                     experiment.name,
                 )
                 result = ExperimentResult(
@@ -119,7 +336,9 @@ class ExperimentSeriesRunner:
                 grid = experiment.grid.create_grid()
                 if grid is not None:
                     grid_path = grids_dir / f"{experiment.name}.fits"
-                    if not grid_path.exists() or self.overwrite_experiments:
+                    if not grid_path.exists() or self._should_overwrite_file(
+                        grid_path, file_type="grids"
+                    ):
                         if not grids_dir.exists():
                             grids_dir.mkdir(parents=True, exist_ok=True)
                         grid.save_to_fits(str(grid_path))
@@ -183,28 +402,11 @@ class ExperimentSeriesRunner:
         # Create output directories
         series_dir = self.output_directory / self.series_config.name
 
-        # Handle directory cleanup based on parameters
-        if self.delete_existing_all_except_configs and series_dir.exists():
-            # Delete everything except configs
-            for item in series_dir.iterdir():
-                if item.name != self.series_config.CONFIGS_DIR:
-                    if item.is_dir():
-                        shutil.rmtree(item)
-                    else:
-                        item.unlink()
-            logger.info("Deleted all existing data (except configs)")
-        elif self.delete_existing_lines_and_summary and series_dir.exists():
-            # Delete only lines directory and summary files
-            lines_dir = series_dir / self.series_config.LINES_DIR
-            if lines_dir.exists():
-                shutil.rmtree(lines_dir)
-                logger.info("Deleted existing lines directory")
-
-            # Delete summary files
-            summary_files = list(series_dir.glob("*_results_summary.yaml"))
-            for summary_file in summary_files:
-                summary_file.unlink()
-                logger.info("Deleted existing summary file: %s", summary_file)
+        # Apply series-level deletion strategy
+        if self.series_deletion_strategy != DeletionStrategy.NONE:
+            self._apply_deletion_strategy(
+                self.series_deletion_strategy, series_dir, scope="series"
+            )
 
         # Create directories if requested and they don't exist
         if self.create_directories:
@@ -332,7 +534,7 @@ class ExperimentSeriesRunner:
         for i, exp in enumerate(
             self.series_config.create_experiment_series(create_directories=False)
         ):
-            if exp.name not in completed_experiments or self.overwrite_experiments:
+            if exp.name not in completed_experiments or self.overwrite_strategy != OverwriteStrategy.NEVER:
                 remaining_experiments.append(exp)
 
         return remaining_experiments
@@ -494,7 +696,9 @@ class ExperimentSeriesRunner:
 
         for experiment in experiments:
             config_path = configs_dir / f"{experiment.name}.yaml"
-            if not config_path.exists() or self.overwrite_experiments:
+            if not config_path.exists() or self._should_overwrite_file(
+                config_path, file_type="configs"
+            ):
                 if not configs_dir.exists():
                     configs_dir.mkdir(parents=True, exist_ok=True)
                 save_config(experiment, config_path, overwrite=True)
@@ -659,9 +863,9 @@ def run_experiment_series(
     series_config: ExperimentSeriesConfig,
     experiment_numbers: Optional[List[int]] = None,
     run_remaining: bool = False,
-    delete_existing_all_except_configs: bool = False,
-    delete_existing_lines_and_summary: bool = False,
-    overwrite_experiments: bool = False,
+    series_deletion_strategy: DeletionStrategy = DeletionStrategy.NONE,
+    experiment_deletion_strategy: DeletionStrategy = DeletionStrategy.NONE,
+    overwrite_strategy: OverwriteStrategy = OverwriteStrategy.NEVER,
     save_individual_configs: bool = True,
     save_grids: bool = True,
     continue_on_failure: bool = True,
@@ -673,6 +877,12 @@ def run_experiment_series(
     ----------
     series_config : ExperimentSeriesConfig
         Configuration for the experiment series.
+    series_deletion_strategy : DeletionStrategy
+        Strategy for deleting data at series level before running.
+    experiment_deletion_strategy : DeletionStrategy
+        Strategy for deleting data at experiment level before running.
+    overwrite_strategy : OverwriteStrategy
+        Strategy for overwriting existing files during execution.
     continue_on_failure : bool, optional
         Whether to continue if an experiment fails. Default is True.
     create_directories : bool, optional
@@ -705,9 +915,9 @@ def run_experiment_series(
         save_grids=save_grids,
         continue_on_failure=continue_on_failure,
         experiment_numbers=experiment_numbers,
-        delete_existing_all_except_configs=delete_existing_all_except_configs,
-        delete_existing_lines_and_summary=delete_existing_lines_and_summary,
-        overwrite_experiments=overwrite_experiments,
+        series_deletion_strategy=series_deletion_strategy,
+        experiment_deletion_strategy=experiment_deletion_strategy,
+        overwrite_strategy=overwrite_strategy,
         run_remaining=run_remaining,
         create_directories=create_directories,
     )
@@ -720,9 +930,9 @@ def run_experiment_series_from_file(
     input_directory: Optional[Union[str, Path]] = None,
     experiment_numbers: Optional[List[int]] = None,
     run_remaining: bool = False,
-    delete_existing_all_except_configs: bool = False,
-    delete_existing_lines_and_summary: bool = False,
-    overwrite_experiments: bool = False,
+    series_deletion_strategy: DeletionStrategy = DeletionStrategy.NONE,
+    experiment_deletion_strategy: DeletionStrategy = DeletionStrategy.NONE,
+    overwrite_strategy: OverwriteStrategy = OverwriteStrategy.NEVER,
     save_individual_configs: bool = True,
     save_grids: bool = True,
     continue_on_failure: bool = True,
@@ -741,9 +951,9 @@ def run_experiment_series_from_file(
         series_config=series_config,
         experiment_numbers=experiment_numbers,
         run_remaining=run_remaining,
-        delete_existing_all_except_configs=delete_existing_all_except_configs,
-        delete_existing_lines_and_summary=delete_existing_lines_and_summary,
-        overwrite_experiments=overwrite_experiments,
+        series_deletion_strategy=series_deletion_strategy,
+        experiment_deletion_strategy=experiment_deletion_strategy,
+        overwrite_strategy=overwrite_strategy,
         save_individual_configs=save_individual_configs,
         save_grids=save_grids,
         continue_on_failure=continue_on_failure,

@@ -21,6 +21,7 @@ if str(project_root) not in sys.path:
 from psr_magpy.line.tracer import FieldLineTracer
 from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters
 from psr_magpy.line.field_line import FieldLine, PropertyName
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.property_calculator import PropertyCalculator
 from psr_magpy.line.property_system import PropertyValidationError
 from psr_magpy.field.multipole import MultipoleField
@@ -112,7 +113,7 @@ class TestFieldLineTracer:
     def test_trace_single_line_all_properties(self):
         """Test field line tracing with all properties enabled."""
         # Create template with all properties
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         
         # Initial position
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.5)
@@ -134,7 +135,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_different_positions(self):
         """Test field line tracing from different initial positions."""
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         # Use a custom tracer with a safe t_span to avoid memory errors
         safe_params = TracingParameters(
             integration=IntegrationParameters(max_integration_radius=10.0, threshold_line_distance=1.0, t_span=(0.0, 100.0)),
@@ -156,7 +157,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_save_dr(self):
         """Test field line tracing with save_dR option."""
-        template = FieldLine.template_line_coordinates_only()
+        template = FieldLineTemplate.template_line_coordinates_only()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -170,7 +171,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_invalid_inputs(self):
         """Test field line tracing with invalid inputs."""
-        template = FieldLine.template_line_coordinates_only()
+        template = FieldLineTemplate.template_line_coordinates_only()
         
         # Test with None position - should raise AttributeError, not ValueError
         with pytest.raises(AttributeError):  # type: ignore
@@ -187,7 +188,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_edge_cases(self):
         """Test field line tracing edge cases."""
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         # Test very small dt
         small_dt_params = TracingParameters(
@@ -227,7 +228,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_property_consistency(self):
         """Test that field line properties are consistent."""
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -272,7 +273,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_magnetic_field_consistency(self):
         """Test that magnetic field calculations are consistent."""
-        template = FieldLine.template_surface_field_properties()
+        template = FieldLineTemplate.template_surface_field_properties()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -295,7 +296,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_multiple_runs(self):
         """Test that multiple runs produce consistent results."""
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -327,7 +328,7 @@ class TestFieldLineTracer:
         multi_field = MultipoleField([dipole1, dipole2])
         multi_tracer = FieldLineTracer(multi_field, self.params)
         
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -341,7 +342,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_integration_parameters(self):
         """Test that integration parameters affect the results."""
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -384,7 +385,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_surface_radius(self):
         """Test field line tracing with different surface radius values."""
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -405,7 +406,7 @@ class TestFieldLineTracer:
     
     def test_trace_single_line_time_span(self):
         """Test field line tracing with different time spans."""
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -431,12 +432,12 @@ class TestFieldLineTracer:
         
         # Test all template methods
         templates = [
-            ("all", FieldLine.template_all()),
-            ("all_except_along_line", FieldLine.template_all_except_along_line()),
-            ("OFL_calc", FieldLine.template_OFL_calc()),
-            ("line_coordinates_only", FieldLine.template_line_coordinates_only()),
-            ("properties_along_line", FieldLine.template_properties_along_line()),
-            ("surface_field_properties", FieldLine.template_surface_field_properties()),
+            ("all", FieldLineTemplate.template_all()),
+            ("all_except_along_line", FieldLineTemplate.template_all_except_along_line()),
+            ("OFL_calc", FieldLineTemplate.template_OFL_calc()),
+            ("line_coordinates_only", FieldLineTemplate.template_line_coordinates_only()),
+            ("properties_along_line", FieldLineTemplate.template_properties_along_line()),
+            ("surface_field_properties", FieldLineTemplate.template_surface_field_properties()),
         ]
         
         for name, template in templates:
@@ -527,7 +528,7 @@ class TestFieldLineTracerIntegration:
     
     def test_end_to_end_tracing(self):
         """Test complete end-to-end field line tracing process."""
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
 
 
         params = TracingParameters(
@@ -582,7 +583,7 @@ class TestFieldLineTracerIntegration:
         mock_field.get_total_field.side_effect = ValueError("Field calculation error")
 
         tracer = FieldLineTracer(mock_field, self.params)
-        template = FieldLine.template_line_coordinates_only()
+        template = FieldLineTemplate.template_line_coordinates_only()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         
@@ -609,7 +610,7 @@ class TestFieldLineTracerPerformance:
         """Test that field line tracing completes in reasonable time."""
         import time
         
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         r_initial = CartesianRepresentation(x=1.0, y=0.0, z=0.0)
         footpoint_id = 1
@@ -631,7 +632,7 @@ class TestFieldLineTracerPerformance:
         import psutil
         import os
         
-        template = FieldLine.template_all_except_along_line()
+        template = FieldLineTemplate.template_all_except_along_line()
         
         # Use custom parameters with shorter time span to avoid memory issues
         params = TracingParameters(

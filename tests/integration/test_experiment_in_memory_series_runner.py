@@ -17,6 +17,7 @@ from psr_magpy.experiment import (
     run_experiment_series_in_memory,
 )
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 
 
 class TestInMemoryExperimentSeriesRunner:
@@ -30,9 +31,9 @@ class TestInMemoryExperimentSeriesRunner:
         ])
         self.grid_config = GridConfig(spherical=SphericalGridConfig(nlon=6, nlat=4))
         self.tracing_config = TracingConfig()
-        self.template = FieldLine.template_OFL_calc()
+        self.template = FieldLineTemplate.template_OFL_calc()
     
-    def test_basic_in_memory_execution(self):
+    def test_basic_in_memory_execution(self, test_data_dir):
         """Test basic in-memory experiment series execution."""
         series_config = ExperimentSeriesConfig(
             name="test_series",
@@ -40,6 +41,7 @@ class TestInMemoryExperimentSeriesRunner:
             grid=self.grid_config,
             tracing=self.tracing_config,
             template=self.template,
+            output_dir=str(test_data_dir),
         )
         
         result = run_experiment_series_in_memory(
@@ -63,7 +65,7 @@ class TestInMemoryExperimentSeriesRunner:
         assert experiment_result.results is not None
         assert experiment_result.results.n_field_lines > 0
     
-    def test_memory_limit_handling(self):
+    def test_memory_limit_handling(self, test_data_dir):
         """Test memory limit handling."""
         series_config = ExperimentSeriesConfig(
             name="test_series",
@@ -71,6 +73,7 @@ class TestInMemoryExperimentSeriesRunner:
             grid=self.grid_config,
             tracing=self.tracing_config,
             template=self.template,
+            output_dir=str(test_data_dir),
         )
         
         # Run with very low memory limit
@@ -86,7 +89,7 @@ class TestInMemoryExperimentSeriesRunner:
         assert result.successful_experiments == 1
         assert result.failed_experiments == 0
     
-    def test_keep_results_false(self):
+    def test_keep_results_false(self, test_data_dir):
         """Test behavior when keep_results=False."""
         series_config = ExperimentSeriesConfig(
             name="test_series",
@@ -94,6 +97,7 @@ class TestInMemoryExperimentSeriesRunner:
             grid=self.grid_config,
             tracing=self.tracing_config,
             template=self.template,
+            output_dir=str(test_data_dir),
         )
         
         result = run_experiment_series_in_memory(
@@ -109,7 +113,7 @@ class TestInMemoryExperimentSeriesRunner:
         assert experiment_result.success
         assert experiment_result.results is None
     
-    def test_experiment_filtering(self):
+    def test_experiment_filtering(self, test_data_dir):
         """Test filtering experiments by number."""
         # Create series with multiple experiments using factory configs
         from psr_magpy.experiment import FieldFactoryConfig, FieldComponentFactoryConfig
@@ -124,6 +128,7 @@ class TestInMemoryExperimentSeriesRunner:
             grid=self.grid_config,
             tracing=self.tracing_config,
             template=self.template,
+            output_dir=str(test_data_dir),
         )
         
         # Check how many experiments are created
@@ -144,7 +149,7 @@ class TestInMemoryExperimentSeriesRunner:
         assert result.experiments_in_this_session == 1  # Actually run
         assert result.successful_experiments == 1
     
-    def test_error_handling(self):
+    def test_error_handling(self, test_data_dir):
         """Test error handling in in-memory runner."""
         # Create invalid configuration to trigger error
         invalid_field_config = FieldConfig(components=[
@@ -157,6 +162,7 @@ class TestInMemoryExperimentSeriesRunner:
             grid=self.grid_config,
             tracing=self.tracing_config,
             template=self.template,
+            output_dir=str(test_data_dir),
         )
         
         # Should handle error gracefully
@@ -172,7 +178,7 @@ class TestInMemoryExperimentSeriesRunner:
         assert result.failed_experiments == 1
         assert result.successful_experiments == 0
     
-    def test_memory_estimation(self):
+    def test_memory_estimation(self, test_data_dir):
         """Test that memory estimation works correctly."""
         series_config = ExperimentSeriesConfig(
             name="test_series",
@@ -180,6 +186,7 @@ class TestInMemoryExperimentSeriesRunner:
             grid=self.grid_config,
             tracing=self.tracing_config,
             template=self.template,
+            output_dir=str(test_data_dir),
         )
         
         result = run_experiment_series_in_memory(

@@ -26,6 +26,7 @@ from psr_magpy.grid.grid import SphericalGrid, CustomGrid, RandomGrid
 from psr_magpy.line.calculator import FieldLineCalculator
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters, PerformanceParameters
 import logging
 from tests.fixtures.conftest import setup_test_logger
@@ -60,18 +61,25 @@ class TestFieldLineReversibilityCore:
         
 
 
-    def _trace_field_lines_time_reversal(self, field, grid, R_max, t_span, description=""):
+    def _trace_field_lines_time_reversal(self, field, grid, R_max, t_span, description="", verify_by_reversing=False):
         """
         Trace field lines using time reversal approach like in demo.
         
+        Parameters
+        ----------
+        verify_by_reversing : bool
+            If True, enable automatic reversibility verification via verify_by_reversing flag.
         """
         params = TracingParameters(
             integration=IntegrationParameters(
                 max_integration_radius=R_max,
                 threshold_line_distance=1.0,
                 t_span=t_span,
-                dt=5,
-                trace_open_lines_backwards=True
+                dt=0.1,
+                trace_open_lines_backwards=True,
+                verify_by_reversing=verify_by_reversing,
+                field_backend="numba",
+                solver_backend="cyrk"
             ),
             performance=PerformanceParameters(
                 n_trial=grid.nline if hasattr(grid, 'nline') and grid.nline else 50,
@@ -88,7 +96,7 @@ class TestFieldLineReversibilityCore:
         # Create new calculator for each tracing operation
         context = CalculationContext(field, grid, params)
         calculator = FieldLineCalculator(context)
-        template = FieldLine.template_line_coordinates_only()
+        template = FieldLineTemplate.template_line_coordinates_only()
         
         return calculator.get_field_lines(template)
 
@@ -107,12 +115,16 @@ class TestFieldLineReversibilityCore:
                 else:
                     endpoints.append(endpoint)
         
-        return np.array(endpoints)
+        # Ensure float64 dtype for CyRK solver compatibility
+        return np.asarray(endpoints, dtype=np.float64)
 
     def _create_custom_grid_from_endpoints(self, endpoints):
         """Create custom grid from endpoint coordinates."""
         if len(endpoints) == 0:
             return None
+        
+        # Ensure float64 dtype for CyRK solver compatibility
+        endpoints = np.asarray(endpoints, dtype=np.float64)
             
         cart_coords = CartesianRepresentation(
             x=endpoints[:, 0],
@@ -351,38 +363,46 @@ class TestFieldLineReversibilityCore:
                     assert backward_results is not None
 
     def test_field_strength_ratios(self):
-        """Test different dipole/quadrupole strength ratios."""
+        """Test different dipole/quadrupole strength ratios using verify_by_reversing."""
         grid = SphericalGrid(nlon=2, nlat=5, pole_lat=0.0)
         
-        ratios = [0.1, 0.5, 0.9, 1.5]  # quadrupole/dipole ratios
+        ratios = [0, 0.1, 0.5, 0.9, 1.5]  # quadrupole/dipole ratios
         
         for ratio in ratios:
             quad = QuadrupoleFieldComponent(
                 B_magnitude=ratio,
-                moment_orientation_latitude_degree=0.0,
+                moment_orientation_latitude_degree=45.0,
                 moment_orientation_longitude_degree=0.0
             )
             
             field = MultipoleField([self.dipole, quad])
             
-            # Forward trace
-            forward_results = self._trace_field_lines_time_reversal(field, grid, self.R_max, self.t_span_forward, f"Forward ratio {ratio}")
+            # Forward trace with verify_by_reversing enabled
+            forward_results = self._trace_field_lines_time_reversal(
+                field, grid, self.R_max, self.t_span_forward, 
+                f"Forward ratio {ratio}", verify_by_reversing=True
+            )
             
             if forward_results is not None:
-                endpoints = self._extract_endpoints(forward_results)
+                # Check that reversed_error property exists
+                reversed_errors = forward_results.get_property('reversed_error')
                 
-                if len(endpoints) > 0:
-                    # Should be able to perform reversibility test
-                    custom_grid = self._create_custom_grid_from_endpoints(endpoints)
-                    backward_results = self._trace_field_lines_time_reversal(field, custom_grid, self.R_max, self.t_span_forward, f"Backward ratio {ratio}")
+                if reversed_errors is not None and len(reversed_errors) > 0:
+                    # Filter out infinite errors (failed reversals)
+                    finite_errors = reversed_errors[np.isfinite(reversed_errors)]
                     
-                    if backward_results is not None:
-                        final_endpoints = self._extract_endpoints(backward_results)
-                        distances = self._calculate_position_differences(grid, final_endpoints)
+                    if len(finite_errors) > 0:
+                        max_error = np.max(finite_errors)
+                        mean_error = np.mean(finite_errors)
+                        min_error = np.min(finite_errors)
+                        print(f"\nRatio {ratio} reversed_error:")
+                        print(f"  All errors: {reversed_errors}")
+                        print(f"  Finite errors: {finite_errors}")
+                        print(f"  Min: {min_error:.6e}, Mean: {mean_error:.6e}, Max: {max_error:.6e}")
+                        print(f"  Within 1e-3 tolerance: {np.sum(finite_errors < 1e-3)}/{len(finite_errors)}")
                         
-                        # Should have some level of reversibility
-                        if len(distances) > 0:
-                            pass  # Removed assertion to avoid test failures
+                        # Verify reversibility: reversed_error should be within 1e-3 tolerance
+                        assert np.all(finite_errors < 1e-3), f"All reversed_error values should be within 1e-3 tolerance for ratio {ratio}, got max error {max_error:.6f}"
 
     def test_edge_cases(self):
         """Test edge cases for reversibility."""
@@ -456,7 +476,9 @@ class TestReversedErrorFunctionality:
                 t_span=(0.0, 1e6),
                 dt=0.1,
                 trace_open_lines_backwards=True,
-                verify_by_reversing=True  # Enable verification
+                verify_by_reversing=True,
+                field_backend="numba",
+                solver_backend="cyrk"
             ),
             performance=PerformanceParameters(
                 n_trial=5,
@@ -472,7 +494,7 @@ class TestReversedErrorFunctionality:
         
         context = CalculationContext(self.field, self.grid, params)
         calculator = FieldLineCalculator(context)
-        template = FieldLine.template_line_coordinates_only()
+        template = FieldLineTemplate.template_line_coordinates_only()
         
         results = calculator.get_field_lines(template)
         
@@ -493,7 +515,9 @@ class TestReversedErrorFunctionality:
                 t_span=(0.0, 1e6),
                 dt=0.1,
                 trace_open_lines_backwards=True,
-                verify_by_reversing=False  # Disable verification
+                verify_by_reversing=False,
+                field_backend="numba",
+                solver_backend="cyrk"
             ),
             performance=PerformanceParameters(
                 n_trial=5,
@@ -509,7 +533,7 @@ class TestReversedErrorFunctionality:
         
         context = CalculationContext(self.field, self.grid, params)
         calculator = FieldLineCalculator(context)
-        template = FieldLine.template_line_coordinates_only()
+        template = FieldLineTemplate.template_line_coordinates_only()
         
         results = calculator.get_field_lines(template)
         
@@ -529,7 +553,9 @@ class TestReversedErrorFunctionality:
                 t_span=(0.0, 1e6),
                 dt=0.1,
                 trace_open_lines_backwards=True,
-                verify_by_reversing=True
+                verify_by_reversing=True,
+                field_backend="numba",
+                solver_backend="cyrk"
             ),
             performance=PerformanceParameters(
                 n_trial=5,
@@ -545,7 +571,7 @@ class TestReversedErrorFunctionality:
         
         context = CalculationContext(self.field, self.grid, params)
         calculator = FieldLineCalculator(context)
-        template = FieldLine.template_line_coordinates_only()
+        template = FieldLineTemplate.template_line_coordinates_only()
         
         results = calculator.get_field_lines(template)
         reversed_error = results.get_property('reversed_error') if results is not None else None
@@ -570,7 +596,9 @@ class TestReversedErrorFunctionality:
                     dt=0.1,
                     trace_open_lines_backwards=True,
                     verify_by_reversing=True,
-                    max_step=max_step
+                    max_step=max_step,
+                    field_backend="numba",
+                    solver_backend="cyrk"       
                 ),
                 performance=PerformanceParameters(
                     n_trial=5,
@@ -586,7 +614,7 @@ class TestReversedErrorFunctionality:
             
             context = CalculationContext(self.field, self.grid, params)
             calculator = FieldLineCalculator(context)
-            template = FieldLine.template_line_coordinates_only()
+            template = FieldLineTemplate.template_line_coordinates_only()
             
             results = calculator.get_field_lines(template)
             
@@ -602,7 +630,7 @@ class TestReversedErrorFunctionality:
                 t_span=(0.0, 1e6),
                 dt=0.1,
                 trace_open_lines_backwards=True,
-                verify_by_reversing=True
+                verify_by_reversing=True,
             ),
             performance=PerformanceParameters(
                 n_trial=5,
@@ -618,7 +646,7 @@ class TestReversedErrorFunctionality:
         
         context = CalculationContext(self.field, self.grid, params)
         calculator = FieldLineCalculator(context)
-        template = FieldLine.template_line_coordinates_only()
+        template = FieldLineTemplate.template_line_coordinates_only()
         
         results = calculator.get_field_lines(template)
         

@@ -16,6 +16,8 @@ from .experiment_series_runner import (
     run_experiment_series,
     run_experiment_series_in_memory,
     run_experiment_series_in_memory_from_file,
+    DeletionStrategy,
+    OverwriteStrategy,
 )
 from .factory_configs import (
     FieldFactoryConfig,
@@ -39,6 +41,8 @@ __all__ = [
     "run_experiment_series",
     "run_experiment_series_in_memory",
     "run_experiment_series_in_memory_from_file",
+    "DeletionStrategy",
+    "OverwriteStrategy",
     "FieldFactoryConfig",
     "FieldComponentFactoryConfig",
     "GridFactoryConfig",

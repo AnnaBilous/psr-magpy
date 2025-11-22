@@ -12,6 +12,7 @@ from psr_magpy.grid.grid import SphericalGrid
 from psr_magpy.line.calculation_context import CalculationContext
 from psr_magpy.line.tracing_parameters import TracingParameters, IntegrationParameters, OutputParameters, PerformanceParameters
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 
 
 class TestCalculationContext:
@@ -79,7 +80,7 @@ class TestCalculationContext:
         params.performance.n_trial = 10
         
         context = CalculationContext(self.field, self.grid, params)
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         trial_size, completion_time = context.estimate_memory_requirements(template)
         assert trial_size > 0
@@ -99,7 +100,7 @@ class TestCalculationContext:
         """Test optimal batch size calculation."""
         context = CalculationContext(self.field, self.grid, self.params)
         
-        template = FieldLine.template_OFL_calc()
+        template = FieldLineTemplate.template_OFL_calc()
         
         trial_size, _ = context.estimate_memory_requirements(template)
         # Test batch size calculation

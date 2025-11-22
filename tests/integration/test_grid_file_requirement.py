@@ -14,7 +14,7 @@ from psr_magpy.experiment.factory_configs import (
 from psr_magpy.experiment.field_config import FieldConfig
 from psr_magpy.experiment.grid_config import GridConfig, RandomGridConfig, CustomGridConfig
 from psr_magpy.experiment.tracing_config import TracingConfig
-from psr_magpy.line import FieldLine
+from psr_magpy.line import FieldLine, FieldLineTemplate
 
 def test_random_grid_warning(caplog):
     """Test that RandomGrid creation issues a warning."""
@@ -27,14 +27,14 @@ def test_custom_grid_warning(caplog):
     grid = CustomGrid(coordinates=coordinates, nline_ori=1)
     assert "CustomGrid created: This grid must be saved to a file" in caplog.text
 
-def test_random_grid_load_from_file(tmp_path):
+def test_random_grid_load_from_file(test_data_dir):
     """Test loading RandomGrid from file."""
     # Set random seed for reproducible tests
     np.random.seed(42)
     
     # Create and save grid
     grid = RandomGrid(nline_ori=10)
-    grid_path = tmp_path / "random_grid.fits"
+    grid_path = test_data_dir / "random_grid.fits"
     grid.save_to_fits(str(grid_path))
     
     # Reset random seed to ensure same coordinates are generated
@@ -51,7 +51,7 @@ def test_random_grid_load_from_file(tmp_path):
             )
         ),
         tracing=TracingConfig(),
-        template=FieldLine.template_all()
+        template=FieldLineTemplate.template_all()
     )
     
     # Load grid from config
@@ -63,12 +63,12 @@ def test_random_grid_load_from_file(tmp_path):
         if grid_coords is not None and loaded_coords is not None:
             assert np.allclose(loaded_coords.xyz.value, grid_coords.xyz.value)
 
-def test_custom_grid_load_from_file(tmp_path):
+def test_custom_grid_load_from_file(test_data_dir):
     """Test loading CustomGrid from file."""
     # Create and save grid
     coordinates = CartesianRepresentation(x=[1], y=[0], z=[0])
     grid = CustomGrid(coordinates=coordinates, nline_ori=1)
-    grid_path = tmp_path / "custom_grid.fits"
+    grid_path = test_data_dir / "custom_grid.fits"
     grid.save_to_fits(str(grid_path))
     
     # Create config with file path
@@ -83,7 +83,7 @@ def test_custom_grid_load_from_file(tmp_path):
             )
         ),
         tracing=TracingConfig(),
-        template=FieldLine.template_all()
+        template=FieldLineTemplate.template_all()
     )
     
     # Load grid from config
@@ -105,7 +105,7 @@ def test_random_grid_create_from_scratch():
             )
         ),
         tracing=TracingConfig(),
-        template=FieldLine.template_all()
+        template=FieldLineTemplate.template_all()
     )
     
     grid = config.grid.create_grid()
@@ -125,7 +125,7 @@ def test_custom_grid_create_from_scratch():
             )
         ),
         tracing=TracingConfig(),
-        template=FieldLine.template_all()
+        template=FieldLineTemplate.template_all()
     )
     
     grid = config.grid.create_grid()
@@ -133,31 +133,34 @@ def test_custom_grid_create_from_scratch():
         assert isinstance(grid, CustomGrid)
         assert np.allclose(grid.footpoint_coordinates.xyz.value, coordinates.xyz.value)
 
-def test_grid_save_during_series_creation(tmp_path):
+def test_grid_save_during_series_creation(test_data_dir):
     """Test that grids are saved during experiment series creation."""
     from psr_magpy.experiment import ExperimentSeriesConfig
     from psr_magpy.experiment.factory_configs import (
         FieldFactoryConfig, GridFactoryConfig, TracingFactoryConfig
     )
-    from psr_magpy.line import FieldLine
+    from psr_magpy.line import FieldLine, FieldLineTemplate
     
     # Create series config with random grid
     series_config = ExperimentSeriesConfig(
         name="test_series",
-        output_dir=str(tmp_path),
+        output_dir=str(test_data_dir),
         field=FieldFactoryConfig(components=[]),
         grid=GridFactoryConfig(
             grids=[RandomGridFactoryConfig(nline_ori=[10, 20])]
         ),
         tracing=TracingFactoryConfig(),
-        template=FieldLine.template_all()
+        template=FieldLineTemplate.template_all()
     )
+    
+    # Create directory structure first
+    series_config.create_directory_structure()
     
     # Create experiments
     experiments = series_config.create_experiment_series(save_configs=True)
     
     # Check that grid files exist and are referenced in configs
-    grids_dir = tmp_path / series_config.name / "grids"
+    grids_dir = test_data_dir / series_config.name / "grids"
     assert grids_dir.exists()
     
     for experiment in experiments:

@@ -45,9 +45,12 @@ class TestFieldLineSetInitialization:
             for i in range(3)
         ]
     
-    def _create_sample_field_line(self, template: FieldLine, footpoint_id: int = 1) -> FieldLine:
+    def _create_sample_field_line(self, template, footpoint_id: int = 1) -> FieldLine:
         """Create a sample field line with test data."""
-        field_line = template.copy_structure()
+        if isinstance(template, FieldLineTemplate):
+            field_line = FieldLine.from_template(template)
+        else:
+            field_line = template.copy_structure()
         field_line.set_property(footpoint_id=footpoint_id)
         
         if template.property_system.is_property_enabled('r_line'):
@@ -107,7 +110,7 @@ class TestFieldLineSetInitialization:
     
     def test_initialization_invalid_type(self):
         """Test initialization with invalid type should raise error."""
-        with pytest.raises(ValueError, match="Expected FieldLine or list of FieldLine"):  # type: ignore
+        with pytest.raises(ValueError, match="Expected FieldLine, FieldLineTemplate, or list of FieldLine"):  # type: ignore
             FieldLineSet("invalid", copy_data=True)  # type: ignore
     
     def test_initialization_incompatible_templates(self):
@@ -147,9 +150,12 @@ class TestFieldLineSetAppend:
             copy_data=True
         )
     
-    def _create_sample_field_line(self, template: FieldLine, footpoint_id: int = 1) -> FieldLine:
+    def _create_sample_field_line(self, template, footpoint_id: int = 1) -> FieldLine:
         """Create a sample field line with test data."""
-        field_line = template.copy_structure()
+        if isinstance(template, FieldLineTemplate):
+            field_line = FieldLine.from_template(template)
+        else:
+            field_line = template.copy_structure()
         field_line.set_property(footpoint_id=footpoint_id)
         
         if template.property_system.is_property_enabled('r_line'):
@@ -279,9 +285,12 @@ class TestFieldLineSetProperties:
             copy_data=True
         )
     
-    def _create_sample_field_line(self, template: FieldLine, footpoint_id: int = 1) -> FieldLine:
+    def _create_sample_field_line(self, template, footpoint_id: int = 1) -> FieldLine:
         """Create a sample field line with test data."""
-        field_line = template.copy_structure()
+        if isinstance(template, FieldLineTemplate):
+            field_line = FieldLine.from_template(template)
+        else:
+            field_line = template.copy_structure()
         field_line.set_property(footpoint_id=footpoint_id)
         
         if template.property_system.is_property_enabled('r_line'):
@@ -489,9 +498,12 @@ class TestFieldLineSetMemoryEstimation:
             copy_data=True
         )
     
-    def _create_large_sample_field_line(self, template: FieldLine, footpoint_id: int = 1) -> FieldLine:
+    def _create_large_sample_field_line(self, template, footpoint_id: int = 1) -> FieldLine:
         """Create a sample field line with large test data."""
-        field_line = template.copy_structure()
+        if isinstance(template, FieldLineTemplate):
+            field_line = FieldLine.from_template(template)
+        else:
+            field_line = template.copy_structure()
         field_line.set_property(footpoint_id=footpoint_id)
         
         if template.property_system.is_property_enabled('r_line'):
@@ -578,9 +590,12 @@ class TestFieldLineSetEdgeCases:
         
         self.template = FieldLine(save_r_line=True, save_r_max=True)
     
-    def _create_sample_field_line(self, template: FieldLine, footpoint_id: int = 1) -> FieldLine:
+    def _create_sample_field_line(self, template, footpoint_id: int = 1) -> FieldLine:
         """Create a sample field line with test data."""
-        field_line = template.copy_structure()
+        if isinstance(template, FieldLineTemplate):
+            field_line = FieldLine.from_template(template)
+        else:
+            field_line = template.copy_structure()
         field_line.set_property(footpoint_id=footpoint_id)
         
         if template.property_system.is_property_enabled('r_line'):
@@ -672,7 +687,7 @@ class TestFieldLineSetIntegration:
     def test_end_to_end_workflow(self):
         """Test complete workflow from creation to multiple appends."""
         # Create initial field line set
-        template = FieldLine.template_all()
+        template = FieldLineTemplate.template_all()
         initial_field_line = self._create_complex_field_line(template, 1)
         field_line_set = FieldLineSet(initial_field_line, copy_data=True)
         
@@ -708,9 +723,12 @@ class TestFieldLineSetIntegration:
         size = field_line_set.estimate_size()
         assert size > 0
     
-    def _create_complex_field_line(self, template: FieldLine, footpoint_id: int) -> FieldLine:
+    def _create_complex_field_line(self, template, footpoint_id: int) -> FieldLine:
         """Create a complex field line with all properties."""
-        field_line = template.copy_structure()
+        if isinstance(template, FieldLineTemplate):
+            field_line = FieldLine.from_template(template)
+        else:
+            field_line = template.copy_structure()
         field_line.set_property(footpoint_id=footpoint_id)
         
         if template.property_system.is_property_enabled('r_line'):
@@ -762,9 +780,12 @@ class TestFieldLineSetCopy:
             field_line = self._create_complex_field_line(self.template, i)
             self.field_line_set.append(field_line)
     
-    def _create_complex_field_line(self, template: FieldLine, footpoint_id: int) -> FieldLine:
+    def _create_complex_field_line(self, template, footpoint_id: int) -> FieldLine:
         """Create a complex field line with all properties."""
-        field_line = template.copy_structure()
+        if isinstance(template, FieldLineTemplate):
+            field_line = FieldLine.from_template(template)
+        else:
+            field_line = template.copy_structure()
         field_line.set_property(footpoint_id=footpoint_id)
         
         if template.property_system.is_property_enabled('r_line'):

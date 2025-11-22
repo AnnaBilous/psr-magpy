@@ -910,7 +910,7 @@ def create_simple_series(
         >>> field = FieldConfig(components=[...])
         >>> grid = GridConfig(healpix=HealpixGridConfig(nside=128))
         >>> tracing = TracingConfig()
-        >>> template = FieldLine.template_all()
+        >>> template = FieldLineTemplate.template_all()
         >>> series = create_simple_series("my_series", field, grid, tracing, template)
     """
     return ExperimentSeriesConfig(

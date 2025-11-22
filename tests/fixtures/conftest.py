@@ -45,6 +45,18 @@ def setup_test_logger(test_name: str) -> logging.Logger:
 
 
 @pytest.fixture
+def test_data_dir():
+    """Provide test data directory inside tests/data.
+    
+    This directory is cleaned up after all tests complete.
+    """
+    tests_dir = Path(__file__).parent.parent
+    data_dir = tests_dir / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    yield data_dir
+
+
+@pytest.fixture
 def temp_dir():
     """Provide temporary directory for test files."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -68,18 +80,32 @@ def rng():
 def cleanup_test_directories():
     """Clean up test directories at the end of test session.
     
-    This fixture automatically cleans up any test directories created in the
-    project root when tests don't properly set output_dir or use temp directories.
+    This fixture automatically cleans up:
+    1. tests/data directory (all test output)
+    2. Any test directories created in the project root when tests don't properly set output_dir
     """
     yield  # Run all tests
     
     # Clean up test directories after all tests complete
     import shutil
     
-    # Get project root (parent of tests directory)
+    # Get paths
+    tests_dir = Path(__file__).parent.parent
+    data_dir = tests_dir / "data"
     project_root = Path(__file__).parent.parent.parent
     
-    # Patterns for test directories that might be created
+    cleaned = []
+    
+    # Clean up tests/data directory
+    if data_dir.exists():
+        try:
+            shutil.rmtree(data_dir)
+            cleaned.append(str(data_dir))
+            print(f"Cleaned up test data directory: {data_dir}")
+        except Exception as e:
+            print(f"Warning: Could not clean up {data_dir}: {e}")
+    
+    # Patterns for test directories that might be created in project root
     # These match common test directory names when output_dir is not set
     test_dir_patterns = [
         "test_experiment*",
@@ -87,9 +113,23 @@ def cleanup_test_directories():
         "test_*_series*",
         "test_*_experiment*",
         "simple_series*",  # From test_experiment_config.py
+        "integration_test*",  # From test_experiment_series.py::test_full_series_workflow
     ]
     
-    cleaned = []
+    # Also clean up grids directory if created in project root
+    # (created by experiment_runner.py when grid_file_path is not set)
+    grids_dir = project_root / "grids"
+    if grids_dir.exists() and grids_dir.is_dir():
+        try:
+            # Only clean if it contains test files (check for test_* pattern)
+            grid_files = list(grids_dir.glob("test_*.fits"))
+            if grid_files:
+                shutil.rmtree(grids_dir)
+                cleaned.append(str(grids_dir))
+                print(f"Cleaned up grids directory: {grids_dir}")
+        except Exception as e:
+            print(f"Warning: Could not clean up {grids_dir}: {e}")
+    
     for pattern in test_dir_patterns:
         # Search in project root only (not in subdirectories)
         for test_dir in project_root.glob(pattern):

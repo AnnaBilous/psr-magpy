@@ -12,6 +12,7 @@ from psr_magpy.experiment.experiment_config import ExperimentConfig
 from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.grid.grid import SphericalGrid
 from psr_magpy.field.multipole import MultipoleField
 from psr_magpy.line.property_system import PropertyName
@@ -196,11 +197,11 @@ class TestIntegration:
 class TestTemplateFunctionality:
     """Test the new template functionality in I/O system."""
     
-    def test_load_with_template_success(self):
+    def test_load_with_template_success(self, test_data_dir):
         """Test loading FieldLineSet with a template that matches available columns."""
         
         # Create a FieldLineSet with all properties
-        full_template = FieldLine.template_all()
+        full_template = FieldLineTemplate.template_all()
         field_line_set = FieldLineSet(full_template, copy_data=False)
         
         # Add some test data using direct property assignment
@@ -211,36 +212,33 @@ class TestTemplateFunctionality:
         field_line_set.property_system._properties[PropertyName.Z_ABS_MAX] = np.array([0.5, 1.0, 1.5])
         field_line_set.n_field_lines = 3
         
-        # Save to temporary file
-        tmp_path = Path(tempfile.mktemp(suffix=".fits"))
+        # Save to test data directory
+        test_data_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = test_data_dir / "test_template_load.fits"
         
-        try:
-            save_data(field_line_set, tmp_path)
-            
-            # Create minimal template
-            minimal_template = FieldLine(
-                save_footpoint_id=True,
-                save_r_cyl_max=True,
-                save_z_abs_max=True
-            )
-            
-            # Load with minimal template
-            loaded_set = load_data(FieldLineSet, tmp_path, template=minimal_template)
-            
-            # Check that only requested properties are loaded
-            assert loaded_set.property_system.get_property(PropertyName.FOOTPOINT_ID) is not None
-            assert loaded_set.property_system.get_property(PropertyName.R_CYL_MAX) is not None
-            assert loaded_set.property_system.get_property(PropertyName.Z_ABS_MAX) is not None
-            
-            # Check that other properties are not loaded
-            assert PropertyName.R_LINE not in loaded_set.property_system.enabled_properties
-            assert PropertyName.B_LINE not in loaded_set.property_system.enabled_properties
-            
-            # Check field line count
-            assert loaded_set.n_field_lines == 3
-            
-        finally:
-            tmp_path.unlink(missing_ok=True)
+        save_data(field_line_set, tmp_path)
+        
+        # Create minimal template
+        minimal_template = FieldLine(
+            save_footpoint_id=True,
+            save_r_cyl_max=True,
+            save_z_abs_max=True
+        )
+        
+        # Load with minimal template
+        loaded_set = load_data(FieldLineSet, tmp_path, template=minimal_template)
+        
+        # Check that only requested properties are loaded
+        assert loaded_set.property_system.get_property(PropertyName.FOOTPOINT_ID) is not None
+        assert loaded_set.property_system.get_property(PropertyName.R_CYL_MAX) is not None
+        assert loaded_set.property_system.get_property(PropertyName.Z_ABS_MAX) is not None
+        
+        # Check that other properties are not loaded
+        assert PropertyName.R_LINE not in loaded_set.property_system.enabled_properties
+        assert PropertyName.B_LINE not in loaded_set.property_system.enabled_properties
+        
+        # Check field line count
+        assert loaded_set.n_field_lines == 3
     
     def test_load_with_template_missing_columns(self):
         """Test loading with template that requires columns not present in file."""
