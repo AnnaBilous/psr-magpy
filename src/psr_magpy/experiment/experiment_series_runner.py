@@ -20,6 +20,7 @@ from psr_magpy.io import save_config, load_config
 from psr_magpy.io.config_io import ExperimentSeriesConfigIO
 from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy, ConfigIOValidator
 from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
+from psr_magpy.utils.exceptions import PSRMagPyIOError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -402,7 +403,7 @@ class ExperimentSeriesRunner:
         # Create output directories
         series_dir = self.output_directory / self.series_config.name
 
-        # Apply series-level deletion strategy
+        # Apply series-level deletion strategy FIRST (before any config creation)
         if self.series_deletion_strategy != DeletionStrategy.NONE:
             self._apply_deletion_strategy(
                 self.series_deletion_strategy, series_dir, scope="series"
@@ -439,11 +440,18 @@ class ExperimentSeriesRunner:
             self.log_rotation_backup_count,
         )
 
-        # Load or create experiments
+        # Load or create experiments (AFTER deletion)
         if self.run_remaining:
             # Get total experiments first to know the series size
-            all_experiments = self.series_config.load_experiments()
-            total_experiments_in_series = len(all_experiments)
+            try:
+                all_experiments = self.series_config.load_experiments()
+                total_experiments_in_series = len(all_experiments)
+            except (ValueError, PSRMagPyIOError):
+                # If configs were deleted, create them
+                all_experiments = self.series_config.create_experiment_series(
+                    save_configs=False, create_directories=self.create_directories
+                )
+                total_experiments_in_series = len(all_experiments)
 
             experiments = self._get_remaining_experiments()
             if not experiments:
@@ -462,19 +470,15 @@ class ExperimentSeriesRunner:
             try:
                 experiments = self.series_config.load_experiments()
                 total_experiments_in_series = len(experiments)
-            except ValueError as e:
-                # If no experiments found and we want to save configs, create them
-                if self.save_individual_configs:
-                    logger.info(
-                        "No existing experiments found, creating new experiment series"
-                    )
-                    experiments = self.series_config.create_experiment_series(
-                        save_configs=True, create_directories=self.create_directories
-                    )
-                    total_experiments_in_series = len(experiments)
-                else:
-                    # Re-raise the error if we don't want to save configs
-                    raise e
+            except (ValueError, PSRMagPyIOError):
+                # If no experiments found (e.g., deleted), create them
+                logger.info(
+                    "No existing experiments found, creating new experiment series"
+                )
+                experiments = self.series_config.create_experiment_series(
+                    save_configs=False, create_directories=self.create_directories
+                )
+                total_experiments_in_series = len(experiments)
 
         # Filter experiments by number if specified
         if self.experiment_numbers is not None:
@@ -489,7 +493,7 @@ class ExperimentSeriesRunner:
                 f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
             )
 
-        # Save individual configs if requested
+        # Save individual configs if requested (AFTER deletion and creation)
         if self.save_individual_configs:
             self._save_individual_configs(experiments)
 
