@@ -493,8 +493,9 @@ class ExperimentSeriesRunner:
                 f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
             )
 
-        # Save individual configs if requested (AFTER deletion and creation)
+        # Save series config and individual configs if requested (AFTER deletion and creation)
         if self.save_individual_configs:
+            self._save_series_config()
             self._save_individual_configs(experiments)
 
         # Run experiments
@@ -686,6 +687,27 @@ class ExperimentSeriesRunner:
             yaml.dump(summary, f, Dumper=OrderedDumper, sort_keys=False, width=1000)
 
         logger.info(f"Results summary saved to: {summary_path}")
+
+    def _save_series_config(self) -> None:
+        """Save series configuration YAML file."""
+        configs_dir = (
+            self.output_directory
+            / self.series_config.name
+            / self.series_config.CONFIGS_DIR
+        )
+        
+        if not configs_dir.exists():
+            configs_dir.mkdir(parents=True, exist_ok=True)
+        
+        series_config_path = configs_dir / f"{self.series_config.name}_config.yaml"
+        
+        if not series_config_path.exists() or self._should_overwrite_file(
+            series_config_path, file_type="configs"
+        ):
+            save_config(self.series_config, series_config_path, overwrite=True)
+            logger.info(f"Saved series config to: {series_config_path}")
+        else:
+            logger.info(f"Series config file already exists, skipping: {series_config_path}")
 
     def _save_individual_configs(self, experiments: List[ExperimentConfig]) -> None:
         """Save individual experiment configurations."""
