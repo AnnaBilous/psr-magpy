@@ -223,8 +223,6 @@ class FieldLineTracer:
             self.params.integration.trace_open_lines_backwards,
         )
 
-        # Handle different integration systems
-     
         dt = self.params.integration.dt
         #print(field_line.t[0], field_line.t[-1])
         if isinstance(dt, int) or dt > 1:
@@ -255,18 +253,8 @@ class FieldLineTracer:
         )
 
         # Use property calculator
-        # For System B, calculate dt from the actual time points
-        if self.params.integration.integration_system == "A":
-            dt_for_props = dt
-        else:  # System B
-            # Calculate dt from actual time points
-            if len(t) > 1:
-                dt_for_props = np.mean(np.diff(t))
-            else:
-                dt_for_props = self.params.integration.dt
-        
         props = self.property_calculator.calculate_line_properties(
-            footpoint_id, r, B_initial, dotprod, K, dt_for_props, template
+            footpoint_id, r, B_initial, dotprod, K, dt, template
         )
 
         output.set_property(**props)

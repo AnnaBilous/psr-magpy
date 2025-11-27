@@ -37,7 +37,6 @@ class TracingDefaults:
     DT = 0.01
     MAX_STEP = 0.01
     METHOD = "RK45"  # Integration method for ODE solver
-    INTEGRATION_SYSTEM = "A"  # Integration system: "A" (current) or "B" (t_eval based)
     FIELD_BACKEND = "python"  # Field calculation backend: "python" or "numba"
     SOLVER_BACKEND = "scipy"  # ODE solver backend: "scipy", "numba", or "cyrk"
     TRACE_OPEN_LINES_BACKWARDS = False
@@ -115,10 +114,6 @@ class IntegrationParameters(BaseModel):
         default=TracingDefaults.METHOD,
         description="Integration method for ODE solver (e.g., 'RK45', 'DOP853', 'BDF', 'Radau')",
     )
-    integration_system: str = Field(
-        default=TracingDefaults.INTEGRATION_SYSTEM,
-        description="Integration system: 'A' (current dense_output) or 'B' (t_eval based)",
-    )
     field_backend: str = Field(
         default=TracingDefaults.FIELD_BACKEND,
         description="Field calculation backend: 'python' (Python implementation) or 'numba' (Numba-compiled)",
@@ -172,15 +167,6 @@ class IntegrationParameters(BaseModel):
         if self.dt > 1.0:
             logger.warning(
                 f"Large dt value: {self.dt}. This may affect integration accuracy."
-            )
-        return self
-
-    @model_validator(mode="after")
-    def validate_integration_system(self):
-        """Validate integration system parameter."""
-        if self.integration_system not in ["A", "B"]:
-            raise ValueError(
-                f"integration_system must be 'A' or 'B', got {self.integration_system}"
             )
         return self
 

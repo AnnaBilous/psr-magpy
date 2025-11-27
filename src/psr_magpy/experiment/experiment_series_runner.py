@@ -472,13 +472,13 @@ class ExperimentSeriesRunner:
                 total_experiments_in_series = len(experiments)
             except (ValueError, PSRMagPyIOError):
                 # If no experiments found (e.g., deleted), create them
-                logger.info(
-                    "No existing experiments found, creating new experiment series"
-                )
-                experiments = self.series_config.create_experiment_series(
+                    logger.info(
+                        "No existing experiments found, creating new experiment series"
+                    )
+                    experiments = self.series_config.create_experiment_series(
                     save_configs=False, create_directories=self.create_directories
-                )
-                total_experiments_in_series = len(experiments)
+                    )
+                    total_experiments_in_series = len(experiments)
 
         # Filter experiments by number if specified
         if self.experiment_numbers is not None:
