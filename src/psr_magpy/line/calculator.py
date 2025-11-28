@@ -93,7 +93,7 @@ class FieldLineCalculator:
     def _estimate_memory(self, template: Union[FieldLineTemplate, FieldLine]) -> Tuple[float, float]:
         """Estimate memory requirements for field line calculation."""
         trial_size, completion_time = self.context.estimate_memory_requirements(
-            template
+            template, n_trial=self.context.params.performance.n_trial
         )
         trial_size_mb = trial_size / (1024 * 1024)
         self.context.progress_reporter.report_memory_estimation(
