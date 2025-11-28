@@ -4,10 +4,6 @@ from typing import Optional, List
 from pathlib import Path
 
 from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
-from psr_magpy.experiment.experiment_series_runner import (
-    run_experiment_series,
-    DeletionStrategy,
-)
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyExperimentError
 
@@ -20,16 +16,13 @@ def create_fine_subset_workflow(
     R_LC: float,
     h_LC_coeff: float = 3**1.5 / 2.0,
     experiment_numbers: Optional[List[int]] = None,
-    run_fine_series: bool = True,
-    **run_kwargs,
 ) -> ExperimentSeriesConfig:
-    """Complete workflow for creating and running fine resolution subset series.
+    """Complete workflow for creating fine resolution subset series.
 
     This workflow:
     1. Verifies coarse series directories exist
     2. Creates fine resolution subset grids from coarse OFL footpoints
-    3. Optionally runs the fine resolution experiment series
-    4. Returns updated fine series config
+    3. Returns updated fine series config
 
     Parameters
     ----------
@@ -43,10 +36,6 @@ def create_fine_subset_workflow(
         Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
     experiment_numbers : Optional[List[int]], optional
         Optional list of experiment numbers to process. Default is None.
-    run_fine_series : bool, optional
-        If True, run the fine series after creating subsets. Default is True.
-    **run_kwargs : Any
-        Additional arguments passed to run_experiment_series.
 
     Returns
     -------
@@ -57,8 +46,7 @@ def create_fine_subset_workflow(
         >>> fine_config = create_fine_subset_workflow(
         ...     coarse_series_config=coarse_config,
         ...     fine_series_config=fine_config,
-        ...     R_LC=10.0,
-        ...     run_fine_series=True
+        ...     R_LC=10.0
         ... )
     """
     logger.info("Starting fine subset workflow")
@@ -79,19 +67,6 @@ def create_fine_subset_workflow(
         experiment_numbers=experiment_numbers,
         save_configs=True,
     )
-
-    # Optionally run the fine series
-    if run_fine_series:
-        logger.info("Running fine resolution experiment series...")
-        series_result = run_experiment_series(
-            series_config=fine_series_config,
-            save_individual_configs=False,
-            save_grids=False,
-            continue_on_failure=True,
-            series_deletion_strategy=DeletionStrategy.LINES_AND_SUMMARY,
-            **run_kwargs,
-        )
-        series_result.print_summary()
 
     logger.info("Fine subset workflow completed")
     return fine_series_config
