@@ -483,11 +483,29 @@ class ExperimentSeriesRunner:
         # Filter experiments by number if specified
         if self.experiment_numbers is not None:
             filtered_experiments = []
-            for i in self.experiment_numbers:
-                if i < 0 or i >= len(experiments):
-                    logger.warning(f"Experiment number {i} out of range, skipping")
-                    continue
-                filtered_experiments.append(experiments[i])
+            requested_numbers = set(self.experiment_numbers)
+            for exp in experiments:
+                # Extract experiment number from name (format: {series_name}_{number:03d})
+                try:
+                    name_parts = exp.name.rsplit("_", 1)
+                    if len(name_parts) == 2:
+                        exp_number = int(name_parts[1])
+                        if exp_number in requested_numbers:
+                            filtered_experiments.append(exp)
+                except (ValueError, IndexError):
+                    logger.warning(f"Could not parse experiment number from name: {exp.name}, skipping")
+            # Warn about requested numbers that weren't found
+            found_numbers = set()
+            for exp in filtered_experiments:
+                try:
+                    name_parts = exp.name.rsplit("_", 1)
+                    if len(name_parts) == 2:
+                        found_numbers.add(int(name_parts[1]))
+                except (ValueError, IndexError):
+                    pass
+            missing_numbers = requested_numbers - found_numbers
+            if missing_numbers:
+                logger.warning(f"Experiment numbers not found: {sorted(missing_numbers)}")
             experiments = filtered_experiments
             logger.info(
                 f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
@@ -858,11 +876,29 @@ class InMemoryExperimentSeriesRunner:
         # Filter experiments by number if specified
         if self.experiment_numbers is not None:
             filtered_experiments = []
-            for i in self.experiment_numbers:
-                if i < 0 or i >= len(experiments):
-                    logger.warning(f"Experiment number {i} out of range, skipping")
-                    continue
-                filtered_experiments.append(experiments[i])
+            requested_numbers = set(self.experiment_numbers)
+            for exp in experiments:
+                # Extract experiment number from name (format: {series_name}_{number:03d})
+                try:
+                    name_parts = exp.name.rsplit("_", 1)
+                    if len(name_parts) == 2:
+                        exp_number = int(name_parts[1])
+                        if exp_number in requested_numbers:
+                            filtered_experiments.append(exp)
+                except (ValueError, IndexError):
+                    logger.warning(f"Could not parse experiment number from name: {exp.name}, skipping")
+            # Warn about requested numbers that weren't found
+            found_numbers = set()
+            for exp in filtered_experiments:
+                try:
+                    name_parts = exp.name.rsplit("_", 1)
+                    if len(name_parts) == 2:
+                        found_numbers.add(int(name_parts[1]))
+                except (ValueError, IndexError):
+                    pass
+            missing_numbers = requested_numbers - found_numbers
+            if missing_numbers:
+                logger.warning(f"Experiment numbers not found: {sorted(missing_numbers)}")
             experiments = filtered_experiments
             logger.info(
                 f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
