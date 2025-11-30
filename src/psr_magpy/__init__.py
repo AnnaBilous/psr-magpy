@@ -13,6 +13,7 @@ from .grid.grid import SphericalGrid, RandomGrid, HealpixGrid, CustomGrid
 from .line.calculator import FieldLineCalculator
 from .line.tracing_parameters import TracingParameters, IntegrationParameters
 from .line.field_line import FieldLine
+from .line.field_line_template import FieldLineTemplate
 
 # Utils
 from .utils.logging_config import get_logger
@@ -63,6 +64,7 @@ __all__ = [
     "TracingParameters",
     "IntegrationParameters",
     "FieldLine",
+    "FieldLineTemplate",
     # Utils
     "get_logger",
     "get_R_LC",
