@@ -97,8 +97,11 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
     #print(grid.indices)
     #print("Full grid nline", len(full_grid.longitude))
 
-    full_grid_ftp_ids_not_inner = grid.indices[ftp_ids_not_inner]
-    full_grid_ftp_ids = grid.indices[ftp_ids]
+    #full_grid_ftp_ids_not_inner = grid.indices[ftp_ids_not_inner]
+    #full_grid_ftp_ids = grid.indices[ftp_ids]
+    
+    full_grid_ftp_ids_not_inner = ftp_ids_not_inner
+    full_grid_ftp_ids = ftp_ids
 
     #plt.plot(full_grid.longitude, full_grid.colatitude, '.')
     #plt.plot(full_grid.longitude[full_grid_ftp_ids_not_inner], full_grid.colatitude[full_grid_ftp_ids_not_inner], 'k.')
@@ -134,20 +137,7 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
     n_neighbours_in_ftp_ids = np.sum(neighbours_in_ftp_ids, axis=0)
     # Edge detection: footpoint is edge if it has fewer neighbors in ftp_ids than expected
     is_edge = n_neighbours_in_ftp_ids < n_neighbours_per_footpoint - 1
-    for iii,f in enumerate(ftp_ids_not_inner):
-      if is_edge[iii] and False:  
-        print(n_neighbours_per_footpoint[iii])
-        for jj in range(8):
-            print("\t", neighbour_footpoints[jj,iii])
-        print(n_neighbours_in_ftp_ids[iii])
-        print(is_edge[iii])
-        print("=====" )
-        plt.plot(grid.longitude, grid.colatitude, 'o', color='0.5')
-        plt.plot(grid.longitude[ftp_ids_not_inner], grid.colatitude[ftp_ids_not_inner], 'k.')
-        plt.scatter([l[f]], [c[f]], s=150, color='yellow')
-        plt.scatter(l[neighbour_footpoints[:,iii]], c[neighbour_footpoints[:,iii]], s=150, color='green')
-        plt.show()
-
+ 
     ftp_ids_edge = ftp_ids_not_inner[is_edge]
 
     #plt.plot(grid.longitude, grid.colatitude, 'k.')
