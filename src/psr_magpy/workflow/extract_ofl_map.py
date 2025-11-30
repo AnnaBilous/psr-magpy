@@ -124,7 +124,7 @@ def find_OFL_regions_from_batch_files(
     
     # Create grid from experiment config
     grid = experiment_config.grid.create_grid()
-    n_footpoints = grid.nline
+    n_footpoints = grid.nline_ori
     
     # Create NaN array for all footpoint IDs
     ofl_map = np.full(n_footpoints, np.nan)
