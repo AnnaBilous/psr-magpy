@@ -337,7 +337,8 @@ class TestCalculateAndSaveOFLEdges:
         self.experiment_config_path = self.temp_dir / "test_config.yaml"
         self.lines_dir = self.temp_dir / "lines"
         self.lines_dir.mkdir(parents=True, exist_ok=True)
-        self.output_path = self.temp_dir / "edge_lines.fits"
+        self.output_dir = self.temp_dir / "edge_lines"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Create template
         self.template = FieldLine(
@@ -362,7 +363,7 @@ class TestCalculateAndSaveOFLEdges:
         assert 'lines_dir' in sig.parameters
         assert 'template' in sig.parameters
         assert 'R_LC_values' in sig.parameters
-        assert 'output_path' in sig.parameters
+        assert 'output_dir' in sig.parameters
         
         # Check return type annotation
         assert sig.return_annotation == OFLEdgeResult
@@ -378,7 +379,7 @@ class TestCalculateAndSaveOFLEdges:
                 lines_dir=str(self.lines_dir),
                 template=self.template,
                 R_LC_values=self.r_lc_values,
-                output_path=str(self.output_path)
+                output_dir=str(self.output_dir)
             )
             assert False, "Should have raised PSRMagPyIOError"
         except PSRMagPyIOError as e:
@@ -397,7 +398,7 @@ class TestCalculateAndSaveOFLEdges:
                 lines_dir=str(self.lines_dir),
                 template=self.template,
                 R_LC_values=self.r_lc_values,
-                output_path=str(self.output_path)
+                output_dir=str(self.output_dir)
             )
             assert False, "Should have raised PSRMagPyIOError"
         except PSRMagPyIOError as e:
@@ -426,7 +427,7 @@ class TestCalculateAndSaveOFLEdges:
                 lines_dir=str(self.lines_dir),
                 template=self.template,
                 R_LC_values=self.r_lc_values,
-                output_path=str(self.output_path),
+                output_dir=str(self.output_dir),
                 precise_edges=True  # This will trigger the grid type check
             )
             assert False, "Should have raised PSRMagPyExperimentError"
@@ -438,6 +439,8 @@ class TestCalculateAndSaveOFLEdges:
     def test_calculate_and_save_template_reversed_error_addition(self, mock_load_data, mock_experiment_config):
         """Test that reversed_error is added to template if not present."""
         mock_config = Mock()
+        mock_config.name = "test_series_001"
+        mock_config.metadata = {"experiment_number": 1}
         mock_experiment_config.load.return_value = mock_config
         
         # Mock field line data
@@ -511,8 +514,9 @@ class TestCalculateAndSaveOFLEdges:
                     lines_dir=str(self.lines_dir),
                     template=template_without_error,
                     R_LC_values=self.r_lc_values,
-                    output_path=str(self.output_path),
-                    precise_edges=False
+                    output_dir=str(self.output_dir),
+                    precise_edges=False,
+                    reversed_error_threshold=0.001  # Pass threshold to trigger addition
                 )
                 
                 # Verify that reversed_error was added to template
@@ -524,13 +528,14 @@ class TestCalculateAndSaveOFLEdges:
     def test_calculate_and_save_error_filtering(self, mock_load_data, mock_experiment_config):
         """Test that footpoints with high reversed_error are filtered out."""
         mock_config = Mock()
+        mock_config.name = "test_experiment_001"
+        mock_config.metadata = {"experiment_number": 1}
         mock_experiment_config.load.return_value = mock_config
         
         # Mock tracing config with reversed_error_threshold
         mock_tracing = Mock()
         mock_tracing.reversed_error_threshold = 0.001
         mock_config.tracing = mock_tracing
-        mock_config.name = "test_experiment"
         
         # Mock field line data
         mock_ofl_data = Mock(spec=FieldLineSet)
@@ -615,8 +620,9 @@ class TestCalculateAndSaveOFLEdges:
                     lines_dir=str(self.lines_dir),
                     template=template_with_error,
                     R_LC_values=self.r_lc_values,
-                    output_path=str(self.output_path),
-                    precise_edges=False
+                    output_dir=str(self.output_dir),
+                    precise_edges=False,
+                    reversed_error_threshold=0.001  # Pass threshold to trigger filtering
                 )
                 
                 # Verify that subset_by_footpoint_ids was called with filtered footpoints

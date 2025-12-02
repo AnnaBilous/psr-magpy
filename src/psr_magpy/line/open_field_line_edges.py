@@ -1,12 +1,11 @@
 import healpy as hp
 import numpy as np
-from typing import NamedTuple, List, Union, Optional
+from typing import NamedTuple, List, Union, Optional, Dict
 from pathlib import Path
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.field_line import FieldLine
-from psr_magpy.line.property_system import PropertyName
-from psr_magpy.grid.grid import HealpixGrid, SphericalGrid, RandomGrid, CustomGrid, FootpointGrid
-from psr_magpy.utils.physical_conversions import get_R_LC, get_P_ms
+from psr_magpy.grid.grid import HealpixGrid, FootpointGrid
+from psr_magpy.utils.physical_conversions import get_R_LC
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyGridError, PSRMagPyValidationError, PSRMagPyExperimentError
 
@@ -302,18 +301,313 @@ def get_OFL_edges_approximate(
     return OFLEdgeResult(R_LC=R_LC, edge_footpoints=edge_ftp_ids, precise_edges=False)
 
 
+def _load_experiment_setup(
+    experiment_config_path: Union[str, Path],
+    lines_dir: Union[str, Path],
+) -> tuple:
+    """Load experiment configuration, grid, and minimal OFL data.
+    
+    Parameters
+    ----------
+    experiment_config_path : Union[str, Path]
+        Path to experiment configuration file.
+    lines_dir : Union[str, Path]
+        Directory containing field line batch files.
+    
+    Returns
+    -------
+    tuple
+        (experiment_config, grid, OFL_data)
+    """
+    from psr_magpy.experiment.experiment_config import ExperimentConfig
+    from psr_magpy.line.field_line import FieldLine
+    
+    logger = get_logger(__name__, console_format_brief=True)
+    
+    # Load experiment configuration
+    try:
+        experiment_config = ExperimentConfig.load(experiment_config_path)
+        logger.info(f"Loaded experiment config: {experiment_config.name}")
+    except Exception as e:
+        raise PSRMagPyIOError(
+            f"Failed to load experiment config from {experiment_config_path}: {e}"
+        ) from e
+    
+    # Create grid from experiment config
+    try:
+        grid = experiment_config.grid.create_grid()
+        if grid is None:
+            raise PSRMagPyGridError("Failed to create grid from experiment config")
+        if grid.grid_type is None:
+            raise PSRMagPyGridError("Grid type is None")
+        logger.info(f"Created grid: {grid.grid_type.value}")
+    except Exception as e:
+        raise PSRMagPyGridError(f"Failed to create grid: {e}") from e
+    
+    # Load minimal data for OFL calculation
+    try:
+        minimal_template = FieldLine(
+            save_footpoint_id=True,
+            save_r_cyl_max=True,
+            save_z_abs_max=True,
+        )
+        
+        OFL_data = experiment_config.load_combined_batch_data(
+            minimal_template, str(lines_dir)
+        )
+        if OFL_data is None:
+            raise PSRMagPyIOError(f"No field line data found in {lines_dir}")
+        logger.info(
+            f"Loaded {OFL_data.n_field_lines} field lines with minimal template"
+        )
+    except Exception as e:
+        raise PSRMagPyIOError(f"Failed to load field line data from {lines_dir}: {e}") from e
+    
+    return experiment_config, grid, OFL_data
+
+
+def _extract_and_save_OFL_data(
+    experiment_config,
+    template: FieldLine,
+    lines_dir: Union[str, Path],
+    batch_files: Optional[List[str]],
+    footpoint_indices_list: List[np.ndarray],
+    R_LC_values: np.ndarray,
+    output_dir: Optional[Union[str, Path]] = None,
+    trim_lines: bool = False,
+    trim_type: str = "sphere",
+    trim_radius: float = 5.0,
+    max_memory_mb: float = 500.0,
+    data_type: str = "edge",
+    reversed_error_threshold: Optional[float] = None,
+) -> None:
+    """Extract and save OFL data (edges or regions) with memory management.
+    
+    Parameters
+    ----------
+    experiment_config : ExperimentConfig
+        Experiment configuration.
+    template : FieldLine
+        FieldLine template specifying which properties to save.
+    lines_dir : Union[str, Path]
+        Directory containing batch files.
+    batch_files : Optional[List[str]]
+        List of batch file paths. If None, will be found automatically.
+    footpoint_indices_list : List[np.ndarray]
+        List of footpoint index arrays, one per R_LC value.
+    R_LC_values : np.ndarray
+        Array of R_LC values.
+    output_dir : Union[str, Path]
+        Output directory for saving chunks.
+    trim_lines : bool, optional
+        Whether to trim field lines. Default is False.
+    trim_type : str, optional
+        Trimming method. Default is "sphere".
+    trim_radius : float, optional
+        Radius for trimming. Default is 5.0.
+    max_memory_mb : float, optional
+        Maximum memory threshold in MB. Default is 500.0.
+    data_type : str, optional
+        Type of data ("edge" or "region") for logging. Default is "edge".
+    reversed_error_threshold : Optional[float], optional
+        Threshold for filtering by reversed_error. If None, no filtering is performed.
+        Default is None.
+    """
+    from psr_magpy.io import load_data
+    from psr_magpy.line.field_line_set import FieldLineSet
+    from psr_magpy.line.property_system import PropertyName
+    from psr_magpy.io.data_io import FieldLineSetIO
+    import glob
+    
+    logger = get_logger(__name__, console_format_brief=True)
+    
+    # Ensure reversed_error is in template only if filtering is requested
+    if reversed_error_threshold is not None:
+        if not template.property_system.save_flags.save_reversed_error:
+            template.property_system.save_flags.save_reversed_error = True
+            logger.debug("Added reversed_error to template for filtering")
+    
+    # Find batch files if not provided
+    if batch_files is None:
+        batch_pattern = f"{lines_dir}/{experiment_config.name}_batch_*.fits"
+        batch_files = sorted(glob.glob(batch_pattern))
+        
+        if not batch_files:
+            raise PSRMagPyIOError(f"No batch files found matching pattern: {batch_pattern}")
+        
+        logger.info(f"Found {len(batch_files)} batch files")
+    
+    # Create output directory
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Extract experiment number from config
+    experiment_number = None
+    if experiment_config.metadata is not None and isinstance(experiment_config.metadata, dict) and "experiment_number" in experiment_config.metadata:
+        experiment_number = experiment_config.metadata["experiment_number"]
+    else:
+        # Try to parse from experiment name (format: {series_name}_{number:03d})
+        try:
+            name_parts = experiment_config.name.rsplit("_", 1)
+            if len(name_parts) == 2:
+                experiment_number = int(name_parts[1])
+        except (ValueError, IndexError):
+            logger.warning(f"Could not extract experiment number from name: {experiment_config.name}")
+    
+    if experiment_number is None:
+        error_msg = "Experiment number not found in config metadata or name"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    # Determine filename stem based on data type
+    if data_type == "edge":
+        stem_prefix = "OFLR_edge_lines"
+    else:
+        stem_prefix = "OFLR_lines"
+    
+    for i, (r_lc, footpoint_indices) in enumerate(zip(R_LC_values, footpoint_indices_list)):
+        logger.info(
+            f"Processing R_LC = {r_lc:.2f}: {len(footpoint_indices)} {data_type} footpoints"
+        )
+        
+        if len(footpoint_indices) == 0:
+            logger.warning(f"  No {data_type} footpoints for R_LC = {r_lc:.2f}")
+            continue
+        
+        footpoint_set = set(footpoint_indices.tolist())
+        combined_data = None
+        chunk_counter = 0
+        
+        for batch_file in batch_files:
+            logger.debug(f"  Processing batch file: {batch_file}")
+            
+            try:
+                batch_data = load_data(FieldLineSet, batch_file, template=template)
+                
+                if batch_data is None or batch_data.n_field_lines == 0:
+                    logger.debug(f"    No data in batch file, skipping")
+                    continue
+                
+                batch_footpoint_ids = batch_data.property_system.get_property(
+                    PropertyName.FOOTPOINT_ID
+                )
+                
+                if batch_footpoint_ids is None:
+                    logger.debug(f"    No footpoint IDs in batch file, skipping")
+                    continue
+                
+                # Find matching footpoint IDs
+                matching_footpoint_ids = []
+                for j, fp_id in enumerate(batch_footpoint_ids):
+                    if fp_id in footpoint_set:
+                        # Filter by reversed_error if threshold is provided
+                        if reversed_error_threshold is not None:
+                            batch_reversed_error = batch_data.property_system.get_property(
+                                PropertyName.REVERSED_ERROR
+                            )
+                            if batch_reversed_error is not None and len(batch_reversed_error) > j:
+                                if batch_reversed_error[j] > reversed_error_threshold:
+                                    continue
+                        matching_footpoint_ids.append(fp_id)
+                
+                if not matching_footpoint_ids:
+                    logger.debug(f"    No {data_type} footpoints in this batch, skipping")
+                    continue
+                
+                batch_subset = batch_data.subset_by_footpoint_ids(matching_footpoint_ids)
+                
+                if batch_subset.n_field_lines > 0:
+                    logger.debug(
+                        f"    Found {batch_subset.n_field_lines} {data_type} field lines in batch"
+                    )
+                    
+                    # Trim before combining
+                    if trim_lines:
+                        batch_subset.trim_to_light_cylinder(
+                            R_LC=trim_radius, trim_type=trim_type
+                        )
+                    
+                    # Combine
+                    if combined_data is None:
+                        combined_data = batch_subset
+                    else:
+                        combined_data.append(batch_subset)
+                    
+                    # Check memory and save chunk if needed
+                    if combined_data is not None:
+                        memory_mb = combined_data.estimate_size() / (1024 * 1024)
+                        if memory_mb > max_memory_mb:
+                            logger.info(
+                                f"  Memory threshold exceeded ({memory_mb:.2f} MB > {max_memory_mb:.2f} MB). "
+                                f"Saving chunk to disk."
+                            )
+                            
+                            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:03d}_RLC_{r_lc:02.2f}_{chunk_counter:03d}.fits"
+                            chunk_io = FieldLineSetIO(combined_data)
+                            chunk_io.add_header_keyword(
+                                "R_LC", r_lc, "Light cylinder radius for this subset"
+                            )
+                            chunk_io.save(combined_data, chunk_filename)
+                            
+                            logger.info(
+                                f"  Saved chunk {chunk_counter} ({combined_data.n_field_lines} lines) "
+                                f"to {chunk_filename}"
+                            )
+                            
+                            chunk_counter += 1
+                            combined_data = None
+                else:
+                    logger.debug(
+                        f"    No {data_type} field lines found in this batch (this is normal)"
+                    )
+            
+            except Exception as e:
+                logger.warning(f"    Error processing batch file {batch_file}: {e}")
+                continue
+        
+        # Save final chunk
+        if combined_data is not None and combined_data.n_field_lines > 0:
+            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:03d}_RLC_{r_lc:02.2f}_{chunk_counter:03d}.fits"
+            
+            logger.info(
+                f"  Saving final chunk {chunk_counter} ({combined_data.n_field_lines} lines) "
+                f"to {chunk_filename}"
+            )
+            
+            io_instance = FieldLineSetIO(combined_data)
+            io_instance.add_header_keyword(
+                "R_LC", r_lc, "Light cylinder radius for this subset"
+            )
+            io_instance.save(combined_data, chunk_filename)
+            
+            logger.info(f"  Successfully saved final chunk for R_LC = {r_lc:.2f}")
+        
+        if chunk_counter > 0 or (combined_data is not None and combined_data.n_field_lines > 0):
+            total_chunks = chunk_counter + (1 if combined_data is not None and combined_data.n_field_lines > 0 else 0)
+            logger.info(f"  Saved {total_chunks} chunk(s) for R_LC = {r_lc:.2f}")
+        else:
+            logger.warning(
+                f"  No {data_type} field lines found for R_LC = {r_lc:.2f} across all batch files"
+            )
+            logger.warning(
+                f"  Expected {len(footpoint_set)} footpoint IDs but found none"
+            )
+
+
 def calculate_and_save_OFL_edges(
     experiment_config_path: Union[str, Path],
     lines_dir: Union[str, Path],
     template: FieldLine,
     R_LC_values: np.ndarray,
-    output_path: Union[str, Path],
+    output_dir: Optional[Union[str, Path]] = None,
     h_LC_coeff: float = 3**1.5 / 2.0,
     trim_lines: bool = False,
     trim_type: str = "sphere",
     trim_radius: float = 5.0,
     precise_edges: bool = False,
     R_LC_edge_coefficient: float = 1.02,
+    max_memory_mb: float = 500.0,
+    reversed_error_threshold: Optional[float] = None,
 ) -> OFLEdgeResult:
     """Calculate OFL edges and save as FITS file.
 
@@ -331,8 +625,9 @@ def calculate_and_save_OFL_edges(
         FieldLine template specifying which properties to save.
     R_LC_values : np.ndarray
         Array of light cylinder radii for edge calculation.
-    output_path : Union[str, Path]
-        Path where to save the filtered edge lines FITS file.
+    output_dir : Optional[Union[str, Path]], optional
+        Directory where to save the filtered edge lines FITS files.
+        If None, defaults to lines_dir/OFLR_edges. Default is None.
     h_LC_coeff : float, optional
         Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
     trim_lines : bool, optional
@@ -345,6 +640,12 @@ def calculate_and_save_OFL_edges(
         If True, use precise edge calculation method. Default is False.
     R_LC_edge_coefficient : float, optional
         Edge coefficient. Default is 1.02.
+    max_memory_mb : float, optional
+        Maximum memory threshold in MB. If combined edge data exceeds this,
+        it will be saved to disk and cleared from memory. Default is 500.0.
+    reversed_error_threshold : Optional[float], optional
+        Threshold for filtering by reversed_error. If None, no filtering is performed.
+        If not None, uses this value instead of experiment config default. Default is None.
 
     Returns
     -------
@@ -363,14 +664,13 @@ def calculate_and_save_OFL_edges(
     FileNotFoundError
         If experiment config or lines directory not found.
     """
-    from psr_magpy.experiment.experiment_config import ExperimentConfig
-    from psr_magpy.io import load_data
-    from psr_magpy.line.field_line_set import FieldLineSet
-    from psr_magpy.line.field_line import FieldLine
-    from psr_magpy.line.property_system import PropertyName
-    import glob
-
+    
     logger = get_logger(__name__, console_format_brief=True)
+
+    # Set default output_dir if not provided
+    if output_dir is None:
+        output_dir = Path(lines_dir) / "OFLR_edges"
+        logger.info(f"Using default output_dir: {output_dir}")
 
     # Ensure R_LC_values are sorted in descending order
     R_LC_values = np.array(R_LC_values) if not isinstance(R_LC_values, np.ndarray) else R_LC_values
@@ -378,62 +678,20 @@ def calculate_and_save_OFL_edges(
         R_LC_values = np.sort(R_LC_values)[::-1]
         logger.info(f"R_LC_values sorted in descending order: {R_LC_values}")
 
-    # Load experiment configuration
-    try:
-        experiment_config = ExperimentConfig.load(experiment_config_path)
-        logger.info(f"Loaded experiment config: {experiment_config.name}")
-    except Exception as e:
-        raise PSRMagPyIOError(
-            f"Failed to load experiment config from {experiment_config_path}: {e}"
-        ) from e
-
-    # Create grid from experiment config
-    try:
-        grid = experiment_config.grid.create_grid()
-        if grid is None:
-            raise PSRMagPyGridError("Failed to create grid from experiment config")
-        if grid.grid_type is None:
-            raise PSRMagPyGridError("Grid type is None")
-        logger.info(f"Created grid: {grid.grid_type.value}")
-    except Exception as e:
-        raise PSRMagPyGridError(f"Failed to create grid: {e}") from e
-
-    # Phase 1: Load minimal data for edge calculation
+    # Phase 1: Load experiment setup
     logger.info("Phase 1: Loading minimal data for edge calculation")
-    try:
-        # Create minimal template for edge calculation
-        minimal_template = FieldLine(
-            save_footpoint_id=True,  # Always required
-            save_r_cyl_max=True,
-            save_z_abs_max=True,
-            # All other properties default to False
-        )
-
-        OFL_data = experiment_config.load_combined_batch_data(
-            minimal_template, str(lines_dir)
-        )
-        if OFL_data is None:
-            raise PSRMagPyIOError(f"No field line data found in {lines_dir}")
-        logger.info(
-            f"Loaded {OFL_data.n_field_lines} field lines with minimal template"
-        )
-    except Exception as e:
-        raise PSRMagPyIOError(f"Failed to load field line data from {lines_dir}: {e}") from e
+    experiment_config, grid, OFL_data = _load_experiment_setup(
+        experiment_config_path, lines_dir
+    )
 
     # Calculate OFL edges
     try:
         if precise_edges:
             if not isinstance(grid, HealpixGrid):
                 raise PSRMagPyGridError(
-                    f"Precise edge calculation requires HealpixGrid with nside < 512, got {type(grid).__name__}."
+                    f"Precise edge calculation requires HealpixGrid got {type(grid).__name__}."
                 )
-            """
-            else:
-                if grid.nside >= 512:
-                    raise PSRMagPyGridError(
-                        f"Precise edge calculation requires HealpixGrid with nside < 512, got nside = {grid.nside}."
-                    )
-            """
+
 
         calculator = OFLEdgeCalculator(grid, h_LC_coeff=h_LC_coeff, precise_edges=precise_edges)
 
@@ -447,154 +705,23 @@ def calculate_and_save_OFL_edges(
     # Phase 2: Extract edge data with full template
     logger.info("Phase 2: Extracting edge data with full template")
     
-    # Ensure reversed_error is in template if needed for filtering
-    if not template.property_system.save_flags.save_reversed_error:
-        template.property_system.save_flags.save_reversed_error = True
-        logger.debug("Added reversed_error to template for filtering")
-    
     try:
-        # Find all batch files
-        batch_pattern = f"{lines_dir}/{experiment_config.name}_batch_*.fits"
-        batch_files = sorted(glob.glob(batch_pattern))
-
-        if not batch_files:
-            raise PSRMagPyIOError(f"No batch files found matching pattern: {batch_pattern}")
-
-        logger.info(f"Found {len(batch_files)} batch files")
-
-        # Process each R_LC value and its edge footpoints
-        output_path = Path(output_path)
-        
-        # Create output directory if it doesn't exist
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        base_path = output_path.parent / output_path.stem
-        extension = output_path.suffix
-
-        for i, r_lc in enumerate(edge_result.R_LC):
-            footpoint_indices = edge_result.edge_footpoints[i]
-            logger.info(
-                f"Processing R_LC = {r_lc:.2f}: {len(footpoint_indices)} edge footpoints"
-            )
-
-            if len(footpoint_indices) == 0:
-                logger.warning(f"  No edge footpoints for R_LC = {r_lc:.2f}")
-                continue
-
-            # Convert to set for efficient lookup
-            edge_footpoint_set = set(footpoint_indices.tolist())
-
-            # Load and subset each batch file
-            combined_edge_data = None
-
-            for batch_file in batch_files:
-                logger.debug(f"  Processing batch file: {batch_file}")
-
-                try:
-                    # Load batch file with full template
-                    batch_data = load_data(
-                        FieldLineSet, batch_file, template=template
-                    )
-
-                    if batch_data is None or batch_data.n_field_lines == 0:
-                        logger.debug(f"    No data in batch file, skipping")
-                        continue
-
-                    # Get footpoint IDs from this batch
-                    batch_footpoint_ids = batch_data.property_system.get_property(
-                        PropertyName.FOOTPOINT_ID
-                    )
-
-                    if batch_footpoint_ids is None:
-                        logger.debug(f"    No footpoint IDs in batch file, skipping")
-                        continue
-
-                    # Get reversed_error if available for filtering
-                    batch_reversed_error = batch_data.property_system.get_property(
-                        PropertyName.REVERSED_ERROR
-                    )
-                    reversed_error_threshold = getattr(experiment_config.tracing, 'reversed_error_threshold', 1.0e-3)
-                    
-                    # Find footpoint IDs that are in the edge and pass error threshold
-                    edge_footpoint_ids_in_batch = []
-                    for j, fp_id in enumerate(batch_footpoint_ids):
-                        if fp_id in edge_footpoint_set:
-                            # Filter by reversed_error if available
-                            if batch_reversed_error is not None and len(batch_reversed_error) > j:
-                                if batch_reversed_error[j] > reversed_error_threshold:
-                                    continue  # Skip this footpoint due to high error
-                            edge_footpoint_ids_in_batch.append(fp_id)
-
-                    if not edge_footpoint_ids_in_batch:
-                        logger.debug(f"    No edge footpoints in this batch, skipping")
-                        continue
-
-                    # Create subset of this batch
-                    batch_subset = batch_data.subset_by_footpoint_ids(
-                        edge_footpoint_ids_in_batch
-                    )
-
-                    if batch_subset.n_field_lines > 0:
-                        logger.debug(
-                            f"    Found {batch_subset.n_field_lines} edge field lines in batch"
-                        )
-
-                        # Combine with previous batch subsets
-                        if combined_edge_data is None:
-                            combined_edge_data = batch_subset
-                        else:
-                            combined_edge_data.append(batch_subset)
-                    else:
-                        logger.debug(
-                            f"    No edge field lines found in this batch (this is normal)"
-                        )
-
-                except Exception as e:
-                    logger.warning(f"    Error processing batch file {batch_file}: {e}")
-                    continue
-
-            # Save combined edge data for this R_LC value
-            if combined_edge_data is not None and combined_edge_data.n_field_lines > 0:
-                subset_filename = f"{base_path}_{i:03d}{extension}"
-
-                logger.info(
-                    f"  Saving {combined_edge_data.n_field_lines} edge field lines to {subset_filename}"
-                )
-
-                # Trim field lines if requested
-                if trim_lines:
-                    logger.info(
-                        f"  Trimming field lines to R_LC = {trim_radius} using {trim_type} method"
-                    )
-                    combined_edge_data.trim_to_light_cylinder(
-                        R_LC=trim_radius, trim_type=trim_type
-                    )
-                    logger.info(
-                        f"  Trimmed edge data now has {combined_edge_data.n_field_lines} field lines"
-                    )
-
-                # Create I/O instance and add R_LC keyword to header
-                from psr_magpy.io.data_io import FieldLineSetIO
-
-                io_instance = FieldLineSetIO(combined_edge_data)
-                io_instance.add_header_keyword(
-                    "R_LC", r_lc, "Light cylinder radius for this subset"
-                )
-
-                # Save with the I/O instance that has the header keyword
-                io_instance.save(combined_edge_data, subset_filename)
-
-                logger.info(f"  Successfully saved edge data for R_LC = {r_lc:.2f}")
-            else:
-                logger.warning(
-                    f"  No edge field lines found for R_LC = {r_lc:.2f} across all batch files"
-                )
-                logger.warning(
-                    f"  Expected {len(edge_footpoint_set)} footpoint IDs but found none"
-                )
-
+        _extract_and_save_OFL_data(
+            experiment_config=experiment_config,
+            template=template,
+            lines_dir=lines_dir,
+            batch_files=None,  # Will be found inside helper
+            footpoint_indices_list=edge_result.edge_footpoints,
+            R_LC_values=edge_result.R_LC,
+            output_dir=output_dir,
+            trim_lines=trim_lines,
+            trim_type=trim_type,
+            trim_radius=trim_radius,
+            max_memory_mb=max_memory_mb,
+            data_type="edge",
+            reversed_error_threshold=reversed_error_threshold,
+        )
         logger.info("Phase 2: Edge data extraction completed")
-
     except Exception as e:
         raise PSRMagPyIOError(f"Failed to extract and save edge data: {e}") from e
 
@@ -606,11 +733,13 @@ def calculate_and_save_OFL_regions(
     lines_dir: Union[str, Path],
     template: FieldLine,
     R_LC_values: np.ndarray,
-    output_path: Union[str, Path],
+    output_dir: Optional[Union[str, Path]] = None,
     h_LC_coeff: float = 3**1.5 / 2.0,
     trim_lines: bool = False,
     trim_type: str = "sphere",
     trim_radius: float = 5.0,
+    max_memory_mb: float = 500.0,
+    reversed_error_threshold: Optional[float] = None,
 ) -> OFLEdgeResult:
     """Calculate OFL regions and save as FITS file.
 
@@ -626,8 +755,9 @@ def calculate_and_save_OFL_regions(
         FieldLine template specifying which properties to save.
     R_LC_values : np.ndarray
         Array of light cylinder radii for region calculation.
-    output_path : Union[str, Path]
-        Path where to save the filtered region lines FITS file.
+    output_dir : Optional[Union[str, Path]], optional
+        Directory where to save the filtered region lines FITS files.
+        If None, defaults to lines_dir/OFLR. Default is None.
     h_LC_coeff : float, optional
         Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
     trim_lines : bool, optional
@@ -636,6 +766,12 @@ def calculate_and_save_OFL_regions(
         Trimming method ("sphere" or "cylinder"). Default is "sphere".
     trim_radius : float, optional
         Radius for trimming (light cylinder radius). Default is 5.0.
+    max_memory_mb : float, optional
+        Maximum memory threshold in MB. If combined region data exceeds this,
+        it will be saved to disk and cleared from memory. Default is 500.0.
+    reversed_error_threshold : Optional[float], optional
+        Threshold for filtering by reversed_error. If None, no filtering is performed.
+        If not None, uses this value instead of experiment config default. Default is None.
 
     Returns
     -------
@@ -656,53 +792,22 @@ def calculate_and_save_OFL_regions(
 
     logger = get_logger(__name__, console_format_brief=True)
 
+    # Set default output_dir if not provided
+    if output_dir is None:
+        output_dir = Path(lines_dir) / "OFLR"
+        logger.info(f"Using default output_dir: {output_dir}")
+
     # Ensure R_LC_values are sorted in descending order
     R_LC_values = np.array(R_LC_values) if not isinstance(R_LC_values, np.ndarray) else R_LC_values
     if len(R_LC_values) > 1:
         R_LC_values = np.sort(R_LC_values)[::-1]
         logger.info(f"R_LC_values sorted in descending order: {R_LC_values}")
 
-    # Load experiment configuration
-    try:
-        experiment_config = ExperimentConfig.load(experiment_config_path)
-        logger.info(f"Loaded experiment config: {experiment_config.name}")
-    except Exception as e:
-        raise PSRMagPyIOError(
-            f"Failed to load experiment config from {experiment_config_path}: {e}"
-        ) from e
-
-    # Create grid from experiment config
-    try:
-        grid = experiment_config.grid.create_grid()
-        if grid is None:
-            raise PSRMagPyGridError("Failed to create grid from experiment config")
-        if grid.grid_type is None:
-            raise PSRMagPyGridError("Grid type is None")
-        logger.info(f"Created grid: {grid.grid_type.value}")
-    except Exception as e:
-        raise PSRMagPyGridError(f"Failed to create grid: {e}") from e
-
-    # Phase 1: Load minimal data for OFL region calculation
+    # Phase 1: Load experiment setup
     logger.info("Phase 1: Loading minimal data for OFL region calculation")
-    try:
-        # Create minimal template for OFL calculation
-        minimal_template = FieldLine(
-            save_footpoint_id=True,  # Always required
-            save_r_cyl_max=True,
-            save_z_abs_max=True,
-            # All other properties default to False
-        )
-
-        OFL_data = experiment_config.load_combined_batch_data(
-            minimal_template, str(lines_dir)
-        )
-        if OFL_data is None:
-            raise PSRMagPyIOError(f"No field line data found in {lines_dir}")
-        logger.info(
-            f"Loaded {OFL_data.n_field_lines} field lines with minimal template"
-        )
-    except Exception as e:
-        raise PSRMagPyIOError(f"Failed to load field line data from {lines_dir}: {e}") from e
+    experiment_config, grid, OFL_data = _load_experiment_setup(
+        experiment_config_path, lines_dir
+    )
 
     # Calculate OFL regions (all footpoints, not just edges)
     try:
@@ -723,155 +828,196 @@ def calculate_and_save_OFL_regions(
     # Phase 2: Extract region data with full template
     logger.info("Phase 2: Extracting region data with full template")
     
-    # Ensure reversed_error is in template for filtering
-    reversed_error_threshold = getattr(experiment_config.tracing, 'reversed_error_threshold', 1.0e-3)
-    if not template.property_system.save_flags.save_reversed_error:
-        template.property_system.save_flags.save_reversed_error = True
-        logger.debug("Added reversed_error to template for filtering")
-    
     try:
-        # Find all batch files
-        batch_pattern = f"{lines_dir}/{experiment_config.name}_batch_*.fits"
-        batch_files = sorted(glob.glob(batch_pattern))
-
-        if not batch_files:
-            raise PSRMagPyIOError(f"No batch files found matching pattern: {batch_pattern}")
-
-        logger.info(f"Found {len(batch_files)} batch files")
-
-        # Process each R_LC value and its region footpoints
-        output_path = Path(output_path)
-        
-        # Create output directory if it doesn't exist
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        base_path = output_path.parent / output_path.stem
-        extension = output_path.suffix
-
-        for i, r_lc in enumerate(region_result.R_LC):
-            footpoint_indices = region_result.edge_footpoints[i]  # Contains all OFL footpoints
-            logger.info(
-                f"Processing R_LC = {r_lc:.2f}: {len(footpoint_indices)} OFL footpoints"
-            )
-
-            if len(footpoint_indices) == 0:
-                logger.warning(f"  No OFL footpoints for R_LC = {r_lc:.2f}")
-                continue
-
-            # Convert to set for efficient lookup
-            region_footpoint_set = set(footpoint_indices.tolist())
-
-            # Load and subset each batch file
-            combined_region_data = None
-
-            for batch_file in batch_files:
-                logger.debug(f"  Processing batch file: {batch_file}")
-
-                try:
-                    # Load batch file with full template
-                    batch_data = load_data(
-                        FieldLineSet, batch_file, template=template
-                    )
-
-                    if batch_data is None or batch_data.n_field_lines == 0:
-                        logger.debug(f"    No data in batch file, skipping")
-                        continue
-
-                    # Get footpoint IDs from this batch
-                    batch_footpoint_ids = batch_data.property_system.get_property(
-                        PropertyName.FOOTPOINT_ID
-                    )
-
-                    if batch_footpoint_ids is None:
-                        logger.debug(f"    No footpoint IDs in batch file, skipping")
-                        continue
-
-                    # Get reversed_error if available for filtering
-                    batch_reversed_error = batch_data.property_system.get_property(
-                        PropertyName.REVERSED_ERROR
-                    )
-                    
-                    # Find footpoint IDs that are in the region and pass error threshold
-                    region_footpoint_ids_in_batch = []
-                    for j, fp_id in enumerate(batch_footpoint_ids):
-                        if fp_id in region_footpoint_set:
-                            # Filter by reversed_error if available
-                            if batch_reversed_error is not None and len(batch_reversed_error) > j:
-                                if batch_reversed_error[j] > reversed_error_threshold:
-                                    continue  # Skip this footpoint due to high error
-                            region_footpoint_ids_in_batch.append(fp_id)
-
-                    if not region_footpoint_ids_in_batch:
-                        logger.debug(f"    No region footpoints in this batch, skipping")
-                        continue
-
-                    # Create subset of this batch
-                    batch_subset = batch_data.subset_by_footpoint_ids(
-                        region_footpoint_ids_in_batch
-                    )
-
-                    if batch_subset.n_field_lines > 0:
-                        logger.debug(
-                            f"    Found {batch_subset.n_field_lines} region field lines in batch"
-                        )
-
-                        # Combine with previous batch subsets
-                        if combined_region_data is None:
-                            combined_region_data = batch_subset
-                        else:
-                            combined_region_data.append(batch_subset)
-                    else:
-                        logger.debug(
-                            f"    No region field lines found in this batch (this is normal)"
-                        )
-
-                except Exception as e:
-                    logger.warning(f"    Error processing batch file {batch_file}: {e}")
-                    continue
-
-            # Save combined region data for this R_LC value
-            if combined_region_data is not None and combined_region_data.n_field_lines > 0:
-                subset_filename = f"{base_path}_{i:03d}{extension}"
-
-                logger.info(
-                    f"  Saving {combined_region_data.n_field_lines} region field lines to {subset_filename}"
-                )
-
-                # Trim field lines if requested
-                if trim_lines:
-                    logger.info(
-                        f"  Trimming field lines to R_LC = {trim_radius} using {trim_type} method"
-                    )
-                    combined_region_data.trim_to_light_cylinder(
-                        R_LC=trim_radius, trim_type=trim_type
-                    )
-                    logger.info(
-                        f"  Trimmed region data now has {combined_region_data.n_field_lines} field lines"
-                    )
-
-                # Create I/O instance and add R_LC keyword to header
-                from psr_magpy.io.data_io import FieldLineSetIO
-
-                io_instance = FieldLineSetIO(combined_region_data)
-                io_instance.add_header_keyword(
-                    "R_LC", r_lc, "Light cylinder radius for this subset"
-                )
-
-                # Save with the I/O instance that has the header keyword
-                io_instance.save(combined_region_data, subset_filename)
-
-                logger.info(f"  Successfully saved region data for R_LC = {r_lc:.2f}")
-            else:
-                logger.warning(
-                    f"  No region field lines found for R_LC = {r_lc:.2f} across all batch files"
-                )
-                logger.warning(
-                    f"  Expected {len(region_footpoint_set)} footpoint IDs but found none"
-                )
-
+        _extract_and_save_OFL_data(
+            experiment_config=experiment_config,
+            template=template,
+            lines_dir=lines_dir,
+            batch_files=None,  # Will be found inside helper
+            footpoint_indices_list=region_result.edge_footpoints,
+            R_LC_values=region_result.R_LC,
+            output_dir=output_dir,
+            trim_lines=trim_lines,
+            trim_type=trim_type,
+            trim_radius=trim_radius,
+            max_memory_mb=max_memory_mb,
+            data_type="region",
+            reversed_error_threshold=reversed_error_threshold,
+        )
         logger.info("Phase 2: Region data extraction completed")
-
     except Exception as e:
         raise PSRMagPyIOError(f"Failed to extract and save region data: {e}") from e
 
     return region_result
+
+
+def load_OFLR_line_data(       
+    experiment_number: int,
+    R_LC_values: np.ndarray,
+    lines_dir: Optional[Union[str, Path]] = None,
+    template: Optional[FieldLine] = None,
+    file_pattern: Optional[str] = None,
+    data_type: str = "edge",
+) -> Dict[float, FieldLineSet]:
+    """Load OFL line data (edges or regions) from FITS files.
+    
+    Parameters
+    ----------
+    experiment_number : int
+        Experiment number.
+    R_LC_values : np.ndarray
+        Array of R_LC values to load.
+    lines_dir : Optional[Union[str, Path]], optional
+        Directory containing OFL line files. Default is None.
+    template : Optional[FieldLine], optional
+        FieldLine template for loading. If None, uses template_all(). Default is None.
+    file_pattern : Optional[str], optional
+        Custom file pattern (currently unused, files are auto-detected). Default is None.
+    data_type : str, optional
+        Type of data to load: "edge" or "region". Default is "edge".
+    
+    Returns
+    -------
+    Dict[float, FieldLineSet]
+        Dictionary mapping R_LC values to FieldLineSet objects.
+    
+    Raises
+    ------
+    ValueError
+        If data_type is not "edge" or "region".
+    PSRMagPyIOError
+        If no files are found or files cannot be loaded.
+    """
+    from psr_magpy.io import load_data
+    from psr_magpy.line.field_line_set import FieldLineSet
+    from psr_magpy.line.field_line import FieldLine
+    import glob
+
+    logger = get_logger(__name__, console_format_brief=True)
+
+    # Convert R_LC_values to numpy array and ensure sorted
+    R_LC_values = np.array(R_LC_values) if not isinstance(R_LC_values, np.ndarray) else R_LC_values
+
+
+    # Set up template
+    if template is None:
+        template = FieldLine.template_all()
+
+    # Determine filename prefix based on data type
+    if data_type == "edge":
+        stem_prefix = "OFLR_edge_lines"
+    elif data_type == "region":
+        stem_prefix = "OFLR_lines"
+    else:
+        error_msg = f"Invalid data_type: {data_type}. Must be 'edge' or 'region'"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    # Find all candidate files matching the new pattern
+    # Pattern: OFLR_{edge_}lines_{experiment_number:03d}_RLC_{r_lc:02.2f}_{chunk_counter:03d}.fits
+    pattern = f"{stem_prefix}_{experiment_number:03d}_RLC_*.fits"
+    candidate_files = sorted(glob.glob(str(lines_dir / pattern)))
+    
+    if not candidate_files:
+        raise PSRMagPyIOError(
+            f"No FITS files found matching patterns for experiment {experiment_number} in {lines_dir}"
+        )
+
+    logger.info(f"Found {len(candidate_files)} candidate FITS files")
+    
+    # Map R_LC values to files by parsing filenames
+    # Pattern: OFLR_{edge_}lines_{experiment_number:03d}_RLC_{r_lc:02.2f}_{chunk_counter:03d}.fits
+    R_LC_to_files = {}
+    
+    for filepath in candidate_files:
+        try:
+            filename = Path(filepath).stem
+            # Extract R_LC from filename: ..._RLC_{r_lc:02.2f}_{chunk_counter:03d}
+            parts = filename.split("_RLC_")
+            if len(parts) != 2:
+                logger.warning(f"Could not parse R_LC from filename: {filepath}")
+                continue
+            
+            # Extract R_LC value (format: {r_lc:02.2f}_{chunk_counter:03d})
+            r_lc_part = parts[1].split("_")[0]
+            r_lc = float(r_lc_part)
+            
+            # Collect files for this R_LC value
+            if r_lc not in R_LC_to_files:
+                R_LC_to_files[r_lc] = []
+            R_LC_to_files[r_lc].append(filepath)
+                        
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Error parsing R_LC from filename {filepath}: {e}")
+            continue
+
+    if not R_LC_to_files:
+        raise PSRMagPyIOError(
+            f"No FITS files found with valid R_LC in filename for experiment {experiment_number} in {lines_dir}"
+        )
+
+    # Match requested R_LC_values to files
+    # Filter to only requested R_LC values (with tolerance)
+    matched_R_LC_to_files = {}
+    for r_lc_requested in R_LC_values:
+        matching_r_lc = None
+        for r_lc_stored in R_LC_to_files.keys():
+            if np.isclose(r_lc_requested, r_lc_stored, rtol=1e-6):
+                matching_r_lc = r_lc_stored
+                break
+        
+        if matching_r_lc is None:
+            logger.warning(f"No files found with R_LC = {r_lc_requested:.2f}")
+            continue
+        
+        matched_R_LC_to_files[r_lc_requested] = sorted(R_LC_to_files[matching_r_lc])
+        logger.debug(
+            f"R_LC = {r_lc_requested:.2f} matches stored R_LC = {matching_r_lc:.2f} "
+            f"({len(matched_R_LC_to_files[r_lc_requested])} files)"
+        )
+    
+    R_LC_to_files = matched_R_LC_to_files
+
+    if not R_LC_to_files:
+        raise PSRMagPyIOError(
+            f"No FITS files found with R_LC values matching {R_LC_values} for experiment {experiment_number}"
+        )
+
+    # Load FieldLineSet for each R_LC value
+    result = {}
+    for r_lc in R_LC_values:
+        if r_lc not in R_LC_to_files:
+            logger.warning(f"No files found for R_LC = {r_lc:.2f}")
+            continue
+
+        # Combine all files for this R_LC value
+        combined_data = None
+        for filepath in sorted(R_LC_to_files[r_lc]):
+            try:
+                logger.debug(f"Loading {filepath} for R_LC = {r_lc:.2f}")
+                field_line_set = load_data(FieldLineSet, filepath, template=template)
+                
+                if field_line_set is None or field_line_set.n_field_lines == 0:
+                    logger.debug(f"  No data in file, skipping")
+                    continue
+
+
+                # Combine with previous files
+                if combined_data is None:
+                    combined_data = field_line_set
+                else:
+                    combined_data.append(field_line_set)
+
+            except Exception as e:
+                logger.warning(f"Error loading {filepath}: {e}")
+                continue
+
+        if combined_data is not None and combined_data.n_field_lines > 0:
+            result[r_lc] = combined_data
+            logger.info(
+                f"Loaded {combined_data.n_field_lines} field lines for R_LC = {r_lc:.2f}"
+            )
+        else:
+            logger.warning(f"No field lines loaded for R_LC = {r_lc:.2f}")
+
+    return result
