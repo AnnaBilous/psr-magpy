@@ -161,23 +161,23 @@ def find_OFL_regions_from_batch_files(
     # Save OFL map if requested
     if save:
         if output_dir is None:
-            output_dir = Path(lines_dir) / "OFL_maps"
+            output_dir = Path(lines_dir) / "OFLR_maps"
         else:
             output_dir = Path(output_dir)
         
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        ofl_map_path = output_dir / f"OFL_map_{experiment_config.name}.fits"
+        ofl_map_path = output_dir / f"OFLR_map_{experiment_config.name}.fits"
         
         # Save as FITS using astropy with two columns: OFL map and grid indices
-        col1 = fits.Column(name='OFL_MAP', format='E', array=ofl_map)
+        col1 = fits.Column(name='OFLR_MAP', format='E', array=ofl_map)
         col2 = fits.Column(name='GRID_INDICES', format='J', array=grid.indices)
         
         hdu = fits.BinTableHDU.from_columns([col1, col2])
         hdu.writeto(ofl_map_path, overwrite=True)
         
-        logger.info(f"Saved OFL map to {ofl_map_path}")
-        logger.info(f"OFL map shape: {ofl_map.shape}")
+        logger.info(f"Saved OFLR map to {ofl_map_path}")
+        logger.info(f"OFLR map shape: {ofl_map.shape}")
         logger.info(f"Non-NaN values: {np.sum(~np.isnan(ofl_map))}")
     
     return ofl_map

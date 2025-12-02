@@ -941,11 +941,13 @@ def load_OFLR_line_data(
             # Extract R_LC value (format: {r_lc:05.2f}_{chunk_counter:03d})
             r_lc_part = parts[1].split("_")[0]
             r_lc = float(r_lc_part)
+            # Round to 2 decimal places for consistent matching
+            r_lc_rounded = round(r_lc, 2)
             
             # Collect files for this R_LC value
-            if r_lc not in R_LC_to_files:
-                R_LC_to_files[r_lc] = []
-            R_LC_to_files[r_lc].append(filepath)
+            if r_lc_rounded not in R_LC_to_files:
+                R_LC_to_files[r_lc_rounded] = []
+            R_LC_to_files[r_lc_rounded].append(filepath)
                         
         except (ValueError, IndexError) as e:
             logger.warning(f"Error parsing R_LC from filename {filepath}: {e}")
@@ -957,23 +959,24 @@ def load_OFLR_line_data(
         )
 
     # Match requested R_LC_values to files
-    # Filter to only requested R_LC values (with tolerance)
+    # Round requested R_LC values to 2 decimal places for consistent matching
     matched_R_LC_to_files = {}
     for r_lc_requested in R_LC_values:
+        r_lc_requested_rounded = round(r_lc_requested, 2)
         matching_r_lc = None
         for r_lc_stored in R_LC_to_files.keys():
-            if np.isclose(r_lc_requested, r_lc_stored, rtol=1e-6):
+            if np.isclose(r_lc_requested_rounded, r_lc_stored, rtol=1e-6):
                 matching_r_lc = r_lc_stored
                 break
         
         if matching_r_lc is None:
-            logger.warning(f"No files found with R_LC = {r_lc_requested:.2f}")
+            logger.warning(f"No files found with R_LC = {r_lc_requested_rounded:.2f}")
             continue
         
-        matched_R_LC_to_files[r_lc_requested] = sorted(R_LC_to_files[matching_r_lc])
+        matched_R_LC_to_files[r_lc_requested_rounded] = sorted(R_LC_to_files[matching_r_lc])
         logger.debug(
-            f"R_LC = {r_lc_requested:.2f} matches stored R_LC = {matching_r_lc:.2f} "
-            f"({len(matched_R_LC_to_files[r_lc_requested])} files)"
+            f"R_LC = {r_lc_requested_rounded:.2f} matches stored R_LC = {matching_r_lc:.2f} "
+            f"({len(matched_R_LC_to_files[r_lc_requested_rounded])} files)"
         )
     
     R_LC_to_files = matched_R_LC_to_files
@@ -985,16 +988,17 @@ def load_OFLR_line_data(
 
     # Load FieldLineSet for each R_LC value
     result = {}
-    for r_lc in R_LC_values:
-        if r_lc not in R_LC_to_files:
-            logger.warning(f"No files found for R_LC = {r_lc:.2f}")
+    for r_lc_requested in R_LC_values:
+        r_lc_rounded = round(r_lc_requested, 2)
+        if r_lc_rounded not in R_LC_to_files:
+            logger.warning(f"No files found for R_LC = {r_lc_rounded:.2f}")
             continue
 
         # Combine all files for this R_LC value
         combined_data = None
-        for filepath in sorted(R_LC_to_files[r_lc]):
+        for filepath in sorted(R_LC_to_files[r_lc_rounded]):
             try:
-                logger.debug(f"Loading {filepath} for R_LC = {r_lc:.2f}")
+                logger.debug(f"Loading {filepath} for R_LC = {r_lc_rounded:.2f}")
                 field_line_set = load_data(FieldLineSet, filepath, template=template)
                 
                 if field_line_set is None or field_line_set.n_field_lines == 0:
@@ -1013,11 +1017,11 @@ def load_OFLR_line_data(
                 continue
 
         if combined_data is not None and combined_data.n_field_lines > 0:
-            result[r_lc] = combined_data
+            result[r_lc_rounded] = combined_data
             logger.info(
-                f"Loaded {combined_data.n_field_lines} field lines for R_LC = {r_lc:.2f}"
+                f"Loaded {combined_data.n_field_lines} field lines for R_LC = {r_lc_rounded:.2f}"
             )
         else:
-            logger.warning(f"No field lines loaded for R_LC = {r_lc:.2f}")
+            logger.warning(f"No field lines loaded for R_LC = {r_lc_rounded:.2f}")
 
     return result
