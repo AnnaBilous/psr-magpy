@@ -113,6 +113,7 @@ class FieldLineTemplate:
             save_curvature_line=True,
             save_tangent_theta=True,
             save_tangent_phi=True,
+            save_reversed_error=True,
         )
 
     @classmethod
@@ -128,6 +129,7 @@ class FieldLineTemplate:
             save_z_abs_max=True,
             save_b_ini=True,
             save_b_r_ini_angle=True,
+            save_reversed_error=True,
         )
 
     @classmethod
@@ -137,7 +139,7 @@ class FieldLineTemplate:
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.
         """
-        return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True)
+        return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True, save_reversed_error=True)
 
     @classmethod
     def template_OFL_subset(cls) -> "FieldLineTemplate":
@@ -150,7 +152,7 @@ class FieldLineTemplate:
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.
         """
-        return cls(save_r_cyl_max=True, save_z_abs_max=True)
+        return cls(save_r_cyl_max=True, save_z_abs_max=True, save_reversed_error=True)
 
     @classmethod
     def template_line_coordinates_only(cls) -> "FieldLineTemplate":
@@ -159,7 +161,7 @@ class FieldLineTemplate:
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.
         """
-        return cls(save_r_line=True)
+        return cls(save_r_line=True, save_reversed_error=True)
 
     @classmethod
     def template_properties_along_line(cls) -> "FieldLineTemplate":
@@ -175,6 +177,7 @@ class FieldLineTemplate:
             save_curvature_line=True,
             save_tangent_theta=True,
             save_tangent_phi=True,
+            save_reversed_error=True,
         )
 
     @classmethod
@@ -184,5 +187,5 @@ class FieldLineTemplate:
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.
         """
-        return cls(save_b_ini=True, save_b_r_ini_angle=True)
+        return cls(save_b_ini=True, save_b_r_ini_angle=True, save_reversed_error=True)
 
