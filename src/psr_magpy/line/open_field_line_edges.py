@@ -306,14 +306,14 @@ def _load_experiment_setup(
     lines_dir: Union[str, Path],
 ) -> tuple:
     """Load experiment configuration, grid, and minimal OFL data.
-    
+
     Parameters
     ----------
     experiment_config_path : Union[str, Path]
         Path to experiment configuration file.
     lines_dir : Union[str, Path]
         Directory containing field line batch files.
-    
+
     Returns
     -------
     tuple
@@ -321,9 +321,9 @@ def _load_experiment_setup(
     """
     from psr_magpy.experiment.experiment_config import ExperimentConfig
     from psr_magpy.line.field_line import FieldLine
-    
+
     logger = get_logger(__name__, console_format_brief=True)
-    
+
     # Load experiment configuration
     try:
         experiment_config = ExperimentConfig.load(experiment_config_path)
@@ -332,7 +332,7 @@ def _load_experiment_setup(
         raise PSRMagPyIOError(
             f"Failed to load experiment config from {experiment_config_path}: {e}"
         ) from e
-    
+
     # Create grid from experiment config
     try:
         grid = experiment_config.grid.create_grid()
@@ -343,7 +343,7 @@ def _load_experiment_setup(
         logger.info(f"Created grid: {grid.grid_type.value}")
     except Exception as e:
         raise PSRMagPyGridError(f"Failed to create grid: {e}") from e
-    
+
     # Load minimal data for OFL calculation
     try:
         minimal_template = FieldLine(
@@ -351,7 +351,7 @@ def _load_experiment_setup(
             save_r_cyl_max=True,
             save_z_abs_max=True,
         )
-        
+
         OFL_data = experiment_config.load_combined_batch_data(
             minimal_template, str(lines_dir)
         )
@@ -362,7 +362,7 @@ def _load_experiment_setup(
         )
     except Exception as e:
         raise PSRMagPyIOError(f"Failed to load field line data from {lines_dir}: {e}") from e
-    
+
     return experiment_config, grid, OFL_data
 
 
@@ -431,16 +431,16 @@ def _extract_and_save_OFL_data(
     if batch_files is None:
         batch_pattern = f"{lines_dir}/{experiment_config.name}_batch_*.fits"
         batch_files = sorted(glob.glob(batch_pattern))
-        
+
         if not batch_files:
             raise PSRMagPyIOError(f"No batch files found matching pattern: {batch_pattern}")
-        
+
         logger.info(f"Found {len(batch_files)} batch files")
-    
+
     # Create output directory
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+        
     # Extract experiment number from config
     experiment_number = None
     if experiment_config.metadata is not None and isinstance(experiment_config.metadata, dict) and "experiment_number" in experiment_config.metadata:
@@ -469,33 +469,33 @@ def _extract_and_save_OFL_data(
         logger.info(
             f"Processing R_LC = {r_lc:.2f}: {len(footpoint_indices)} {data_type} footpoints"
         )
-        
+
         if len(footpoint_indices) == 0:
             logger.warning(f"  No {data_type} footpoints for R_LC = {r_lc:.2f}")
             continue
-        
+
         footpoint_set = set(footpoint_indices.tolist())
         combined_data = None
         chunk_counter = 0
-        
+
         for batch_file in batch_files:
             logger.debug(f"  Processing batch file: {batch_file}")
-            
+
             try:
                 batch_data = load_data(FieldLineSet, batch_file, template=template)
-                
+
                 if batch_data is None or batch_data.n_field_lines == 0:
                     logger.debug(f"    No data in batch file, skipping")
                     continue
-                
+
                 batch_footpoint_ids = batch_data.property_system.get_property(
                     PropertyName.FOOTPOINT_ID
                 )
-                
+
                 if batch_footpoint_ids is None:
                     logger.debug(f"    No footpoint IDs in batch file, skipping")
                     continue
-                
+
                 # Find matching footpoint IDs
                 matching_footpoint_ids = []
                 for j, fp_id in enumerate(batch_footpoint_ids):
@@ -509,18 +509,18 @@ def _extract_and_save_OFL_data(
                                 if batch_reversed_error[j] > reversed_error_threshold:
                                     continue
                         matching_footpoint_ids.append(fp_id)
-                
+
                 if not matching_footpoint_ids:
                     logger.debug(f"    No {data_type} footpoints in this batch, skipping")
                     continue
-                
+
                 batch_subset = batch_data.subset_by_footpoint_ids(matching_footpoint_ids)
-                
+
                 if batch_subset.n_field_lines > 0:
                     logger.debug(
                         f"    Found {batch_subset.n_field_lines} {data_type} field lines in batch"
                     )
-                    
+
                     # Trim before combining
                     if trim_lines:
                         batch_subset.trim_to_light_cylinder(
@@ -542,7 +542,7 @@ def _extract_and_save_OFL_data(
                                 f"Saving chunk to disk."
                             )
                             
-                            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:03d}_RLC_{r_lc:02.2f}_{chunk_counter:03d}.fits"
+                            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:03d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits"
                             chunk_io = FieldLineSetIO(combined_data)
                             chunk_io.add_header_keyword(
                                 "R_LC", r_lc, "Light cylinder radius for this subset"
@@ -560,28 +560,28 @@ def _extract_and_save_OFL_data(
                     logger.debug(
                         f"    No {data_type} field lines found in this batch (this is normal)"
                     )
-            
+
             except Exception as e:
                 logger.warning(f"    Error processing batch file {batch_file}: {e}")
                 continue
-        
+
         # Save final chunk
         if combined_data is not None and combined_data.n_field_lines > 0:
-            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:03d}_RLC_{r_lc:02.2f}_{chunk_counter:03d}.fits"
-            
+            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:03d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits"
+
             logger.info(
                 f"  Saving final chunk {chunk_counter} ({combined_data.n_field_lines} lines) "
                 f"to {chunk_filename}"
             )
-            
+
             io_instance = FieldLineSetIO(combined_data)
             io_instance.add_header_keyword(
                 "R_LC", r_lc, "Light cylinder radius for this subset"
             )
             io_instance.save(combined_data, chunk_filename)
-            
+
             logger.info(f"  Successfully saved final chunk for R_LC = {r_lc:.2f}")
-        
+
         if chunk_counter > 0 or (combined_data is not None and combined_data.n_field_lines > 0):
             total_chunks = chunk_counter + (1 if combined_data is not None and combined_data.n_field_lines > 0 else 0)
             logger.info(f"  Saved {total_chunks} chunk(s) for R_LC = {r_lc:.2f}")
@@ -914,10 +914,10 @@ def load_OFLR_line_data(
         raise ValueError(error_msg)
     
     # Find all candidate files matching the new pattern
-    # Pattern: OFLR_{edge_}lines_{experiment_number:03d}_RLC_{r_lc:02.2f}_{chunk_counter:03d}.fits
+    # Pattern: OFLR_{edge_}lines_{experiment_number:03d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits
     pattern = f"{stem_prefix}_{experiment_number:03d}_RLC_*.fits"
     candidate_files = sorted(glob.glob(str(lines_dir / pattern)))
-    
+
     if not candidate_files:
         raise PSRMagPyIOError(
             f"No FITS files found matching patterns for experiment {experiment_number} in {lines_dir}"
@@ -926,19 +926,19 @@ def load_OFLR_line_data(
     logger.info(f"Found {len(candidate_files)} candidate FITS files")
     
     # Map R_LC values to files by parsing filenames
-    # Pattern: OFLR_{edge_}lines_{experiment_number:03d}_RLC_{r_lc:02.2f}_{chunk_counter:03d}.fits
+    # Pattern: OFLR_{edge_}lines_{experiment_number:03d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits
     R_LC_to_files = {}
     
     for filepath in candidate_files:
         try:
             filename = Path(filepath).stem
-            # Extract R_LC from filename: ..._RLC_{r_lc:02.2f}_{chunk_counter:03d}
+            # Extract R_LC from filename: ..._RLC_{r_lc:05.2f}_{chunk_counter:03d}
             parts = filename.split("_RLC_")
             if len(parts) != 2:
                 logger.warning(f"Could not parse R_LC from filename: {filepath}")
                 continue
-            
-            # Extract R_LC value (format: {r_lc:02.2f}_{chunk_counter:03d})
+
+            # Extract R_LC value (format: {r_lc:05.2f}_{chunk_counter:03d})
             r_lc_part = parts[1].split("_")[0]
             r_lc = float(r_lc_part)
             
