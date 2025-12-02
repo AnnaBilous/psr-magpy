@@ -7,6 +7,7 @@ import numpy as np
 from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
 from psr_magpy.experiment.experiment_config import ExperimentConfig
 from psr_magpy.line.field_line_template import FieldLineTemplate
+from psr_magpy.line.property_system import PropertyName
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyIOError
 
@@ -20,6 +21,7 @@ def extract_ofl_map(
     experiment_numbers: Optional[List[int]] = None,
     save: bool = True,
     output_dir: Optional[Union[str, Path]] = None,
+    reversed_error_threshold: Optional[float] = None,
 ) -> Dict[int, np.ndarray]:
     """Extract OFL maps from an experiment series.
 
@@ -39,6 +41,9 @@ def extract_ofl_map(
         Whether to save the OFL maps as FITS files. Default is True.
     output_dir : Optional[Union[str, Path]], optional
         Directory to save OFL maps. If None, uses lines_dir/OFL_maps. Default is None.
+    reversed_error_threshold : Optional[float], optional
+        Threshold for filtering by reversed_error. If None, no filtering is performed.
+        Default is None.
 
     Returns
     -------
@@ -78,6 +83,7 @@ def extract_ofl_map(
                 h_LC_coeff=h_LC_coeff,
                 save=save,
                 output_dir=exp_output_dir,
+                reversed_error_threshold=reversed_error_threshold,
             )
 
             results[exp_num] = ofl_map
@@ -97,6 +103,7 @@ def find_OFL_regions_from_batch_files(
     h_LC_coeff: float = 3**1.5 / 2.0,
     save: bool = True,
     output_dir: Optional[Union[str, Path]] = None,
+    reversed_error_threshold: Optional[float] = None,
 ) -> np.ndarray:
     """Load all batch files for a specific experiment and create OFL map for each R_LC.
 
@@ -114,6 +121,9 @@ def find_OFL_regions_from_batch_files(
         Whether to save the OFL map as FITS file. Default is True.
     output_dir : Optional[Union[str, Path]], optional
         Directory to save OFL maps. If None, uses lines_dir/OFL_maps. Default is None.
+    reversed_error_threshold : Optional[float], optional
+        Threshold for filtering by reversed_error. If None, no filtering is performed.
+        Default is None.
 
     Returns
     -------
@@ -153,7 +163,37 @@ def find_OFL_regions_from_batch_files(
             h_LC_coeff=h_LC_coeff
         )
         
-        # Assign R_LC value to the OFL footpoint IDs
+        # Filter by reversed_error if threshold is provided
+        if reversed_error_threshold is not None and len(ofl_footpoint_ids) > 0:
+            reversed_error = combined_data.property_system.get_property(
+                PropertyName.REVERSED_ERROR
+            )
+            footpoint_ids = combined_data.property_system.get_property(
+                PropertyName.FOOTPOINT_ID
+            )
+            
+            if reversed_error is not None and footpoint_ids is not None:
+                # Convert to numpy arrays for efficient operations
+                footpoint_ids = np.asarray(footpoint_ids)
+                reversed_error = np.asarray(reversed_error)
+                
+                fp_id_to_error = dict(zip(footpoint_ids, reversed_error))
+                
+                ofl_errors = np.array([fp_id_to_error.get(fp_id, np.nan) for fp_id in ofl_footpoint_ids])
+                
+                keep_mask = (ofl_errors <= reversed_error_threshold) | np.isnan(ofl_errors)
+                filtered_footpoint_ids = ofl_footpoint_ids[keep_mask]
+                
+                n_filtered = len(ofl_footpoint_ids) - len(filtered_footpoint_ids)
+                ofl_footpoint_ids = filtered_footpoint_ids
+                
+                if n_filtered > 0:
+                    logger.info(
+                        f"  Filtered out {n_filtered} footpoints "
+                        f"(threshold: {reversed_error_threshold:.6f}), "
+                        f"remaining: {len(ofl_footpoint_ids)}"
+                    )
+        
         ofl_map[ofl_footpoint_ids] = r_lc
         
         logger.info(f"  Found {len(ofl_footpoint_ids)} OFL footpoints for R_LC = {r_lc:.2f}")
