@@ -211,7 +211,7 @@ def find_OFL_regions_from_batch_files(
         
         # Save as FITS using astropy with two columns: OFL map and grid indices
         col1 = fits.Column(name='OFLR_MAP', format='E', array=ofl_map)
-        col2 = fits.Column(name='GRID_INDICES', format='J', array=grid.indices)
+        col2 = fits.Column(name='GRID_INDICES', format='J', array=np.arange(len(ofl_map)))
         
         hdu = fits.BinTableHDU.from_columns([col1, col2])
         hdu.writeto(ofl_map_path, overwrite=True)
