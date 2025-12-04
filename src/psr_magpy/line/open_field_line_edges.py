@@ -1005,7 +1005,6 @@ def load_OFLR_line_data(
                     logger.debug(f"  No data in file, skipping")
                     continue
 
-
                 # Combine with previous files
                 if combined_data is None:
                     combined_data = field_line_set
