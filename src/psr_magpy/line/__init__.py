@@ -42,6 +42,7 @@ from .open_field_line_edges import (
     OFLEdgeCalculator,
     OFLEdgeResult,
     calculate_and_save_OFL_edges,
+    calculate_and_save_OFL_regions,
 )
 from .solver import SolverError
 
@@ -66,5 +67,6 @@ __all__ = [
     "OFLEdgeCalculator",
     "OFLEdgeResult",
     "calculate_and_save_OFL_edges",
+    "calculate_and_save_OFL_regions",
     "SolverError",
 ]

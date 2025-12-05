@@ -14,6 +14,7 @@ from .line.calculator import FieldLineCalculator
 from .line.tracing_parameters import TracingParameters, IntegrationParameters
 from .line.field_line import FieldLine
 from .line.field_line_template import FieldLineTemplate
+from .line.open_field_line_edges import calculate_and_save_OFL_edges, calculate_and_save_OFL_regions
 
 # Utils
 from .utils.logging_config import get_logger
@@ -65,6 +66,8 @@ __all__ = [
     "IntegrationParameters",
     "FieldLine",
     "FieldLineTemplate",
+    "calculate_and_save_OFL_edges",
+    "calculate_and_save_OFL_regions",
     # Utils
     "get_logger",
     "get_R_LC",
