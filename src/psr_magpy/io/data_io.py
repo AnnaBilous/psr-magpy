@@ -216,6 +216,17 @@ class FieldLineSetIO(FitsIO):
         from psr_magpy.line.property_system import PropertyName
         import psutil
 
+        # Set ARRAY_LIST_PROPERTIES if not already set
+        if not self.ARRAY_LIST_PROPERTIES:
+            self.ARRAY_LIST_PROPERTIES = [
+                PropertyName.R_LINE,
+                PropertyName.PA_LINE,
+                PropertyName.B_LINE,
+                PropertyName.CURVATURE_LINE,
+                PropertyName.TANGENT_THETA,
+                PropertyName.TANGENT_PHI,
+            ]
+
         # Find FIELD_LINES HDU
         if "FIELD_LINES" not in [h.name for h in hdul]:
             raise PSRMagPyIOError("No FIELD_LINES HDU found in FITS file")
@@ -271,6 +282,8 @@ class FieldLineSetIO(FitsIO):
                 # Special handling for array list properties
                 if prop in self.ARRAY_LIST_PROPERTIES:
                     if prop.name == "R_LINE":
+                        # Ensure r_line is reshaped to 2D (n_points, 3) for each field line
+                        # Reshape to (-1, 3) which works for both 1D and 2D arrays
                         data = [d.reshape(-1, 3) for d in data]
                     else:
                         data = [np.array(d, dtype=object) for d in data]

@@ -376,7 +376,7 @@ def _extract_and_save_OFL_data(
     output_dir: Optional[Union[str, Path]] = None,
     trim_lines: bool = False,
     trim_type: str = "sphere",
-    trim_radius: float = 5.0,
+    trim_radius: Union[float, np.ndarray, Dict[float, float]] = 5.0,
     max_memory_mb: float = 500.0,
     data_type: str = "edge",
     reversed_error_threshold: Optional[float] = None,
@@ -403,8 +403,11 @@ def _extract_and_save_OFL_data(
         Whether to trim field lines. Default is False.
     trim_type : str, optional
         Trimming method. Default is "sphere".
-    trim_radius : float, optional
-        Radius for trimming. Default is 5.0.
+    trim_radius : Union[float, np.ndarray, Dict[float, float]], optional
+        Radius for trimming. Can be:
+        - float: Single radius used for all R_LC values (default: 5.0)
+        - np.ndarray: Array of radii, one per R_LC value (must match length)
+        - Dict[float, float]: Dictionary mapping R_LC values to trim radii
     max_memory_mb : float, optional
         Maximum memory threshold in MB. Default is 500.0.
     data_type : str, optional
@@ -465,7 +468,27 @@ def _extract_and_save_OFL_data(
     else:
         stem_prefix = "OFLR_lines"
     
-    for i, (r_lc, footpoint_indices) in enumerate(zip(R_LC_values, footpoint_indices_list)):
+    # Handle trim_radius as float, array, or dict
+    n_values = len(R_LC_values)
+    if isinstance(trim_radius, (int, float)):
+        trim_radii = [trim_radius] * n_values
+    elif isinstance(trim_radius, np.ndarray):
+        if len(trim_radius) != n_values:
+            raise ValueError(f"trim_radius array length ({len(trim_radius)}) must match R_LC_values length ({n_values})")
+        trim_radii = trim_radius.tolist()
+    elif isinstance(trim_radius, dict):
+        # Map R_LC values to trim radii
+        trim_radii = []
+        for r_lc in R_LC_values:
+            if r_lc not in trim_radius:
+                error_msg = f"trim_radius dictionary missing key for R_LC = {r_lc:.2f}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            trim_radii.append(trim_radius[r_lc])
+    else:
+        raise TypeError(f"trim_radius must be float, np.ndarray, or dict, got {type(trim_radius)}")
+    
+    for i, (r_lc, footpoint_indices, trim_r) in enumerate(zip(R_LC_values, footpoint_indices_list, trim_radii)):
         logger.info(
             f"Processing R_LC = {r_lc:.2f}: {len(footpoint_indices)} {data_type} footpoints"
         )
@@ -524,7 +547,7 @@ def _extract_and_save_OFL_data(
                     # Trim before combining
                     if trim_lines:
                         batch_subset.trim_to_light_cylinder(
-                            R_LC=trim_radius, trim_type=trim_type
+                            R_LC=trim_r, trim_type=trim_type
                         )
                     
                     # Combine
@@ -603,7 +626,7 @@ def calculate_and_save_OFL_edges(
     h_LC_coeff: float = 3**1.5 / 2.0,
     trim_lines: bool = False,
     trim_type: str = "sphere",
-    trim_radius: float = 5.0,
+    trim_radius: Union[float, np.ndarray, Dict[float, float]] = 5.0,
     precise_edges: bool = False,
     R_LC_edge_coefficient: float = 1.02,
     max_memory_mb: float = 500.0,
@@ -634,8 +657,11 @@ def calculate_and_save_OFL_edges(
         Whether to trim field lines to light cylinder before saving. Default is False.
     trim_type : str, optional
         Trimming method ("sphere" or "cylinder"). Default is "sphere".
-    trim_radius : float, optional
-        Radius for trimming (light cylinder radius). Default is 5.0.
+    trim_radius : Union[float, np.ndarray, Dict[float, float]], optional
+        Radius for trimming. Can be:
+        - float: Single radius used for all R_LC values (default: 5.0)
+        - np.ndarray: Array of radii, one per R_LC value (must match length)
+        - Dict[float, float]: Dictionary mapping R_LC values to trim radii
     precise_edges : bool, optional
         If True, use precise edge calculation method. Default is False.
     R_LC_edge_coefficient : float, optional
@@ -737,7 +763,7 @@ def calculate_and_save_OFL_regions(
     h_LC_coeff: float = 3**1.5 / 2.0,
     trim_lines: bool = False,
     trim_type: str = "sphere",
-    trim_radius: float = 5.0,
+    trim_radius: Union[float, np.ndarray, Dict[float, float]] = 5.0,
     max_memory_mb: float = 500.0,
     reversed_error_threshold: Optional[float] = None,
 ) -> OFLEdgeResult:
@@ -764,8 +790,11 @@ def calculate_and_save_OFL_regions(
         Whether to trim field lines to light cylinder before saving. Default is False.
     trim_type : str, optional
         Trimming method ("sphere" or "cylinder"). Default is "sphere".
-    trim_radius : float, optional
-        Radius for trimming (light cylinder radius). Default is 5.0.
+    trim_radius : Union[float, np.ndarray, Dict[float, float]], optional
+        Radius for trimming. Can be:
+        - float: Single radius used for all R_LC values (default: 5.0)
+        - np.ndarray: Array of radii, one per R_LC value (must match length)
+        - Dict[float, float]: Dictionary mapping R_LC values to trim radii
     max_memory_mb : float, optional
         Maximum memory threshold in MB. If combined region data exceeds this,
         it will be saved to disk and cleared from memory. Default is 500.0.
