@@ -153,7 +153,31 @@ class ExperimentConfigIO(YamlIO):
         field = FieldConfig.model_validate(data["field"])
 
         # Reconstruct grid
-        grid = GridConfig.model_validate(data["grid"])
+        # Explicitly handle nested grid configs to ensure proper reconstruction
+        grid_data = data["grid"]
+        if isinstance(grid_data, dict):
+            # Check if it's a nested structure with grid type keys
+            if "healpix" in grid_data and grid_data["healpix"] is not None:
+                from psr_magpy.experiment.grid_config import HealpixGridConfig
+                healpix_config = HealpixGridConfig.model_validate(grid_data["healpix"])
+                grid = GridConfig(healpix=healpix_config)
+            elif "spherical" in grid_data and grid_data["spherical"] is not None:
+                from psr_magpy.experiment.grid_config import SphericalGridConfig
+                spherical_config = SphericalGridConfig.model_validate(grid_data["spherical"])
+                grid = GridConfig(spherical=spherical_config)
+            elif "random" in grid_data and grid_data["random"] is not None:
+                from psr_magpy.experiment.grid_config import RandomGridConfig
+                random_config = RandomGridConfig.model_validate(grid_data["random"])
+                grid = GridConfig(random=random_config)
+            elif "custom" in grid_data and grid_data["custom"] is not None:
+                from psr_magpy.experiment.grid_config import CustomGridConfig
+                custom_config = CustomGridConfig.model_validate(grid_data["custom"])
+                grid = GridConfig(custom=custom_config)
+            else:
+                # Fallback to model_validate
+                grid = GridConfig.model_validate(grid_data)
+        else:
+            grid = GridConfig.model_validate(grid_data)
 
         # Reconstruct tracing
         tracing = TracingConfig(**data["tracing"])
