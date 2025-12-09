@@ -153,7 +153,7 @@ class ExperimentConfigIO(YamlIO):
         field = FieldConfig.model_validate(data["field"])
 
         # Reconstruct grid
-        grid = GridConfig(**data["grid"])
+        grid = GridConfig.model_validate(data["grid"])
 
         # Reconstruct tracing
         tracing = TracingConfig(**data["tracing"])
