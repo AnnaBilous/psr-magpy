@@ -20,7 +20,7 @@ from psr_magpy.io import save_config, load_config
 from psr_magpy.io.config_io import ExperimentSeriesConfigIO
 from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy, ConfigIOValidator
 from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
-from psr_magpy.utils.exceptions import PSRMagPyIOError
+from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyExperimentError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -510,6 +510,43 @@ class ExperimentSeriesRunner:
             logger.info(
                 f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
             )
+
+        # Check if experiments use subset grids and verify subset configs exist
+        # Check if any experiment has a subset grid configured
+        has_subset_grids = False
+        for exp in experiments:
+            if (exp.grid.healpix is not None and exp.grid.healpix.subset) or \
+               (exp.grid.spherical is not None and exp.grid.spherical.subset) or \
+               (exp.grid.random is not None and exp.grid.random.subset) or \
+               (exp.grid.custom is not None and exp.grid.custom.subset):
+                has_subset_grids = True
+                break
+        
+        # Also check series metadata as fallback
+        if not has_subset_grids and self.series_config.metadata is not None:
+            has_subset_grids = self.series_config.metadata.get("has_subset_grids", False)
+        
+        if has_subset_grids:
+            configs_dir = self.series_config.get_configs_dir()
+            if not configs_dir.exists():
+                error_msg = (
+                    f"Configs directory does not exist: {configs_dir}\n"
+                    f"Please run the workflow to create subset grids first."
+                )
+                logger.error(error_msg)
+                raise PSRMagPyExperimentError(error_msg)
+            
+            subset_configs = list(configs_dir.glob("*_subset.yaml"))
+            if not subset_configs:
+                error_msg = (
+                    f"No subset config files found in: {configs_dir}\n"
+                    f"Experiments require subset grids, but config files are missing.\n"
+                    f"Please run the workflow to create subset grids first."
+                )
+                logger.error(error_msg)
+                raise PSRMagPyExperimentError(error_msg)
+            
+            logger.info(f"Verified {len(subset_configs)} subset config files exist")
 
         # Save series config and individual configs if requested (AFTER deletion and creation)
         if self.save_individual_configs:
