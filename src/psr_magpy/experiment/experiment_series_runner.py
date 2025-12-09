@@ -590,10 +590,16 @@ class ExperimentSeriesRunner:
                         r["name"] for r in summary["experiment_results"]
                     }
 
+        # Load existing experiments (which may include subset configs) instead of creating new ones
+        try:
+            all_experiments = self.series_config.load_experiments()
+        except (ValueError, PSRMagPyIOError):
+            # Fallback to creating from factory if loading fails
+            logger.warning("Failed to load experiments, creating from factory config")
+            all_experiments = self.series_config.create_experiment_series(create_directories=False)
+
         remaining_experiments = []
-        for i, exp in enumerate(
-            self.series_config.create_experiment_series(create_directories=False)
-        ):
+        for exp in all_experiments:
             if exp.name not in completed_experiments or self.overwrite_strategy != OverwriteStrategy.NEVER:
                 remaining_experiments.append(exp)
 
