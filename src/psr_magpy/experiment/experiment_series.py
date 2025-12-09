@@ -558,6 +558,9 @@ class ExperimentSeriesConfig(BaseModel):
     def load_experiments(self) -> List[ExperimentConfig]:
         """Load experiment configurations from saved config files.
 
+        If series metadata indicates subset grids (has_subset_grids=True),
+        prioritizes loading subset config files (*_subset.yaml).
+
         Returns
         -------
         List[ExperimentConfig]
@@ -567,22 +570,51 @@ class ExperimentSeriesConfig(BaseModel):
         ------
         ValueError
             If configs directory doesn't exist or no configs found.
+        PSRMagPyIOError
+            If subset configs are expected but not found.
         """
         configs_dir = self.get_configs_dir()
         if not configs_dir.exists():
             raise PSRMagPyIOError(f"Configs directory does not exist: {configs_dir}")
 
-        # Load all experiment configs (skip series config)
-        experiment_files = sorted(
-            [
-                f
-                for f in configs_dir.glob("*.yaml")
-                if not f.name.endswith("_config.yaml")
-            ]
+        # Check if subset grids are expected
+        has_subset_grids = (
+            self.metadata is not None
+            and self.metadata.get("has_subset_grids", False)
         )
 
-        if not experiment_files:
-            raise PSRMagPyIOError(f"No experiment configs found in: {configs_dir}")
+        # Load all experiment configs (skip series config)
+        all_config_files = [
+            f
+            for f in configs_dir.glob("*.yaml")
+            if not f.name.endswith("_config.yaml")
+        ]
+        
+        subset_config_files = [f for f in all_config_files if f.name.endswith("_subset.yaml")]
+        regular_config_files = [f for f in all_config_files if not f.name.endswith("_subset.yaml")]
+        
+        # If subset grids are expected, use only subset configs
+        if has_subset_grids:
+            if not subset_config_files:
+                error_msg = (
+                    f"Series metadata indicates subset grids should exist, "
+                    f"but no subset config files (*_subset.yaml) found in: {configs_dir}\n"
+                    f"Please run the workflow to create subset grids first."
+                )
+                logger.error(error_msg)
+                raise PSRMagPyIOError(error_msg)
+            experiment_files = sorted(subset_config_files)
+            logger.info(f"Loading {len(subset_config_files)} subset config files (has_subset_grids=True)")
+        else:
+            # Use regular configs if available, otherwise use subset configs as fallback
+            if regular_config_files:
+                experiment_files = sorted(regular_config_files)
+                logger.info(f"Loading {len(regular_config_files)} regular config files")
+            elif subset_config_files:
+                experiment_files = sorted(subset_config_files)
+                logger.info(f"No regular configs found, using {len(subset_config_files)} subset config files as fallback")
+            else:
+                raise PSRMagPyIOError(f"No experiment configs found in: {configs_dir}")
 
         experiments = []
         for config_file in experiment_files:
