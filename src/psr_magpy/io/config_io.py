@@ -157,24 +157,26 @@ class ExperimentConfigIO(YamlIO):
         grid_data = data["grid"]
         if isinstance(grid_data, dict):
             # Check if it's a nested structure with grid type keys
-            if "healpix" in grid_data and grid_data["healpix"] is not None:
+            if "healpix" in grid_data and isinstance(grid_data["healpix"], dict):
                 from psr_magpy.experiment.grid_config import HealpixGridConfig
                 healpix_config = HealpixGridConfig.model_validate(grid_data["healpix"])
                 grid = GridConfig(healpix=healpix_config)
-            elif "spherical" in grid_data and grid_data["spherical"] is not None:
+                logger.info(f"Reconstructed GridConfig with healpix: nside={healpix_config.nside}, subset={healpix_config.subset}, grid_file_path={healpix_config.grid_file_path}")
+            elif "spherical" in grid_data and isinstance(grid_data["spherical"], dict):
                 from psr_magpy.experiment.grid_config import SphericalGridConfig
                 spherical_config = SphericalGridConfig.model_validate(grid_data["spherical"])
                 grid = GridConfig(spherical=spherical_config)
-            elif "random" in grid_data and grid_data["random"] is not None:
+            elif "random" in grid_data and isinstance(grid_data["random"], dict):
                 from psr_magpy.experiment.grid_config import RandomGridConfig
                 random_config = RandomGridConfig.model_validate(grid_data["random"])
                 grid = GridConfig(random=random_config)
-            elif "custom" in grid_data and grid_data["custom"] is not None:
+            elif "custom" in grid_data and isinstance(grid_data["custom"], dict):
                 from psr_magpy.experiment.grid_config import CustomGridConfig
                 custom_config = CustomGridConfig.model_validate(grid_data["custom"])
                 grid = GridConfig(custom=custom_config)
             else:
                 # Fallback to model_validate
+                logger.warning(f"Grid data has no recognized grid type dicts, using model_validate. Keys: {list(grid_data.keys())}, types: {[(k, type(v).__name__) for k, v in grid_data.items()]}")
                 grid = GridConfig.model_validate(grid_data)
         else:
             grid = GridConfig.model_validate(grid_data)
