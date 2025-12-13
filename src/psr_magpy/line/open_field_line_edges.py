@@ -700,7 +700,7 @@ def calculate_and_save_OFL_edges(
 
     # Set default output_dir if not provided
     if output_dir is None:
-        output_dir = Path.parent(lines_dir) / "data_products" / "OFLR_edges"
+        output_dir = Path(lines_dir).parent / "data_products" / "OFLR_edges"
         logger.info(f"Using default output_dir: {output_dir}")
 
     # Ensure R_LC_values are sorted in descending order

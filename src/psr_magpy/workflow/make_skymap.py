@@ -116,7 +116,7 @@ def make_skymap(
         # Save each R_LC to its own file
         for r_lc, skymap in all_skymaps.items():
             # Generate filename for this R_LC
-            filename = f"{experiment_config.name}_skymap_nside{grid.nside}_RLC_{r_lc:05.2f}.fits"
+            filename = f"skymap_{experiment_config.name}_nside{grid.nside:03d}_RLC_{r_lc:05.2f}.fits"
             filepath = output_dir / filename
             
             # Save skymap for this R_LC

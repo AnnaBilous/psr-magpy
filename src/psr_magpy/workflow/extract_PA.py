@@ -33,6 +33,15 @@ _PA_EXTRACTION_TEMPLATE = FieldLineTemplate(
     save_z_abs_max=True,
 )
 
+# Template for saving filtered PA data (only properties that are actually present)
+_PA_SAVE_TEMPLATE = FieldLineTemplate(
+    save_footpoint_id=True,
+    save_r_line=True,
+    save_pa_line=True,
+    save_tangent_theta=True,
+    save_tangent_phi=True,
+)
+
 
 
 def patch_PA(results):
@@ -358,13 +367,17 @@ def extract_PA_processor(
             # Construct output path from lines_dir
             output_dir = Path(lines_dir).parent / "data_products" / "extracted_PA"
             output_dir.mkdir(parents=True, exist_ok=True)
-            filename = f"{experiment_config.name}_extract_PA_RLC_{r_lc:05.1f}.fits"
+            filename = f"PA_data_{experiment_config.name}_RLC_{r_lc:05.1f}.fits"
             output_path = output_dir / filename
         else:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        save_data(filtered_result, output_path, overwrite=True)
+        # Create a new FieldLineSet with save template to avoid warnings about missing properties
+        save_result = FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
+        save_result.append(filtered_result)
+        
+        save_data(save_result, output_path, overwrite=True)
         logger.info(f"Saved filtered FieldLineSet to {output_path}")
     
     return filtered_result
