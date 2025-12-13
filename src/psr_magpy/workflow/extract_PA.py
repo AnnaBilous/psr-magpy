@@ -5,11 +5,16 @@ from pathlib import Path
 import numpy as np
 
 from psr_magpy.experiment.experiment_config import ExperimentConfig
-from psr_magpy.experiment.grid_config import HealpixGridConfig, GridConfig
-from psr_magpy.grid.grid import HealpixGrid, FootpointGrid
+from psr_magpy.grid.grid import FootpointGrid
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.workflow.workflow_utils import (
+    prepare_batch_subset,
+    extract_line_properties,
+    normalize_line_arrays,
+    create_radius_mask,
+)
 from psr_magpy.io import save_data
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyPropertyError
@@ -24,12 +29,117 @@ _PA_EXTRACTION_TEMPLATE = FieldLineTemplate(
     save_tangent_theta=True,
     save_tangent_phi=True,
     save_reversed_error=True,
+    save_r_cyl_max=True,
+    save_z_abs_max=True,
 )
+
+
+
+def patch_PA(results):
+    """Calculate basis vectors and PA for all points on all field lines.
+    
+    Args:
+        results: FieldLineSet with r_line and pa_line properties
+    
+    Returns:
+        FieldLineSet: Modified results with calculated PA stored in pa_line property
+    """
+    r_lines = results.get_property('r_line')
+    
+    if r_lines is None or len(r_lines) == 0:
+        error_msg = "No field line data found in results"
+        print(error_msg)
+        return results
+    
+    e1_list = []
+    e2_list = []
+    n_norm_list = []
+    PA_calculated = []
+    
+    
+    for line_idx in range(len(r_lines)):
+        if line_idx >= len(r_lines):
+            continue
+        
+        r_line = r_lines[line_idx]
+        
+        if r_line is None or len(r_line) == 0:
+            # Append None/empty arrays to maintain list structure
+            e1_list.append(None)
+            e2_list.append(None)
+            n_norm_list.append(None)
+            PA_calculated.append(np.array([], dtype=np.float32))
+            continue
+                
+        # Calculate along whole line
+        r64 = r_line.T.astype(np.float64)  # Shape: (3, n_points)
+        
+        ds = 1.0  # uniform sampling
+        r1 = np.gradient(r64, ds, axis=1)
+        r2 = np.gradient(r1, ds, axis=1)
+        
+        # Tangent vector along whole line
+        t_abs = np.linalg.norm(r1, axis=0, keepdims=True)
+        t_abs = np.maximum(t_abs, 1e-12)
+        t_norm = r1 / t_abs
+        
+        # Curvature normal along whole line
+        proj = np.sum(r2 * t_norm, axis=0, keepdims=True) * t_norm
+        n = r2 - proj
+        n_abs = np.linalg.norm(n, axis=0, keepdims=True)
+        n_abs = np.maximum(n_abs, 1e-12)
+        n_norm = n / n_abs
+        
+        
+        Omega = np.array([[0.0], [0.0], [1.0]])  # shape (3, 1)
+
+        # Project Ω onto plane perpendicular to t
+        Omega_dot_t = np.sum(Omega * t_norm, axis=0, keepdims=True)
+        e1 = Omega - Omega_dot_t * t_norm
+
+        e1_norm = np.linalg.norm(e1, axis=0, keepdims=True)
+        e1_norm = np.maximum(e1_norm, 1e-12)   # avoid division by zero near alignment
+        e1 /= e1_norm
+
+        # Second vector: completes right-handed frame
+        e2 = np.cross(t_norm.T, e1.T).T
+        e2_norm = np.linalg.norm(e2, axis=0, keepdims=True)
+        e2_norm = np.maximum(e2_norm, 1e-12)
+        e2 /= e2_norm
+
+        # Project curvature normal onto this basis
+        nom = np.sum(n_norm * e1, axis=0)
+        denom = np.sum(n_norm * e2, axis=0)
+        
+        PA = np.arctan2(nom, denom)
+        PA = 90 - np.rad2deg(PA)
+        
+        #if b_angles[line_idx] > np.pi/2:
+        #    PA = PA + 180. + np.nan
+        # Wrap PA to [-180, 180) range
+        #PA = (PA + 180) % 360 - 180
+        PA = (PA + 90) % 180 -90
+        unstable_points = (n_abs[0, :] <= 1.1e-12) | (t_abs[0, :] <= 1.1e-12) | (e1_norm[0, :] <= 1.1e-12) | (e2_norm[0, :] <= 1.1e-12)
+        PA[unstable_points] = np.nan
+        
+        e1_list.append(e1)
+        e2_list.append(e2)
+        n_norm_list.append(n_norm)
+        # Convert to float32 to match stored PA format
+        PA = PA.astype(np.float32)
+        PA_calculated.append(PA)
+    
+    # Store calculated PA in results
+    results.set_property(pa_line=PA_calculated)
+    
+    return results, e1_list, e2_list, n_norm_list
+
+
+
 
 
 def make_extract_PA(
     experiment_config: ExperimentConfig,
-    healpix_grid_config: HealpixGridConfig,
     R_LC_values: np.ndarray,
     theta_tolerance: float,
     grid_theta: np.ndarray,
@@ -45,8 +155,6 @@ def make_extract_PA(
     ----------
     experiment_config : ExperimentConfig
         Experiment configuration containing field line data.
-    healpix_grid_config : HealpixGridConfig
-        HEALPix grid configuration.
     R_LC_values : np.ndarray
         Array of light cylinder radii to process.
     theta_tolerance : float
@@ -73,18 +181,6 @@ def make_extract_PA(
         If single R_LC: single FieldLineSet.
         If multiple R_LC: dict mapping R_LC values to FieldLineSet objects.
     """
-    # Create grid object
-    grid_config = GridConfig(healpix=healpix_grid_config)
-    grid = grid_config.create_grid()
-    
-    if grid is None:
-        raise PSRMagPyIOError("Failed to create grid from config")
-    
-    if not isinstance(grid, HealpixGrid):
-        raise PSRMagPyIOError(f"Expected HealpixGrid, got {type(grid).__name__}")
-    
-    logger.info(f"Created HEALPix grid with nside={grid.nside}, npix={grid.nline}")
-    
     if lines_dir is None:
         raise PSRMagPyIOError("lines_dir must be specified")
     
@@ -102,7 +198,6 @@ def make_extract_PA(
         # Execute processor with radius range (from r_min to max_radius), don't save yet
         result = extract_PA_processor(
             experiment_config=experiment_config,
-            grid=grid,
             r_lc=r_lc,
             lines_dir=lines_dir,
             theta_tolerance=theta_tolerance,
@@ -126,13 +221,13 @@ def make_extract_PA(
         # Save each R_LC to its own file
         for r_lc, field_line_set in all_results.items():
             # Generate filename for this R_LC
-            filename = f"{experiment_config.name}_extract_PA_nside{grid.nside}_RLC_{r_lc:.2f}.fits"
+            filename = f"{experiment_config.name}_extract_PA_RLC_{r_lc:05.2f}.fits"
             filepath = output_dir / filename
             
             # Save FieldLineSet for this R_LC
             save_data(field_line_set, filepath, overwrite=True)
             
-            logger.info(f"Saved filtered FieldLineSet for R_LC={r_lc:.2f} to {filepath}")
+            logger.info(f"Saved filtered FieldLineSet for R_LC={r_lc:05.2f} to {filepath}")
     
     # Return structure: if single R_LC, return FieldLineSet; otherwise return dict
     if len(R_LC_values) == 1:
@@ -143,7 +238,6 @@ def make_extract_PA(
 
 def extract_PA_processor(
     experiment_config: ExperimentConfig,
-    grid: FootpointGrid,
     r_lc: float,
     lines_dir: str,
     theta_tolerance: float,
@@ -162,8 +256,6 @@ def extract_PA_processor(
     ----------
     experiment_config : ExperimentConfig
         Experiment configuration containing field line data.
-    grid : FootpointGrid
-        Grid for filtering.
     r_lc : float
         Light cylinder radius.
     lines_dir : str
@@ -186,9 +278,6 @@ def extract_PA_processor(
     FieldLineSet
         Filtered FieldLineSet with properties r_line, pa_line, tangent_theta, tangent_phi.
     """
-    if grid.nline is None:
-        raise PSRMagPyIOError("Grid nline is None")
-    
     # Extract radius range if provided
     min_radius = radius_range[0] if radius_range is not None else None
     max_radius = radius_range[1] if radius_range is not None else None
@@ -197,35 +286,23 @@ def extract_PA_processor(
     def process_batch(batch_data):
         """Filter points by theta tolerance and create filtered FieldLineSet."""
         try:
-            ofl_footpoint_ids = batch_data.get_OFL_footpoints(R_LC=r_lc)
+            # Prepare batch subset (OFL extraction and reversed_error filtering, but no trimming yet)
+            batch_subset = prepare_batch_subset(batch_data, r_lc, max_radius=None)
             
-            if len(ofl_footpoint_ids) == 0:
-                logger.debug(f"No OFL footpoints found for R_LC={r_lc:.2f} in this batch")
+            if batch_subset is None:
                 return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
             
-            batch_subset = batch_data.subset_by_footpoint_ids(ofl_footpoint_ids)
-            batch_subset = batch_subset.filter_by_reversed_error(reversed_error_threshold=0.01)
+            # Patch PA before trimming
+            batch_subset, _, _, _ = patch_PA(batch_subset)
             
-            if batch_subset.n_field_lines == 0:
-                logger.debug(f"No field lines remaining after filtering for R_LC={r_lc:.2f} in this batch")
-                return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
-            
-            # Trim to maximum radius if specified
+            # Trim to maximum radius if specified (after patching PA)
             if max_radius is not None:
-                batch_subset.trim_to_light_cylinder(
-                    R_LC=max_radius, trim_type="sphere"
-                )
+                batch_subset.trim_to_light_cylinder(R_LC=max_radius, trim_type="sphere")
             
             # Extract properties
-            tangent_theta_lines = batch_subset.get_property('tangent_theta')
-            tangent_phi_lines = batch_subset.get_property('tangent_phi')
-            r_line_data = batch_subset.get_property('r_line')
-            pa_line_data = batch_subset.get_property('pa_line')
-            
-            if tangent_theta_lines is None or tangent_phi_lines is None or r_line_data is None:
-                error_msg = "Required properties (tangent_theta, tangent_phi, or r_line) not available in batch_subset"
-                logger.error(error_msg)
-                raise PSRMagPyPropertyError(error_msg)
+            tangent_theta_lines, tangent_phi_lines, r_line_data, pa_line_data = extract_line_properties(
+                batch_subset, require_pa=True
+            )
             
             # Filter points for each field line
             filtered_lines = _filter_field_line_points(
@@ -281,9 +358,7 @@ def extract_PA_processor(
             # Construct output path from lines_dir
             output_dir = Path(lines_dir).parent / "data_products" / "extracted_PA"
             output_dir.mkdir(parents=True, exist_ok=True)
-            # Get nside from grid if it's a HealpixGrid
-            nside_str = f"nside{grid.nside}" if isinstance(grid, HealpixGrid) and hasattr(grid, 'nside') else ""
-            filename = f"{experiment_config.name}_extract_PA_{nside_str}_RLC_{r_lc:.2f}.fits"
+            filename = f"{experiment_config.name}_extract_PA_RLC_{r_lc:05.1f}.fits"
             output_path = output_dir / filename
         else:
             output_path = Path(output_path)
@@ -295,43 +370,6 @@ def extract_PA_processor(
     return filtered_result
 
 
-def _normalize_arrays(theta_line, phi_line, r_line):
-    """Normalize arrays to 1D numpy arrays, handling edge cases."""
-    theta_line = np.asarray(theta_line).flatten()
-    phi_line = np.asarray(phi_line).flatten()
-    r_line = np.asarray(r_line)
-    
-    # Handle scalar case
-    if theta_line.ndim == 0:
-        theta_line = np.array([theta_line])
-    if phi_line.ndim == 0:
-        phi_line = np.array([phi_line])
-    
-    if len(theta_line) == 0 or len(phi_line) == 0 or len(r_line) == 0:
-        return None, None, None
-    
-    # Calculate radius for each point
-    if r_line.ndim == 1:
-        r_line = r_line.reshape(-1, 3)
-    point_radii = np.sqrt(np.sum(r_line**2, axis=1))
-    
-    # Ensure point_radii matches length of theta_line and phi_line
-    if len(point_radii) != len(theta_line) or len(point_radii) != len(phi_line):
-        return None, None, None
-    
-    return theta_line, phi_line, r_line, point_radii
-
-
-def _create_radius_mask(point_radii, min_radius, max_radius):
-    """Create mask for filtering points by radius range."""
-    if min_radius is not None and max_radius is not None:
-        return (point_radii >= min_radius) & (point_radii < max_radius)
-    elif min_radius is not None:
-        return point_radii >= min_radius
-    elif max_radius is not None:
-        return point_radii < max_radius
-    else:
-        return np.ones(len(point_radii), dtype=bool)
 
 
 def _create_theta_mask(theta_line, grid_theta, theta_tolerance):
@@ -366,13 +404,13 @@ def _filter_field_line_points(
             continue
         
         # Normalize arrays
-        result = _normalize_arrays(theta_line, phi_line, r_line)
+        result = normalize_line_arrays(theta_line, phi_line, r_line)
         if result is None:
             continue
         theta_line, phi_line, r_line, point_radii = result
         
         # Create masks
-        radius_mask = _create_radius_mask(point_radii, min_radius, max_radius)
+        radius_mask = create_radius_mask(point_radii, min_radius, max_radius)
         theta_mask = _create_theta_mask(theta_line, grid_theta, theta_tolerance)
         
         # Combine masks

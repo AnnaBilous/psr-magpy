@@ -201,7 +201,7 @@ def find_OFL_regions_from_batch_files(
     # Save OFL map if requested
     if save:
         if output_dir is None:
-            output_dir = Path(lines_dir) / "OFLR_maps"
+            output_dir = Path(lines_dir).parent / "data_products" / "OFLR_maps"
         else:
             output_dir = Path(output_dir)
         

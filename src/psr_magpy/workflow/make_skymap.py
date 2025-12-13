@@ -6,10 +6,17 @@ import numpy as np
 import healpy as hp
 
 from psr_magpy.experiment.experiment_config import ExperimentConfig
-from psr_magpy.experiment.grid_config import HealpixGridConfig, GridConfig
+from psr_magpy.experiment.grid_config import HealpixGridConfig
 from psr_magpy.grid.grid import HealpixGrid, FootpointGrid
-from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_template import FieldLineTemplate
+from psr_magpy.workflow.workflow_utils import (
+    create_healpix_grid,
+    prepare_batch_subset,
+    extract_line_properties,
+    normalize_line_arrays,
+    create_radius_mask,
+    get_basic_batch_template,
+)
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyPropertyError
 
@@ -63,21 +70,8 @@ def make_skymap(
         If multiple R_LC: dict mapping R_LC values to skymap arrays.
     """
     # Create grid object
-    grid_config = GridConfig(healpix=healpix_grid_config)
-    grid = grid_config.create_grid()
-    
-    if grid is None:
-        raise PSRMagPyIOError("Failed to create grid from config")
-    
-    if not isinstance(grid, HealpixGrid):
-        raise PSRMagPyIOError(f"Expected HealpixGrid, got {type(grid).__name__}")
-    
-    # Get grid size
-    if grid.nline is None:
-        raise PSRMagPyIOError("Grid nline is None")
-    
+    grid = create_healpix_grid(healpix_grid_config)
     grid_size = grid.nline
-    logger.info(f"Created HEALPix grid with nside={grid.nside}, npix={grid_size}")
     
     # Default processor
     if processor_fn is None:
@@ -122,13 +116,13 @@ def make_skymap(
         # Save each R_LC to its own file
         for r_lc, skymap in all_skymaps.items():
             # Generate filename for this R_LC
-            filename = f"{experiment_config.name}_skymap_nside{grid.nside}_RLC_{r_lc:.2f}.fits"
+            filename = f"{experiment_config.name}_skymap_nside{grid.nside}_RLC_{r_lc:05.2f}.fits"
             filepath = output_dir / filename
             
             # Save skymap for this R_LC
             _save_skymap_fits(skymap, grid, filepath, experiment_config.name, np.array([r_lc]), trim_radius_coeff)
             
-            logger.info(f"Saved skymap for R_LC={r_lc:.2f} to {filepath}")
+            logger.info(f"Saved skymap for R_LC={r_lc:05.2f} to {filepath}")    
     
     # Return structure: if single R_LC, return array; otherwise return dict
     if len(R_LC_values) == 1:
@@ -229,51 +223,22 @@ def skymap_processor(
     min_radius = radius_range[0] if radius_range is not None else None
     max_radius = radius_range[1] if radius_range is not None else None
     
-    # Create minimal template for loading batch data
-    template = FieldLineTemplate(
-        save_footpoint_id=True,
-        save_r_cyl_max=True,
-        save_z_abs_max=True,
-        save_tangent_theta=True,
-        save_tangent_phi=True,
-        save_r_line=True,
-        save_reversed_error=True,
-    )
+    # Get template for loading batch data
+    template = get_basic_batch_template()
     
     # Process batches to extract OFL footpoint IDs and count points in HEALPix bins
     def process_batch(batch_data):
         """Extract OFL regions, filter, and count points in HEALPix bins."""
         try:
-            ofl_footpoint_ids = batch_data.get_OFL_footpoints(R_LC=r_lc)
+            batch_subset = prepare_batch_subset(batch_data, r_lc, max_radius)
             
-            # Check if there are any OFL footpoints
-            if len(ofl_footpoint_ids) == 0:
-                logger.debug(f"No OFL footpoints found for R_LC={r_lc:.2f} in this batch")
+            if batch_subset is None:
                 return np.zeros(grid_size, dtype=np.int64)
             
-            batch_subset = batch_data.subset_by_footpoint_ids(ofl_footpoint_ids)
-            batch_subset = batch_subset.filter_by_reversed_error(reversed_error_threshold=0.01)
-            
-            # Check if subset is empty after filtering
-            if batch_subset.n_field_lines == 0:
-                logger.debug(f"No field lines remaining after filtering for R_LC={r_lc:.2f} in this batch")
-                return np.zeros(grid_size, dtype=np.int64)
-            
-            # Trim to maximum radius if specified
-            if max_radius is not None:
-                batch_subset.trim_to_light_cylinder(
-                    R_LC=max_radius, trim_type="sphere"
-                )
-            
-            # Extract tangent_theta, tangent_phi, and r_line for all points in all lines
-            tangent_theta_lines = batch_subset.get_property('tangent_theta')
-            tangent_phi_lines = batch_subset.get_property('tangent_phi')
-            r_line_data = batch_subset.get_property('r_line')
-            
-            if tangent_theta_lines is None or tangent_phi_lines is None or r_line_data is None:
-                error_msg = "Required properties (tangent_theta, tangent_phi, or r_line) not available in batch_subset"
-                logger.error(error_msg)
-                raise PSRMagPyPropertyError(error_msg)
+            # Extract properties
+            tangent_theta_lines, tangent_phi_lines, r_line_data, _ = extract_line_properties(
+                batch_subset, require_pa=False
+            )
             
             # Count points in each HEALPix pixel
             pixel_counts = np.zeros(grid_size, dtype=np.int64)
@@ -282,40 +247,14 @@ def skymap_processor(
                 if theta_line is None or phi_line is None or r_line is None:
                     continue
                 
-                # Ensure arrays are 1D numpy arrays
-                theta_line = np.asarray(theta_line).flatten()
-                phi_line = np.asarray(phi_line).flatten()
-                r_line = np.asarray(r_line)
-                
-                # Handle scalar case
-                if theta_line.ndim == 0:
-                    theta_line = np.array([theta_line])
-                if phi_line.ndim == 0:
-                    phi_line = np.array([phi_line])
-                
-                if len(theta_line) == 0 or len(phi_line) == 0 or len(r_line) == 0:
+                # Normalize arrays
+                result = normalize_line_arrays(theta_line, phi_line, r_line)
+                if result is None:
                     continue
+                theta_line, phi_line, r_line, point_radii = result
                 
-                # Calculate radius for each point
-                # r_line is shape (N, 3)
-                if r_line.ndim == 1:
-                    r_line = r_line.reshape(-1, 3)
-                point_radii = np.sqrt(np.sum(r_line**2, axis=1))
-                
-                # Ensure point_radii matches length of theta_line and phi_line
-                if len(point_radii) != len(theta_line) or len(point_radii) != len(phi_line):
-                    logger.warning(f"Length mismatch: r_line={len(point_radii)}, theta={len(theta_line)}, phi={len(phi_line)}")
-                    continue
-                
-                # Filter by radius range if specified
-                if min_radius is not None and max_radius is not None:
-                    radius_mask = (point_radii >= min_radius) & (point_radii < max_radius)
-                elif min_radius is not None:
-                    radius_mask = point_radii >= min_radius
-                elif max_radius is not None:
-                    radius_mask = point_radii < max_radius
-                else:
-                    radius_mask = np.ones(len(point_radii), dtype=bool)
+                # Filter by radius range
+                radius_mask = create_radius_mask(point_radii, min_radius, max_radius)
                 
                 if not np.any(radius_mask):
                     continue
@@ -375,11 +314,11 @@ def skymap_processor(
     )
     
     if skymap_counts is None:
-        logger.warning(f"No data processed for R_LC = {r_lc:.2f}")
+        logger.warning(f"No data processed for R_LC = {r_lc:05.2f}")
         return np.zeros(grid_size, dtype=np.float64)
     
     total_points = np.sum(skymap_counts)
-    logger.info(f"Counted {total_points} points in HEALPix bins for R_LC = {r_lc:.2f}")
+    logger.info(f"Counted {total_points} points in HEALPix bins for R_LC = {r_lc:05.1f}")
     
     # Convert counts to float64 for consistency with skymap format
     return skymap_counts.astype(np.float64)
