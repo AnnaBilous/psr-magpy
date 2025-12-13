@@ -575,6 +575,84 @@ class FieldLineSet(FieldLine):
         logger.debug(f"Created subset with {subset.n_field_lines} field lines")
         return subset
 
+    def filter_by_reversed_error(
+        self, reversed_error_threshold: float
+    ) -> "FieldLineSet":
+        """
+        Create a filtered FieldLineSet containing only field lines with reversed_error <= threshold.
+
+        Parameters
+        ----------
+        reversed_error_threshold : float
+            Maximum allowed reversed_error value. Field lines with reversed_error > threshold
+            are excluded. NaN values are kept.
+
+        Returns
+        -------
+        FieldLineSet
+            New FieldLineSet containing only field lines that pass the filter.
+
+        Raises
+        ------
+        PSRMagPyPropertyError
+            If reversed_error or footpoint_id property is not enabled or is None.
+        """
+        # Check if reversed_error property is enabled
+        if (
+            PropertyName.REVERSED_ERROR
+            not in self.property_system.get_enabled_properties()
+        ):
+            raise PSRMagPyPropertyError(
+                "reversed_error property must be enabled to filter by reversed_error"
+            )
+
+        # Check if footpoint_id property is enabled (needed for subset_by_footpoint_ids)
+        if (
+            PropertyName.FOOTPOINT_ID
+            not in self.property_system.get_enabled_properties()
+        ):
+            raise PSRMagPyPropertyError(
+                "footpoint_id property must be enabled to filter by reversed_error"
+            )
+
+        # Get reversed_error and footpoint_id properties
+        reversed_error = self.property_system.get_property(PropertyName.REVERSED_ERROR)
+        if reversed_error is None:
+            raise PSRMagPyPropertyError("reversed_error property is None")
+
+        footpoint_ids = self.property_system.get_property(PropertyName.FOOTPOINT_ID)
+        if footpoint_ids is None:
+            raise PSRMagPyPropertyError("footpoint_id property is None")
+
+        # Convert to numpy arrays for efficient operations
+        reversed_error = np.asarray(reversed_error)
+        footpoint_ids = np.asarray(footpoint_ids)
+
+        # Create mask: keep lines with reversed_error <= threshold or NaN
+        keep_mask = (reversed_error <= reversed_error_threshold) | np.isnan(reversed_error)
+
+        # Get footpoint IDs of field lines that pass the filter
+        filtered_footpoint_ids = footpoint_ids[keep_mask].astype(int).tolist()
+
+        if not filtered_footpoint_ids:
+            # Return empty FieldLineSet with same template
+            empty_set = FieldLineSet(self, copy_data=False)
+            empty_set.n_field_lines = 0
+            logger.info(
+                f"No field lines passed reversed_error filter (threshold: {reversed_error_threshold:.6f})"
+            )
+            return empty_set
+
+        n_filtered = self.n_field_lines - len(filtered_footpoint_ids)
+        logger.info(
+            f"Filtered {n_filtered} field lines "
+            f"(threshold: {reversed_error_threshold:.6f}), "
+            f"remaining: {len(filtered_footpoint_ids)}"
+        )
+
+        # Use subset_by_footpoint_ids to create the filtered set
+        return self.subset_by_footpoint_ids(filtered_footpoint_ids)
+
     def trim_to_light_cylinder(
         self, R_LC, h_LC_coeff=3**1.5 / 2.0, trim_type="cylinder"
     ):

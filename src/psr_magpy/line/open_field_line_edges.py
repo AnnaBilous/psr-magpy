@@ -519,19 +519,24 @@ def _extract_and_save_OFL_data(
                     logger.debug(f"    No footpoint IDs in batch file, skipping")
                     continue
 
+                # Filter by reversed_error if threshold is provided
+                if reversed_error_threshold is not None:
+                    batch_data = batch_data.filter_by_reversed_error(reversed_error_threshold)
+                    if batch_data.n_field_lines == 0:
+                        logger.debug(f"    No field lines passed reversed_error filter, skipping")
+                        continue
+                    # Update footpoint_ids after filtering
+                    batch_footpoint_ids = batch_data.property_system.get_property(
+                        PropertyName.FOOTPOINT_ID
+                    )
+                    if batch_footpoint_ids is None:
+                        logger.debug(f"    No footpoint IDs after filtering, skipping")
+                        continue
+
                 # Find matching footpoint IDs
-                matching_footpoint_ids = []
-                for j, fp_id in enumerate(batch_footpoint_ids):
-                    if fp_id in footpoint_set:
-                        # Filter by reversed_error if threshold is provided
-                        if reversed_error_threshold is not None:
-                            batch_reversed_error = batch_data.property_system.get_property(
-                                PropertyName.REVERSED_ERROR
-                            )
-                            if batch_reversed_error is not None and len(batch_reversed_error) > j:
-                                if batch_reversed_error[j] > reversed_error_threshold:
-                                    continue
-                        matching_footpoint_ids.append(fp_id)
+                matching_footpoint_ids = [
+                    fp_id for fp_id in batch_footpoint_ids if fp_id in footpoint_set
+                ]
 
                 if not matching_footpoint_ids:
                     logger.debug(f"    No {data_type} footpoints in this batch, skipping")

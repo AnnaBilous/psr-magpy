@@ -109,11 +109,18 @@ class ExperimentConfigIO(YamlIO):
     def _prepare_for_save(self, config: Any) -> Dict[Any, Any]:
         """Prepare experiment configuration for saving."""
         # Convert to dict, handling nested objects
+        grid_dict = config.grid.model_dump()
+        
+        # Remove coordinates from custom grid configs (only grid_file_path matters)
+        if "custom" in grid_dict and isinstance(grid_dict["custom"], dict):
+            if "coordinates" in grid_dict["custom"]:
+                del grid_dict["custom"]["coordinates"]
+        
         config_dict = {
             "name": config.name,
             "description": config.description,
             "field": {"components": config.field.get_complete_components()},
-            "grid": config.grid.model_dump(),
+            "grid": grid_dict,
             "tracing": config.tracing.get_complete_config(),
             "template": config.template.property_system.get_flags_dict(),
             "metadata": config.metadata or {},
@@ -228,6 +235,13 @@ class ExperimentSeriesConfigIO(YamlIO):
         """Prepare experiment series configuration for saving."""
         # Use Pydantic's model_dump for serialization
         config_dict = config.model_dump()
+
+        # Remove coordinates from custom grid configs in grids list
+        if "grid" in config_dict and "grids" in config_dict["grid"]:
+            for grid_item in config_dict["grid"]["grids"]:
+                if isinstance(grid_item, dict) and "custom" in grid_item:
+                    if isinstance(grid_item["custom"], dict) and "coordinates" in grid_item["custom"]:
+                        del grid_item["custom"]["coordinates"]
 
         # Convert FieldLine objects to dicts
         if "template" in config_dict and hasattr(

@@ -33,7 +33,7 @@ from .tracing_parameters import (
     PerformanceParameters,
     OutputParameters,
 )
-from .property_calculator import PropertyCalculator
+from .property_calculator import PropertyCalculator, calculate_pa_line
 from .progress_tracker import ProgressTracker, ProgressReporter
 from .memory_manager import MemoryManager
 from .calculation_context import CalculationContext
@@ -59,6 +59,8 @@ __all__ = [
     "PropertySystem",
     "PropertyName",
     "SaveFlags",
+    "PropertyCalculator",
+    "calculate_pa_line",
     "MemoryManager",
     "ProgressTracker",
     "ProgressReporter",

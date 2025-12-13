@@ -1,7 +1,7 @@
 """Experiment configuration for field line calculations."""
 
 from dataclasses import dataclass
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union, Dict, Any, Iterator, Callable
 from pathlib import Path
 
 from .field_config import FieldConfig, FieldComponentConfig
@@ -174,6 +174,136 @@ class ExperimentConfig:
                 logger.info(f"Verified {len(footpoint_ids)} unique footpoint indices")
 
         return combined_field_line_set
+
+    def iter_batch_files(self, lines_dir: str) -> Iterator[Path]:
+        """Iterate over batch file paths for this experiment.
+        
+        Parameters
+        ----------
+        lines_dir : str
+            Directory containing batch files
+            
+        Yields
+        ------
+        Path
+            Path to each batch file in sorted order
+        """
+        import glob
+        
+        if lines_dir is None:
+            raise PSRMagPyValidationError("lines_dir must be specified")
+        
+        batch_pattern = f"{lines_dir}/{self.name}_batch_*.fits"
+        batch_files = sorted(glob.glob(batch_pattern))
+        
+        for batch_file in batch_files:
+            yield Path(batch_file)
+
+    def iter_batch_data(
+        self, 
+        template: FieldLine, 
+        lines_dir: str
+    ) -> Iterator[FieldLineSet]:
+        """Iterate over loaded batch data for this experiment.
+        
+        Parameters
+        ----------
+        template : FieldLine
+            FieldLine template specifying which properties to load
+        lines_dir : str
+            Directory containing batch files
+            
+        Yields
+        ------
+        FieldLineSet
+            Loaded field line set for each batch (skips empty batches)
+        """
+        from psr_magpy.io import load_data
+        
+        for batch_file in self.iter_batch_files(lines_dir):
+            logger.debug(f"Loading batch: {batch_file.name}")
+            batch_data = load_data(FieldLineSet, batch_file, template=template)
+            if batch_data is not None and batch_data.n_field_lines > 0:
+                yield batch_data
+            else:
+                logger.debug(f"Skipping empty batch: {batch_file.name}")
+
+    def process_batches_incremental(
+        self,
+        template: FieldLine,
+        lines_dir: str,
+        processor_fn: Callable[[FieldLineSet], Any],
+        accumulator_fn: Callable[[Any, Any], Any],
+        initial_value: Any = None,
+    ) -> Any:
+        """Process batches incrementally, accumulating results.
+        
+        This method loads batches one at a time, processes each batch using
+        processor_fn, and accumulates results using accumulator_fn. This is
+        memory-efficient for operations that transform FieldLineSet data into
+        other formats (e.g., dictionaries, arrays, custom objects).
+        
+        Parameters
+        ----------
+        template : FieldLine
+            Template for loading batch data
+        lines_dir : str
+            Directory containing batch files
+        processor_fn : Callable[[FieldLineSet], Any]
+            Function that processes a batch and returns result.
+            Signature: (batch_data: FieldLineSet) -> Any
+        accumulator_fn : Callable[[Any, Any], Any]
+            Function that accumulates results.
+            Signature: (accumulated_result: Any, new_result: Any) -> Any
+            First call: accumulator_fn(initial_value, first_batch_result)
+        initial_value : Any, optional
+            Initial accumulator value. If None, first batch result becomes initial value.
+            
+        Returns
+        -------
+        Any
+            Final accumulated result
+            
+        Examples
+        --------
+        >>> # Build a dictionary mapping footpoint_id to max radius
+        >>> def process_batch(batch_data):
+        ...     footpoint_ids = batch_data.footpoint_id
+        ...     r_cyl_max = batch_data.get_property('r_cyl_max')
+        ...     return {fp_id: r_max for fp_id, r_max in zip(footpoint_ids, r_cyl_max)}
+        >>> 
+        >>> def accumulate_dict(accumulated, new):
+        ...     if accumulated is None:
+        ...         return new.copy()
+        ...     for fp_id, r_max in new.items():
+        ...         accumulated[fp_id] = max(accumulated.get(fp_id, 0), r_max)
+        ...     return accumulated
+        >>> 
+        >>> result = exp_config.process_batches_incremental(
+        ...     template=template,
+        ...     lines_dir=str(lines_dir),
+        ...     processor_fn=process_batch,
+        ...     accumulator_fn=accumulate_dict,
+        ...     initial_value=None
+        ... )
+        """
+        result = initial_value
+        batch_count = 0
+        
+        for batch_data in self.iter_batch_data(template, lines_dir):
+            batch_count += 1
+            logger.debug(f"Processing batch {batch_count}: {batch_data.n_field_lines} field lines")
+            
+            batch_result = processor_fn(batch_data)
+            
+            if result is None and initial_value is None:
+                # First batch: use its result as initial value
+                result = batch_result
+            else:
+                result = accumulator_fn(result, batch_result)
+        
+        logger.info(f"Processed {batch_count} batches")
+        return result
 
     @classmethod
     def create_dipole_example(cls) -> "ExperimentConfig":

@@ -585,10 +585,10 @@ class ExperimentSeriesConfig(BaseModel):
 
         # Load all experiment configs (skip series config)
         all_config_files = [
-            f
-            for f in configs_dir.glob("*.yaml")
-            if not f.name.endswith("_config.yaml")
-        ]
+                f
+                for f in configs_dir.glob("*.yaml")
+                if not f.name.endswith("_config.yaml")
+            ]
         
         subset_config_files = [f for f in all_config_files if f.name.endswith("_subset.yaml")]
         regular_config_files = [f for f in all_config_files if not f.name.endswith("_subset.yaml")]
@@ -610,9 +610,6 @@ class ExperimentSeriesConfig(BaseModel):
             if regular_config_files:
                 experiment_files = sorted(regular_config_files)
                 logger.info(f"Loading {len(regular_config_files)} regular config files")
-            elif subset_config_files:
-                experiment_files = sorted(subset_config_files)
-                logger.info(f"No regular configs found, using {len(subset_config_files)} subset config files as fallback")
             else:
                 raise PSRMagPyIOError(f"No experiment configs found in: {configs_dir}")
 

@@ -516,9 +516,7 @@ class ExperimentSeriesRunner:
         has_subset_grids = False
         for exp in experiments:
             if (exp.grid.healpix is not None and exp.grid.healpix.subset) or \
-               (exp.grid.spherical is not None and exp.grid.spherical.subset) or \
-               (exp.grid.random is not None and exp.grid.random.subset) or \
-               (exp.grid.custom is not None and exp.grid.custom.subset):
+               (exp.grid.spherical is not None and exp.grid.spherical.subset):
                 has_subset_grids = True
                 break
         
