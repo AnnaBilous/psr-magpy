@@ -705,9 +705,16 @@ def calculate_and_save_OFL_edges(
 
     # Ensure R_LC_values are sorted in descending order
     R_LC_values = np.array(R_LC_values) if not isinstance(R_LC_values, np.ndarray) else R_LC_values
+    R_LC_original_order = R_LC_values.copy()
     if len(R_LC_values) > 1:
-        R_LC_values = np.sort(R_LC_values)[::-1]
+        sort_indices = np.argsort(R_LC_values)[::-1]
+        R_LC_values = R_LC_values[sort_indices]
         logger.info(f"R_LC_values sorted in descending order: {R_LC_values}")
+        
+        # Reorder trim_radius array to match sorted R_LC_values
+        if isinstance(trim_radius, np.ndarray) and len(trim_radius) == len(R_LC_original_order):
+            trim_radius = trim_radius[sort_indices]
+            logger.info(f"trim_radius reordered to match sorted R_LC_values: {trim_radius}")
 
     # Phase 1: Load experiment setup
     logger.info("Phase 1: Loading minimal data for edge calculation")
@@ -833,9 +840,16 @@ def calculate_and_save_OFL_regions(
 
     # Ensure R_LC_values are sorted in descending order
     R_LC_values = np.array(R_LC_values) if not isinstance(R_LC_values, np.ndarray) else R_LC_values
+    R_LC_original_order = R_LC_values.copy()
     if len(R_LC_values) > 1:
-        R_LC_values = np.sort(R_LC_values)[::-1]
+        sort_indices = np.argsort(R_LC_values)[::-1]
+        R_LC_values = R_LC_values[sort_indices]
         logger.info(f"R_LC_values sorted in descending order: {R_LC_values}")
+        
+        # Reorder trim_radius array to match sorted R_LC_values
+        if isinstance(trim_radius, np.ndarray) and len(trim_radius) == len(R_LC_original_order):
+            trim_radius = trim_radius[sort_indices]
+            logger.info(f"trim_radius reordered to match sorted R_LC_values: {trim_radius}")
 
     # Phase 1: Load experiment setup
     logger.info("Phase 1: Loading minimal data for OFL region calculation")
