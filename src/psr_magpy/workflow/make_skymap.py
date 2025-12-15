@@ -253,15 +253,10 @@ def skymap_processor(
                     continue
                 theta_line, phi_line, r_line, point_radii = result
                 
-                # Filter by radius range
-                radius_mask = create_radius_mask(point_radii, min_radius, max_radius)
                 
-                if not np.any(radius_mask):
-                    continue
-                
-                # Apply radius filter to angles and ensure 1D arrays
-                theta_line_filtered = np.asarray(theta_line[radius_mask], dtype=np.float64).flatten()
-                phi_line_filtered = np.asarray(phi_line[radius_mask], dtype=np.float64).flatten()
+                # Ensure 1D arrays
+                theta_line_filtered = np.asarray(theta_line, dtype=np.float64).flatten()
+                phi_line_filtered = np.asarray(phi_line, dtype=np.float64).flatten()
                 
                 # Ensure they are 1D arrays (not 0-d)
                 if theta_line_filtered.ndim == 0:

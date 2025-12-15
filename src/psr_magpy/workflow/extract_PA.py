@@ -13,7 +13,6 @@ from psr_magpy.workflow.workflow_utils import (
     prepare_batch_subset,
     extract_line_properties,
     normalize_line_arrays,
-    create_radius_mask,
 )
 from psr_magpy.io import save_data
 from psr_magpy.utils.logging_config import get_logger
@@ -295,18 +294,14 @@ def extract_PA_processor(
     def process_batch(batch_data):
         """Filter points by theta tolerance and create filtered FieldLineSet."""
         try:
-            # Prepare batch subset (OFL extraction and reversed_error filtering, but no trimming yet)
-            batch_subset = prepare_batch_subset(batch_data, r_lc, max_radius=None)
+            # Prepare batch subset (OFL extraction, reversed_error filtering, and trimming)
+            batch_subset = prepare_batch_subset(batch_data, r_lc, max_radius=max_radius)
             
             if batch_subset is None:
                 return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
             
-            # Patch PA before trimming
+            # Patch PA
             batch_subset, _, _, _ = patch_PA(batch_subset)
-            
-            # Trim to maximum radius if specified (after patching PA)
-            if max_radius is not None:
-                batch_subset.trim_to_light_cylinder(R_LC=max_radius, trim_type="sphere")
             
             # Extract properties
             tangent_theta_lines, tangent_phi_lines, r_line_data, pa_line_data = extract_line_properties(
@@ -322,8 +317,6 @@ def extract_PA_processor(
                 pa_line_data=pa_line_data,
                 grid_theta=grid_theta,
                 theta_tolerance=theta_tolerance,
-                min_radius=min_radius,
-                max_radius=max_radius,
             )
             
             # Create FieldLineSet from filtered lines
@@ -401,8 +394,6 @@ def _filter_field_line_points(
     pa_line_data,
     grid_theta,
     theta_tolerance,
-    min_radius,
-    max_radius,
 ):
     """Filter points on field lines by theta tolerance and radius range."""
     filtered_lines = []
@@ -422,12 +413,11 @@ def _filter_field_line_points(
             continue
         theta_line, phi_line, r_line, point_radii = result
         
-        # Create masks
-        radius_mask = create_radius_mask(point_radii, min_radius, max_radius)
+        # Create mask
         theta_mask = _create_theta_mask(theta_line, grid_theta, theta_tolerance)
         
-        # Combine masks
-        combined_mask = radius_mask & theta_mask
+        # Use theta mask directly
+        combined_mask = theta_mask
         
         if not np.any(combined_mask):
             continue
