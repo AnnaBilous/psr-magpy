@@ -156,6 +156,7 @@ def make_extract_PA(
     output_dir: Optional[Union[str, Path]] = None,
     trim_radius_coeff: float = 1.0,
     r_min: float = 1.0,
+    interpolation_factor: float = 1.0,
 ) -> Union[FieldLineSet, Dict[float, FieldLineSet]]:
     """Extract PA data filtered by theta tolerance from experiment data.
     
@@ -182,6 +183,9 @@ def make_extract_PA(
         Default is 1.0.
     r_min : float, optional
         Minimum radius for filtering points. Default is 1.0.
+    interpolation_factor : float, optional
+        Factor to increase number of points in r_line via interpolation.
+        Default is 1.0 (no interpolation). Values > 1.0 increase point density.
         
     Returns
     -------
@@ -213,6 +217,7 @@ def make_extract_PA(
             save=False,
             output_path=None,
             radius_range=(r_min, max_radius),
+            interpolation_factor=interpolation_factor,
         )
         
         all_results[r_lc] = result
@@ -253,6 +258,7 @@ def extract_PA_processor(
     save: bool = True,
     output_path: Optional[Union[str, Path]] = None,
     radius_range: Optional[tuple] = None,
+    interpolation_factor: float = 1.0,
 ) -> FieldLineSet:
     """Extract field line points filtered by theta tolerance and save filtered FieldLineSet.
     
@@ -280,6 +286,9 @@ def extract_PA_processor(
     radius_range : Optional[tuple], optional
         Tuple (min_radius, max_radius) to filter points by radius.
         If None, no radius filtering is applied. Default is None.
+    interpolation_factor : float, optional
+        Factor to increase number of points in r_line via interpolation.
+        Default is 1.0 (no interpolation). Values > 1.0 increase point density.
         
     Returns
     -------
@@ -295,7 +304,7 @@ def extract_PA_processor(
         """Filter points by theta tolerance and create filtered FieldLineSet."""
         try:
             # Prepare batch subset (OFL extraction, reversed_error filtering, and trimming)
-            batch_subset = prepare_batch_subset(batch_data, r_lc, max_radius=max_radius)
+            batch_subset = prepare_batch_subset(batch_data, r_lc, max_radius=max_radius, interpolation_factor=interpolation_factor)
             
             if batch_subset is None:
                 return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
@@ -395,7 +404,7 @@ def _filter_field_line_points(
     grid_theta,
     theta_tolerance,
 ):
-    """Filter points on field lines by theta tolerance and radius range."""
+    """Filter points on field lines by theta tolerance."""
     filtered_lines = []
     
     for line_idx in range(batch_subset.n_field_lines):

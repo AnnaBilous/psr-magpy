@@ -3,6 +3,7 @@
 from typing import Optional, Tuple
 from pathlib import Path
 import numpy as np
+from scipy.interpolate import interp1d
 
 from psr_magpy.experiment.grid_config import HealpixGridConfig, GridConfig
 from psr_magpy.grid.grid import HealpixGrid, FootpointGrid
@@ -64,6 +65,7 @@ def prepare_batch_subset(
     r_lc: float,
     max_radius: Optional[float] = None,
     reversed_error_threshold: float = 0.01,
+    interpolation_factor: float = 1.0,
 ) -> Optional[FieldLineSet]:
     """Extract OFL footpoints, filter by reversed_error, and trim by radius.
     
@@ -77,6 +79,9 @@ def prepare_batch_subset(
         Maximum radius for trimming. If None, no trimming is applied.
     reversed_error_threshold : float, optional
         Threshold for reversed_error filtering. Default is 0.01.
+    interpolation_factor : float, optional
+        Factor to increase number of points in r_line via interpolation.
+        Default is 1.0 (no interpolation). Values > 1.0 increase point density.
         
     Returns
     -------
@@ -92,13 +97,125 @@ def prepare_batch_subset(
     batch_subset = batch_data.subset_by_footpoint_ids(ofl_footpoint_ids)
     batch_subset = batch_subset.filter_by_reversed_error(reversed_error_threshold=reversed_error_threshold)
     
+    # Interpolate r_line and recalculate tangent_theta and tangent_phi if factor > 1.0
+    if interpolation_factor > 1.0:
+        batch_subset = interpolate_and_recalculate_tangents(batch_subset, interpolation_factor=interpolation_factor)
+    
     if batch_subset.n_field_lines == 0:
         logger.debug(f"No field lines remaining after filtering for R_LC={r_lc:.2f} in this batch")
         return None
     
     # Trim to maximum radius if specified
     if max_radius is not None:
-        batch_subset.trim_to_light_cylinder(R_LC=max_radius, trim_type="sphere")
+        batch_subset.trim_to_light_cylinder(R_LC=max_radius, trim_type="cylinder")
+    
+    return batch_subset
+
+
+def interpolate_and_recalculate_tangents(
+    batch_subset: FieldLineSet,
+    interpolation_factor: float = 2.0,
+) -> FieldLineSet:
+    """Interpolate r_line to increase points and recalculate tangent_theta and tangent_phi.
+    
+    Parameters
+    ----------
+    batch_subset : FieldLineSet
+        Field line set to process.
+    interpolation_factor : float, optional
+        Factor to increase number of points. Default is 2.0 (doubles the points).
+        
+    Returns
+    -------
+    FieldLineSet
+        Field line set with interpolated r_line and recalculated tangent_theta and tangent_phi.
+    """
+    from psr_magpy.utils.exceptions import PSRMagPyPropertyError
+    
+    r_line_data = batch_subset.get_property('r_line')
+    if r_line_data is None:
+        error_msg = "r_line property not available in batch_subset"
+        logger.error(error_msg)
+        raise PSRMagPyPropertyError(error_msg)
+    
+    n_lines = batch_subset.n_field_lines
+    interpolated_r_lines = []
+    interpolated_tangent_theta = []
+    interpolated_tangent_phi = []
+    
+    for line_idx in range(n_lines):
+        r_line = r_line_data[line_idx]
+        
+        if r_line is None or len(r_line) == 0:
+            interpolated_r_lines.append(r_line)
+            interpolated_tangent_theta.append(None)
+            interpolated_tangent_phi.append(None)
+            continue
+        
+        # Ensure r_line is (N, 3) format
+        if r_line.ndim == 1:
+            r_line = r_line.reshape(-1, 3)
+        elif r_line.ndim == 2 and r_line.shape[1] != 3:
+            if r_line.shape[0] == 3:
+                r_line = r_line.T
+            else:
+                logger.warning(f"Unexpected r_line shape {r_line.shape} for line {line_idx}, skipping")
+                interpolated_r_lines.append(r_line)
+                interpolated_tangent_theta.append(None)
+                interpolated_tangent_phi.append(None)
+                continue
+        
+        n_points = len(r_line)
+        if n_points < 2:
+            # Can't interpolate with less than 2 points
+            interpolated_r_lines.append(r_line)
+            interpolated_tangent_theta.append(None)
+            interpolated_tangent_phi.append(None)
+            continue
+        
+        # Calculate arc length parameterization
+        # Compute cumulative distance along the curve
+        dr = np.diff(r_line, axis=0)
+        ds = np.linalg.norm(dr, axis=1)
+        s = np.concatenate([[0], np.cumsum(ds)])  # Arc length parameter
+        
+        # Create new arc length points with increased density
+        n_new_points = int(n_points * interpolation_factor)
+        s_new = np.linspace(s[0], s[-1], n_new_points)
+        
+        # Interpolate r_line along arc length
+        r_line_interp = np.zeros((n_new_points, 3))
+        for dim in range(3):
+            interp_func = interp1d(s, r_line[:, dim], kind='linear', bounds_error=False, fill_value='extrapolate')
+            r_line_interp[:, dim] = interp_func(s_new)
+        
+        interpolated_r_lines.append(r_line_interp)
+        
+        # Recalculate tangent_theta and tangent_phi using logic from property_calculator
+        # property_calculator uses np.gradient(r, axis=1) where r is (3, N)
+        # So we need to transpose r_line_interp to (3, N) for gradient, then transpose back
+        r_line_T = r_line_interp.T  # (3, N)
+        t = np.gradient(r_line_T, axis=1)  # (3, N) - gradient along second axis
+        t_abs = np.linalg.norm(t, axis=0, keepdims=True)
+        safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
+        t_norm = t / safe_t_abs  # Normalized tangent vector (3, N)
+        
+        # Calculate tangent_theta (colatitude in degrees)
+        x, y, z = t_norm
+        r_sph = np.sqrt(x**2 + y**2 + z**2)
+        theta = np.rad2deg(np.arccos(z / np.where(r_sph == 0, 1, r_sph)))
+        interpolated_tangent_theta.append(theta.astype(np.float32))
+        
+        # Calculate tangent_phi (azimuth in degrees)
+        phi = np.rad2deg(np.arctan2(y, x))
+        interpolated_tangent_phi.append(phi.astype(np.float32))
+    
+    # Update batch_subset properties
+    batch_subset.set_property(r_line=interpolated_r_lines)
+    batch_subset.set_property(tangent_theta=interpolated_tangent_theta)
+    batch_subset.set_property(tangent_phi=interpolated_tangent_phi)
+    
+    logger.info(f"Interpolated {n_lines} field lines with factor {interpolation_factor}")
     
     return batch_subset
 
