@@ -63,6 +63,7 @@ def create_healpix_grid(healpix_grid_config: HealpixGridConfig) -> HealpixGrid:
 def prepare_batch_subset(
     batch_data: FieldLineSet,
     r_lc: float,
+    trim_type: str,
     max_radius: Optional[float] = None,
     reversed_error_threshold: float = 0.01,
     interpolation_factor: float = 1.0,
@@ -75,6 +76,8 @@ def prepare_batch_subset(
         Batch data to process.
     r_lc : float
         Light cylinder radius for OFL extraction.
+    trim_type : str
+        Type of trimming to apply ("cylinder" or "sphere").
     max_radius : Optional[float], optional
         Maximum radius for trimming. If None, no trimming is applied.
     reversed_error_threshold : float, optional
@@ -107,7 +110,7 @@ def prepare_batch_subset(
     
     # Trim to maximum radius if specified
     if max_radius is not None:
-        batch_subset.trim_to_light_cylinder(R_LC=max_radius, trim_type="cylinder")
+        batch_subset.trim_to_light_cylinder(R_LC=max_radius, trim_type=trim_type)
     
     return batch_subset
 
@@ -115,8 +118,10 @@ def prepare_batch_subset(
 def interpolate_and_recalculate_tangents(
     batch_subset: FieldLineSet,
     interpolation_factor: float = 2.0,
+    recalculate_tangents: bool = True,
+    remove_first_point: bool = True,
 ) -> FieldLineSet:
-    """Interpolate r_line to increase points and recalculate tangent_theta and tangent_phi.
+    """Interpolate r_line to increase points and optionally recalculate tangent_theta and tangent_phi.
     
     Parameters
     ----------
@@ -124,11 +129,16 @@ def interpolate_and_recalculate_tangents(
         Field line set to process.
     interpolation_factor : float, optional
         Factor to increase number of points. Default is 2.0 (doubles the points).
+    recalculate_tangents : bool, optional
+        Whether to recalculate tangent_theta and tangent_phi. Default is True.
+    remove_first_point : bool, optional
+        Whether to remove the first point from r_line, tangent_theta, and tangent_phi after interpolation.
+        Default is True.
         
     Returns
     -------
     FieldLineSet
-        Field line set with interpolated r_line and recalculated tangent_theta and tangent_phi.
+        Field line set with interpolated r_line and optionally recalculated tangent_theta and tangent_phi.
     """
     from psr_magpy.utils.exceptions import PSRMagPyPropertyError
     
@@ -189,26 +199,48 @@ def interpolate_and_recalculate_tangents(
             interp_func = interp1d(s, r_line[:, dim], kind='linear', bounds_error=False, fill_value='extrapolate')
             r_line_interp[:, dim] = interp_func(s_new)
         
+        # Remove first point if requested
+        if remove_first_point and len(r_line_interp) > 1:
+            r_line_interp = r_line_interp[1:]
+        
         interpolated_r_lines.append(r_line_interp)
         
-        # Recalculate tangent_theta and tangent_phi using logic from property_calculator
-        # property_calculator uses np.gradient(r, axis=1) where r is (3, N)
-        # So we need to transpose r_line_interp to (3, N) for gradient, then transpose back
-        r_line_T = r_line_interp.T  # (3, N)
-        t = np.gradient(r_line_T, axis=1)  # (3, N) - gradient along second axis
-        t_abs = np.linalg.norm(t, axis=0, keepdims=True)
-        safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
-        t_norm = t / safe_t_abs  # Normalized tangent vector (3, N)
-        
-        # Calculate tangent_theta (colatitude in degrees)
-        x, y, z = t_norm
-        r_sph = np.sqrt(x**2 + y**2 + z**2)
-        theta = np.rad2deg(np.arccos(z / np.where(r_sph == 0, 1, r_sph)))
-        interpolated_tangent_theta.append(theta.astype(np.float32))
-        
-        # Calculate tangent_phi (azimuth in degrees)
-        phi = np.rad2deg(np.arctan2(y, x))
-        interpolated_tangent_phi.append(phi.astype(np.float32))
+        # Recalculate tangent_theta and tangent_phi if requested
+        if recalculate_tangents:
+            # Recalculate tangent_theta and tangent_phi using logic from property_calculator
+            # property_calculator uses np.gradient(r, axis=1) where r is (3, N)
+            # So we need to transpose r_line_interp to (3, N) for gradient, then transpose back
+            r_line_T = r_line_interp.T  # (3, N)
+            t = np.gradient(r_line_T, axis=1)  # (3, N) - gradient along second axis
+            t_abs = np.linalg.norm(t, axis=0, keepdims=True)
+            safe_t_abs = np.where(t_abs == 0.0, 1.0, t_abs)
+            t_norm = t / safe_t_abs  # Normalized tangent vector (3, N)
+            
+            # Calculate tangent_theta (colatitude in degrees)
+            x, y, z = t_norm
+            r_sph = np.sqrt(x**2 + y**2 + z**2)
+            theta = np.rad2deg(np.arccos(z / np.where(r_sph == 0, 1, r_sph)))
+            
+            # Calculate tangent_phi (azimuth in degrees)
+            phi = np.rad2deg(np.arctan2(y, x))
+            
+            # Remove first point from tangents if requested
+            if remove_first_point and len(theta) > 1:
+                theta = theta[1:]
+                phi = phi[1:]
+            
+            interpolated_tangent_theta.append(theta.astype(np.float32))
+            interpolated_tangent_phi.append(phi.astype(np.float32))
+        else:
+            # Keep original tangents (or None if not available)
+            original_theta = batch_subset.get_property('tangent_theta')
+            original_phi = batch_subset.get_property('tangent_phi')
+            if original_theta is not None and original_phi is not None:
+                interpolated_tangent_theta.append(original_theta[line_idx])
+                interpolated_tangent_phi.append(original_phi[line_idx])
+            else:
+                interpolated_tangent_theta.append(None)
+                interpolated_tangent_phi.append(None)
     
     # Update batch_subset properties
     batch_subset.set_property(r_line=interpolated_r_lines)

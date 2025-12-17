@@ -33,6 +33,7 @@ def make_skymap(
     output_dir: Optional[Union[str, Path]] = None,
     trim_radius_coeff: float = 1.0,
     r_min: float = 1.0,
+    trim_type: str = "cylinder",
 ) -> Union[np.ndarray, Dict[float, np.ndarray]]:
     """Create a skymap from experiment data using HEALPix grid.
     
@@ -62,6 +63,8 @@ def make_skymap(
         Default is 1.0.
     r_min : float, optional
         Minimum radius for filtering points. Default is 1.0.
+    trim_type : str, optional
+        Type of trimming to apply ("cylinder" or "sphere"). Default is "cylinder".
         
     Returns
     -------
@@ -77,7 +80,10 @@ def make_skymap(
     if processor_fn is None:
         if lines_dir is None:
             raise PSRMagPyIOError("lines_dir must be specified when using default processor")
-        processor_fn = skymap_processor
+        # Create wrapper to pass trim_type to default processor
+        def processor_wrapper(exp_config, grd, r_lc_val, lns_dir, radius_rng):
+            return skymap_processor(exp_config, grd, r_lc_val, lns_dir, radius_rng, trim_type=trim_type)
+        processor_fn = processor_wrapper
     
     # Process each R_LC value separately and save individual files
     all_skymaps = {}  # Dict to store skymaps per R_LC: {r_lc: skymap}
@@ -189,6 +195,7 @@ def skymap_processor(
     r_lc: float,
     lines_dir: str,
     radius_range: Optional[tuple] = None,
+    trim_type: str = "cylinder",
 ) -> np.ndarray:
     """Process batches incrementally and map results to skymap grid.
     
@@ -208,6 +215,8 @@ def skymap_processor(
     radius_range : Optional[tuple], optional
         Tuple (min_radius, max_radius) to filter points by radius.
         If None, no radius filtering is applied. Default is None.
+    trim_type : str, optional
+        Type of trimming to apply ("cylinder" or "sphere"). Default is "cylinder".
         
     Returns
     -------
@@ -230,7 +239,7 @@ def skymap_processor(
     def process_batch(batch_data):
         """Extract OFL regions, filter, and count points in HEALPix bins."""
         try:
-            batch_subset = prepare_batch_subset(batch_data, r_lc, max_radius)
+            batch_subset = prepare_batch_subset(batch_data, r_lc, trim_type=trim_type, max_radius=max_radius)
             
             if batch_subset is None:
                 return np.zeros(grid_size, dtype=np.int64)

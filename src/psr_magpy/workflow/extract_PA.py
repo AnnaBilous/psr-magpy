@@ -157,6 +157,7 @@ def make_extract_PA(
     trim_radius_coeff: float = 1.0,
     r_min: float = 1.0,
     interpolation_factor: float = 1.0,
+    trim_type: str = "cylinder",
 ) -> Union[FieldLineSet, Dict[float, FieldLineSet]]:
     """Extract PA data filtered by theta tolerance from experiment data.
     
@@ -218,6 +219,7 @@ def make_extract_PA(
             output_path=None,
             radius_range=(r_min, max_radius),
             interpolation_factor=interpolation_factor,
+            trim_type=trim_type,
         )
         
         all_results[r_lc] = result
@@ -259,6 +261,7 @@ def extract_PA_processor(
     output_path: Optional[Union[str, Path]] = None,
     radius_range: Optional[tuple] = None,
     interpolation_factor: float = 1.0,
+    trim_type: str = "cylinder",
 ) -> FieldLineSet:
     """Extract field line points filtered by theta tolerance and save filtered FieldLineSet.
     
@@ -289,6 +292,8 @@ def extract_PA_processor(
     interpolation_factor : float, optional
         Factor to increase number of points in r_line via interpolation.
         Default is 1.0 (no interpolation). Values > 1.0 increase point density.
+    trim_type : str, optional
+        Type of trimming to apply ("cylinder" or "sphere"). Default is "cylinder".
         
     Returns
     -------
@@ -304,7 +309,7 @@ def extract_PA_processor(
         """Filter points by theta tolerance and create filtered FieldLineSet."""
         try:
             # Prepare batch subset (OFL extraction, reversed_error filtering, and trimming)
-            batch_subset = prepare_batch_subset(batch_data, r_lc, max_radius=max_radius, interpolation_factor=interpolation_factor)
+            batch_subset = prepare_batch_subset(batch_data, r_lc, trim_type=trim_type, max_radius=max_radius, interpolation_factor=interpolation_factor)
             
             if batch_subset is None:
                 return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
