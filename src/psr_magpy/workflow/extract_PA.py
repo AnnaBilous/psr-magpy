@@ -56,14 +56,13 @@ def patch_PA(results):
     
     if r_lines is None or len(r_lines) == 0:
         error_msg = "No field line data found in results"
-        print(error_msg)
+        logger.error(error_msg)
         return results
     
     e1_list = []
     e2_list = []
     n_norm_list = []
     PA_calculated = []
-    
     
     for line_idx in range(len(r_lines)):
         if line_idx >= len(r_lines):
@@ -121,11 +120,6 @@ def patch_PA(results):
         
         PA = np.arctan2(nom, denom)
         PA = 90 - np.rad2deg(PA)
-        
-        #if b_angles[line_idx] > np.pi/2:
-        #    PA = PA + 180. + np.nan
-        # Wrap PA to [-180, 180) range
-        #PA = (PA + 180) % 360 - 180
         PA = (PA + 90) % 180 -90
         unstable_points = (n_abs[0, :] <= 1.1e-12) | (t_abs[0, :] <= 1.1e-12) | (e1_norm[0, :] <= 1.1e-12) | (e2_norm[0, :] <= 1.1e-12)
         PA[unstable_points] = np.nan

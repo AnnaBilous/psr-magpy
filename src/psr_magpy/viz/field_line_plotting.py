@@ -210,6 +210,7 @@ class PowerLawWidthGenerator(FieldLineWidthGenerator):
                 / (self.lw_max - self.lw_min)
                 / np.log(2)
             )
+            
             return (self.lw_max - self.lw_min) * (
                 layer_no * 1.0 / Nlayers
             ) ** pli + self.lw_min
