@@ -9,11 +9,17 @@ from typing import Optional, Any, Union, Dict, Set
 from enum import Enum
 from dataclasses import dataclass
 from pydantic import BaseModel, field_validator, ValidationError
+import numpy as np
 
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyPropertyError
 
 logger = get_logger(__name__)
+
+
+def _is_scalar_number(v: Any) -> bool:
+    """Python int/float and NumPy scalar integers/floats (not ndarray)."""
+    return isinstance(v, (int, float, np.integer, np.floating))
 
 
 @dataclass
@@ -157,7 +163,7 @@ class PropertyValue(BaseModel):
             PropertyName.Z_ABS_MAX,
         ]:
             # These should be numeric values (can be 0 for cylindrical coordinates)
-            if not isinstance(v, (int, float)) or not (v >= 0):
+            if not _is_scalar_number(v) or not (v >= 0):
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be a non-negative number, got {v}",
                     property_name.key_name,
@@ -166,7 +172,7 @@ class PropertyValue(BaseModel):
 
         elif property_name in [PropertyName.B_INI, PropertyName.B_R_INI_ANGLE]:
             # These should be numeric values (can be negative)
-            if not isinstance(v, (int, float)):
+            if not _is_scalar_number(v):
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be a number, got {type(v)}",
                     property_name.key_name,
@@ -175,7 +181,7 @@ class PropertyValue(BaseModel):
 
         elif property_name == PropertyName.REVERSED_ERROR:
             # This should be a non-negative float (error distance)
-            if not isinstance(v, (int, float)) or v < 0:
+            if not _is_scalar_number(v) or v < 0:
                 raise PropertyValidationError(
                     f"{property_name.key_name} must be a non-negative number, got {v}",
                     property_name.key_name,
