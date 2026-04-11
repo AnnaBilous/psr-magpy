@@ -279,7 +279,8 @@ def test_deletion_strategies(test_data_dir):
     (series_dir / "configs").mkdir(parents=True, exist_ok=True)
     (series_dir / "grids").mkdir(parents=True, exist_ok=True)
     (series_dir / "lines").mkdir(parents=True, exist_ok=True)
-    (series_dir / "configs" / "test.yaml").touch()
+    # Non-YAML marker so load_experiments() does not try to parse an empty *.yaml file.
+    (series_dir / "configs" / "configs_dir_preserved.txt").touch()
     (series_dir / "grids" / "test.fits").touch()
     (series_dir / "lines" / "test.fits").touch()
     (series_dir / "test.fits").touch()
@@ -292,7 +293,7 @@ def test_deletion_strategies(test_data_dir):
     )
     
     # Configs should be preserved
-    assert (series_dir / "configs" / "test.yaml").exists()
+    assert (series_dir / "configs" / "configs_dir_preserved.txt").exists()
     # Other files should be deleted
     assert not (series_dir / "test.fits").exists()
     # Directories should still exist (recreated)
@@ -345,5 +346,9 @@ def test_experiment_level_deletion(test_data_dir):
         overwrite_strategy=OverwriteStrategy.ALL
     )
     
-    # Should complete successfully
-    assert (series_dir / "lines" / f"{exp_name}.fits").exists() 
+    # Line results are written as batch FITS files (not a single ``{name}.fits``).
+    lines_dir = series_dir / "lines"
+    assert lines_dir.exists()
+    assert any(lines_dir.glob(f"{exp_name}*.fits")), (
+        f"Expected at least one FITS batch for {exp_name} under {lines_dir}"
+    )

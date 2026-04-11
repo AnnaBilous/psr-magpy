@@ -24,6 +24,9 @@ from .utils.physical_conversions import get_R_LC, get_P_ms, PA_RVM
 from .experiment import (
     ExperimentConfig,
     ExperimentSeriesConfig,
+    experiment_matches_thD_fQ,
+    infer_experiment_count,
+    find_experiment_numbers_by_thD_fQ,
     FieldComponentConfig,
     CustomGridConfig,
     GridConfig,
@@ -76,6 +79,9 @@ __all__ = [
     # Experiment system
     "ExperimentConfig",
     "ExperimentSeriesConfig",
+    "experiment_matches_thD_fQ",
+    "infer_experiment_count",
+    "find_experiment_numbers_by_thD_fQ",
     "FieldComponentConfig",
     "CustomGridConfig",
     "GridConfig",

@@ -137,6 +137,15 @@ class ExperimentConfigIO(YamlIO):
         from psr_magpy.experiment.tracing_config import TracingConfig
         from psr_magpy.line.field_line_template import FieldLineTemplate
 
+        if data is None:
+            raise PSRMagPyIOError(
+                "Experiment configuration YAML is empty or contains only a null document."
+            )
+        if not isinstance(data, dict):
+            raise PSRMagPyIOError(
+                f"Experiment configuration must be a YAML mapping, got {type(data).__name__}"
+            )
+
         # Reconstruct template
         template_data = data.get("template", {})
 

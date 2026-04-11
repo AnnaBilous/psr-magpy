@@ -12,6 +12,11 @@ from .grid_config import (
 from .tracing_config import TracingConfig
 from .experiment_metadata import create_experiment_metadata
 from .experiment_series import ExperimentSeriesConfig
+from .experiment_lookup import (
+    experiment_matches_thD_fQ,
+    infer_experiment_count,
+    find_experiment_numbers_by_thD_fQ,
+)
 from .experiment_series_runner import (
     run_experiment_series,
     run_experiment_series_in_memory,
@@ -38,6 +43,9 @@ __all__ = [
     "CustomGridConfig",
     "create_experiment_metadata",
     "ExperimentSeriesConfig",
+    "experiment_matches_thD_fQ",
+    "infer_experiment_count",
+    "find_experiment_numbers_by_thD_fQ",
     "run_experiment_series",
     "run_experiment_series_in_memory",
     "run_experiment_series_in_memory_from_file",

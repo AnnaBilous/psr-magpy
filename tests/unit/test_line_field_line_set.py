@@ -320,6 +320,9 @@ class TestFieldLineSetProperties:
         if template.property_system.is_property_enabled('curvature_line'):
             field_line.set_property(curvature_line=[np.array([0.5, 1.0], dtype=np.float32)])
         
+        if template.property_system.is_property_enabled('reversed_error'):
+            field_line.set_property(reversed_error=0.0)
+        
         return field_line
     
     def test_property_access(self):
@@ -758,6 +761,9 @@ class TestFieldLineSetIntegration:
         if template.property_system.is_property_enabled('curvature_line'):
             field_line.set_property(curvature_line=[np.random.rand(10).astype(np.float32)])
         
+        if template.property_system.is_property_enabled('reversed_error'):
+            field_line.set_property(reversed_error=float(np.random.rand()))
+        
         return field_line
 
 
@@ -814,6 +820,9 @@ class TestFieldLineSetCopy:
         
         if template.property_system.is_property_enabled('curvature_line'):
             field_line.set_property(curvature_line=[np.random.rand(10).astype(np.float32)])
+        
+        if template.property_system.is_property_enabled('reversed_error'):
+            field_line.set_property(reversed_error=float(np.random.rand()))
         
         return field_line
     

@@ -893,6 +893,29 @@ class ExperimentSeriesConfig(BaseModel):
 
         return self
 
+    def infer_experiment_count(self) -> int:
+        """Infer ``N`` such that experiment indices are ``0 .. N-1`` (summary or configs on disk)."""
+        from psr_magpy.experiment.experiment_lookup import infer_experiment_count
+
+        return infer_experiment_count(self)
+
+    def find_experiment_numbers_by_thD_fQ(
+        self,
+        thD: float,
+        fQ: float,
+        *,
+        n_experiments: Optional[int] = None,
+    ) -> List[int]:
+        """Return experiment indices matching dipole colatitude ``thD`` and quadrupole ``fQ``."""
+        from psr_magpy.experiment.experiment_lookup import find_experiment_numbers_by_thD_fQ
+
+        return find_experiment_numbers_by_thD_fQ(
+            self,
+            thD,
+            fQ,
+            n_experiments=n_experiments,
+        )
+
 
 def create_simple_series(
     name: str,

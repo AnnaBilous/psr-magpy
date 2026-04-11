@@ -590,6 +590,23 @@ class TestCalculateAndSaveOFLEdges:
             return mock_subset
         
         mock_field_line_set.subset_by_footpoint_ids = Mock(side_effect=mock_subset_by_footpoint_ids)
+        # After filter_by_reversed_error(), extraction uses a filtered set — mock that path.
+        mock_filtered = Mock(spec=FieldLineSet)
+        mock_filtered.n_field_lines = 2
+
+        def filtered_get_property(prop):
+            if prop.name == "FOOTPOINT_ID":
+                return np.array([1, 5])
+            if prop.name == "REVERSED_ERROR":
+                return np.array([0.001, 0.0005])
+            return None
+
+        mock_filtered.property_system = Mock()
+        mock_filtered.property_system.get_property.side_effect = filtered_get_property
+        mock_filtered.subset_by_footpoint_ids = Mock(side_effect=mock_subset_by_footpoint_ids)
+        mock_filtered.save_flags = mock_save_flags
+        mock_field_line_set.filter_by_reversed_error = Mock(return_value=mock_filtered)
+
         mock_load_data.return_value = mock_field_line_set
         
         # Create template with reversed_error
@@ -625,21 +642,13 @@ class TestCalculateAndSaveOFLEdges:
                     reversed_error_threshold=0.001  # Pass threshold to trigger filtering
                 )
                 
-                # Verify that subset_by_footpoint_ids was called with filtered footpoints
-                # The filtering should remove footpoints with error > 0.001
-                calls = mock_field_line_set.subset_by_footpoint_ids.call_args_list
+                # Verify that subset_by_footpoint_ids was called on the filtered batch data
+                calls = mock_filtered.subset_by_footpoint_ids.call_args_list
                 assert len(calls) > 0, "subset_by_footpoint_ids was never called"
                 
-                # Check that filtering occurred (some footpoints were removed)
-                # Original footpoints: [1, 2, 3, 4, 5] with errors: [0.001, 0.002, 0.01, 0.005, 0.0005]
-                # After filtering (error <= 0.001): should be [1, 5] (removing 2, 3, 4)
-                # For second R_LC: [1, 2, 3] -> [1] (removing 2, 3)
-                
-                # Verify that the first call has fewer footpoints than the original 5
                 first_call_footpoints = calls[0][0][0]
                 assert len(first_call_footpoints) < 5, f"Expected filtering to reduce footpoints, got {first_call_footpoints}"
                 
-                # Verify that footpoint 3 (error 0.01) was filtered out
                 assert 3 not in first_call_footpoints, f"Footpoint 3 (high error) should be filtered out, got {first_call_footpoints}"
                 assert result is not None
 

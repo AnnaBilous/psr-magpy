@@ -118,6 +118,18 @@ class TestFieldLineReversibilityCore:
         # Ensure float64 dtype for CyRK solver compatibility
         return np.asarray(endpoints, dtype=np.float64)
 
+    def _extract_endpoints_per_line(self, field_line_results):
+        """One row per ``r_line`` index; ``nan`` if the trace is missing or empty."""
+        if field_line_results is None or field_line_results.r_line is None:
+            return np.empty((0, 3), dtype=np.float64)
+
+        n = len(field_line_results.r_line)
+        out = np.full((n, 3), np.nan, dtype=np.float64)
+        for i, r_line in enumerate(field_line_results.r_line):
+            if r_line is not None and len(r_line) > 0:
+                out[i] = r_line[-1]
+        return out
+
     def _create_custom_grid_from_endpoints(self, endpoints):
         """Create custom grid from endpoint coordinates."""
         if len(endpoints) == 0:
@@ -135,18 +147,20 @@ class TestFieldLineReversibilityCore:
         return CustomGrid(nline_ori=len(endpoints), coordinates=cart_coords)
 
     def _calculate_position_differences(self, original_grid, final_endpoints):
-        """Calculate position differences between original and final points."""
-        if len(final_endpoints) == 0:
+        """Per-footpoint distances; ``nan`` where ``final_endpoints`` has no valid endpoint."""
+        fe = np.asarray(final_endpoints, dtype=np.float64)
+        if fe.size == 0:
             return np.array([])
-            
+
         original_positions = original_grid.footpoint_coordinates.xyz.value.T
-        
-        # Handle size mismatches
-        min_count = min(len(original_positions), len(final_endpoints))
+        min_count = min(len(original_positions), len(fe))
         original_positions = original_positions[:min_count]
-        final_endpoints = final_endpoints[:min_count]
-        
-        return np.linalg.norm(original_positions - final_endpoints, axis=1)
+        fe = fe[:min_count]
+
+        valid = np.isfinite(fe).all(axis=1)
+        dists = np.full(min_count, np.nan, dtype=np.float64)
+        dists[valid] = np.linalg.norm(original_positions[valid] - fe[valid], axis=1)
+        return dists
 
     def _check_xz_plane_confinement(self, field_line_results, tolerance=1e-10):
         """Check if field lines are confined to XZ plane."""
@@ -258,20 +272,21 @@ class TestFieldLineReversibilityCore:
         # Backward trace
         custom_grid = self._create_custom_grid_from_endpoints(endpoints)
         backward_results = self._trace_field_lines_time_reversal(self.field, custom_grid, self.R_max, self.t_span_forward, "Backward trace")
-        final_endpoints = self._extract_endpoints(backward_results)
+        final_endpoints = self._extract_endpoints_per_line(backward_results)
         
         # Check reversibility
         distances = self._calculate_position_differences(grid, final_endpoints)
         
-        assert len(distances) > 0
-        assert np.mean(distances) < 1.0  # Reasonable accuracy
+        finite = distances[np.isfinite(distances)]
+        assert len(finite) > 0
+        assert np.mean(finite) < 1.0  # Reasonable accuracy
         
-        # Count successful reversals (within tolerance)
+        # Count successful reversals (within tolerance); ignore empty traces
         tolerance = 1e-5
-        successful = np.sum(distances < tolerance)
-        success_rate = successful / len(distances)
+        successful = np.sum(finite < tolerance)
+        success_rate = successful / len(finite)
         
-        assert success_rate == 1.0  # All lines should reverse well
+        assert success_rate == 1.0  # All completed lines should reverse well
 
     def test_reversibility_with_inclined_dipole(self):
         """Test reversibility with inclined dipole (65° like example)."""
@@ -289,15 +304,15 @@ class TestFieldLineReversibilityCore:
         # Backward trace
         custom_grid = self._create_custom_grid_from_endpoints(endpoints)
         backward_results = self._trace_field_lines_time_reversal(dipole_field, custom_grid, self.R_max, self.t_span_forward, "Backward dipole")
-        final_endpoints = self._extract_endpoints(backward_results)
-        
-        # Check reversibility
+        final_endpoints = self._extract_endpoints_per_line(backward_results)
+
+        # Check reversibility (pair by line index; skip traces that returned empty)
         distances = self._calculate_position_differences(grid, final_endpoints)
-        print("Distances", distances)
-        # Dipole should have better reversibility
+        finite = distances[np.isfinite(distances)]
+        assert len(finite) > 0
         tolerance = 5e-4
-        successful = np.sum(distances < tolerance)
-        success_rate = successful / len(distances)
+        successful = np.sum(finite < tolerance)
+        success_rate = successful / len(finite)
         
         assert success_rate == 1.0  
 
@@ -312,15 +327,16 @@ class TestFieldLineReversibilityCore:
         # Backward trace
         custom_grid = self._create_custom_grid_from_endpoints(endpoints)
         backward_results = self._trace_field_lines_time_reversal(self.field, custom_grid, self.R_max, self.t_span_forward, "Backward stats")
-        final_endpoints = self._extract_endpoints(backward_results)
+        final_endpoints = self._extract_endpoints_per_line(backward_results)
         
         # Calculate statistics
         distances = self._calculate_position_differences(grid, final_endpoints)
+        finite_d = distances[np.isfinite(distances)]
         
-        if len(distances) > 0:
-            max_distance = np.max(distances)
-            mean_distance = np.mean(distances)
-            median_distance = np.median(distances)
+        if len(finite_d) > 0:
+            max_distance = np.max(finite_d)
+            mean_distance = np.mean(finite_d)
+            median_distance = np.median(finite_d)
             
             # Basic sanity checks
             assert max_distance >= mean_distance
@@ -331,8 +347,8 @@ class TestFieldLineReversibilityCore:
             # Test different tolerance levels
             tolerances = [1e-3, 1e-2]
             for tol in tolerances:
-                within_tolerance = np.sum(distances < tol)
-                success_rate = within_tolerance / len(distances)
+                within_tolerance = np.sum(finite_d < tol)
+                success_rate = within_tolerance / len(finite_d)
                 # Allow for small numerical errors (at least 90% should pass)
                 assert success_rate >= 0.9, f"Success rate {success_rate} below 0.9 for tolerance {tol}"
 
