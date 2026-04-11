@@ -161,7 +161,6 @@ class FieldLineSetIO(FitsIO):
         # Process each enabled property
         for prop in PropertyName:
             if not getattr(self.data.save_flags, prop.flag_name):
-                logger.debug(f"Skipping disabled property: {prop.key_name}")
                 continue
 
             # Check if property exists in PropertySystem
@@ -170,14 +169,7 @@ class FieldLineSetIO(FitsIO):
                 logger.warning(f"Property {prop.key_name} is enabled but not set")
                 continue
 
-            logger.debug(f"Processing property: {prop.key_name}, type: {type(value)}")
-
-            # Get FITS format for the property
             result[prop.key_name] = IOUtils.get_fits_format(value)
-
-            logger.debug(
-                f"Added format for {prop.key_name}: {result.get(prop.key_name)}"
-            )
 
         return result
 

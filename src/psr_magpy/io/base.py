@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Union, Optional
 from contextlib import contextmanager
-import logging
 import numpy as np
 
 from .validator import (
@@ -68,37 +67,24 @@ class IOUtils:
     @staticmethod
     def get_fits_format(value: Any) -> str:
         """Determine FITS format for a value."""
-        logger.debug(
-            f"Determining FITS format for value of type {type(value).__name__}"
-        )
-
-        # Handle None values
         if value is None:
-            logger.debug("Value is None, using default format 'D'")
             return "D"
 
-        # Handle lists (including lists of arrays) - check this first
         if isinstance(value, list):
-            logger.debug(f"List detected with {len(value)} elements, using format 'PE'")
             return "PE"
 
-        # Handle arrays with shape
+        if isinstance(value, np.ndarray) and value.dtype == object and value.size > 0:
+            return "PE"
+
         if isinstance(value, np.ndarray) and value.size > 0:
             shape = value.shape
             if len(shape) > 1:
-                format_str = f"{shape[1]}D"
-                logger.debug(f"Array with shape {shape}, using format '{format_str}'")
-                return format_str
+                return f"{shape[1]}D"
 
-        # Use type mapping
         for type_class, format_str in IOUtils.FITS_TYPE_MAPPING.items():
             if isinstance(value, type_class):
-                logger.debug(
-                    f"Found matching type {type_class.__name__}, using format '{format_str}'"
-                )
                 return format_str
 
-        # Default case
         logger.warning(
             f"No format mapping found for type {type(value).__name__}, using default"
         )
@@ -111,17 +97,12 @@ class IOUtils:
         @contextmanager
         def _safe_operation():
             file_path_obj = Path(file_path)
-            logger.debug(f"Starting {operation_name} for {file_path_obj}")
-
             try:
                 yield file_path_obj
-                logger.debug(
-                    f"Successfully completed {operation_name} for {file_path_obj}"
+            except Exception:
+                logger.exception(
+                    "Failed to %s %s", operation_name, file_path_obj
                 )
-            except Exception as e:
-                error_msg = f"Failed to {operation_name} {file_path_obj}: {e}"
-                logger.error(error_msg)
-                logger.debug(f"{operation_name} error details", exc_info=True)
                 raise
 
         return _safe_operation()
