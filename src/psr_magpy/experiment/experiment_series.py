@@ -930,8 +930,8 @@ def create_simple_series(
     """Create a simple experiment series configuration.
 
     Convenience wrapper for common single-config experiment series creation.
-    This function simplifies the creation of ExperimentSeriesConfig when you
-    don't need complex parameter variations.
+    This function simplifies the creation of ExperimentSeriesConfig when there is 
+    no need for complex parameter variations.
 
     Parameters
     ----------

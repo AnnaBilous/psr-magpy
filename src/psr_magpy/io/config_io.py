@@ -260,6 +260,38 @@ class ExperimentSeriesConfigIO(YamlIO):
                 "template"
             ].property_system.get_flags_dict()
 
+        # Keep series YAML consistent with per-experiment normalization:
+        # verify_by_reversing=True requires save_reversed_error=True.
+        tracing_cfg = config_dict.get("tracing", {})
+        verify_by_reversing = False
+        if isinstance(tracing_cfg, dict):
+            verify_value = tracing_cfg.get("verify_by_reversing", False)
+            if isinstance(verify_value, list):
+                verify_by_reversing = any(bool(v) for v in verify_value)
+            else:
+                verify_by_reversing = bool(verify_value)
+
+        if verify_by_reversing and "template" in config_dict:
+            template_cfg = config_dict["template"]
+            if isinstance(template_cfg, dict):
+                if "templates" in template_cfg and isinstance(
+                    template_cfg["templates"], list
+                ):
+                    normalized_templates: List[Any] = []
+                    for template_item in template_cfg["templates"]:
+                        if hasattr(template_item, "property_system"):
+                            flags = template_item.property_system.get_flags_dict()
+                            flags["save_reversed_error"] = True
+                            normalized_templates.append(flags)
+                        elif isinstance(template_item, dict):
+                            template_item["save_reversed_error"] = True
+                            normalized_templates.append(template_item)
+                        else:
+                            normalized_templates.append(template_item)
+                    template_cfg["templates"] = normalized_templates
+                else:
+                    template_cfg["save_reversed_error"] = True
+
         # Convert tuples and numpy arrays to lists for YAML compatibility
         return cast(Dict[Any, Any], IOUtils.convert_for_yaml(config_dict))
 
