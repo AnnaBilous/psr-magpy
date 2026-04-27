@@ -228,6 +228,68 @@ class TestExperimentSeriesConfig:
         experiment_names = [exp.name for exp in experiments]
         expected_names = [f"test_series_{i:03d}" for i in range(8)]
         assert experiment_names == expected_names
+
+    def test_create_series_is_deterministic_for_same_inputs(self, test_data_dir):
+        """Same inputs should produce identical experiment order."""
+        field_factory = FieldFactoryConfig(
+            components=[
+                FieldComponentConfig(moment_type="dipole", B_magnitude=1.0),
+                FieldComponentConfig(moment_type="quadrupole", B_magnitude=0.5),
+            ]
+        )
+        grid_factory = GridFactoryConfig(
+            grids=[
+                SphericalGridConfig(nlon=10, nlat=5),
+                SphericalGridConfig(nlon=20, nlat=10),
+            ]
+        )
+        tracing_factory = TracingFactoryConfig(
+            max_integration_radius=[2.0, 3.0],
+            save_results_to_disk=True,
+            filename="test",
+        )
+        template = FieldLineTemplate.template_all()
+
+        series_a = ExperimentSeriesConfig(
+            name="deterministic_series",
+            field=field_factory,
+            grid=grid_factory,
+            tracing=tracing_factory,
+            template=template,
+            output_dir=str(test_data_dir),
+        )
+        series_b = ExperimentSeriesConfig(
+            name="deterministic_series",
+            field=field_factory,
+            grid=grid_factory,
+            tracing=tracing_factory,
+            template=template,
+            output_dir=str(test_data_dir),
+        )
+
+        experiments_a = series_a.create_experiment_series(save_configs=False)
+        experiments_b = series_b.create_experiment_series(save_configs=False)
+
+        signature_a = [
+            (
+                exp.name,
+                exp.field.components[0].B_magnitude,
+                exp.grid.spherical.nlon if exp.grid.spherical is not None else None,
+                exp.tracing.max_integration_radius,
+            )
+            for exp in experiments_a
+        ]
+        signature_b = [
+            (
+                exp.name,
+                exp.field.components[0].B_magnitude,
+                exp.grid.spherical.nlon if exp.grid.spherical is not None else None,
+                exp.tracing.max_integration_radius,
+            )
+            for exp in experiments_b
+        ]
+
+        assert signature_a == signature_b
     
     def test_create_directory_structure(self, test_data_dir):
         """Test that directory structure is created correctly."""

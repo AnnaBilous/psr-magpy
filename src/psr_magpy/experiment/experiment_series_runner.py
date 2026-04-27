@@ -1,22 +1,39 @@
-"""Experiment series runner module."""
+"""Experiment series runner module.
+
+Architecture boundary note
+--------------------------
+This module should focus on orchestration. Persistence details should move
+toward ``experiment.infrastructure`` repositories, while reusable run workflow
+logic should move toward ``experiment.services``.
+"""
 
 import logging
 import time
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Union, cast, Set
-from collections import OrderedDict
+from typing import List, Optional, Dict, Any, Union, Set
 import shutil
 import yaml
-import glob
 
 from .experiment_config import ExperimentConfig
 from .experiment_series import ExperimentSeriesConfig
-from .experiment_runner import run_experiment
+from .experiment_runner import run_experiment  # compatibility for test patch targets
 from .experiment_result import ExperimentResult, SeriesResult
+from .services.experiment_executor import ExperimentExecutor
+from .services.series_executor import SeriesExecutor
+from .services.formatting import format_duration
+from .services.selection import filter_experiments_by_numbers
+from .infrastructure.config_repository import ConfigRepository
+from .infrastructure.summary_repository import SummaryRepository
+from .infrastructure.path_policy import (
+    series_dir as policy_series_dir,
+    configs_dir as policy_configs_dir,
+    lines_dir as policy_lines_dir,
+    series_config_filename,
+    results_summary_filename,
+)
 
 from psr_magpy.utils.logging_config import get_logger, setup_logging
-from psr_magpy.io import save_config, load_config
 from psr_magpy.io.config_io import ExperimentSeriesConfigIO
 from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy, ConfigIOValidator
 from psr_magpy.io.memory_monitor import MemoryMonitor, MemoryThreshold
@@ -84,6 +101,7 @@ class ExperimentSeriesRunner:
         self.create_directories = create_directories
         self.log_rotation_max_bytes = log_rotation_max_bytes
         self.log_rotation_backup_count = log_rotation_backup_count
+        self._experiment_executor = ExperimentExecutor(run_func=run_experiment)
         self.series_deletion_strategy = series_deletion_strategy
         self.experiment_deletion_strategy = experiment_deletion_strategy
         self.overwrite_strategy = overwrite_strategy
@@ -327,6 +345,9 @@ class ExperimentSeriesRunner:
             if not lines_dir.exists():
                 lines_dir.mkdir(parents=True, exist_ok=True)
 
+            # Prevent stale/garbage rerun artifacts from polluting summary semantics.
+            self._cleanup_experiment_batch_files(lines_dir, experiment.name)
+
             # Save grid if requested
             if self.save_grids:
                 grids_dir = (
@@ -347,44 +368,25 @@ class ExperimentSeriesRunner:
                     else:
                         logger.info("Grid file already exists, skipping: %s", grid_path)
 
-            # Run the experiment
-            exp_start_time = time.time()
-            try:
-                result = cast(
-                    ExperimentResult,
-                    run_experiment(experiment, save_grids=self.save_grids),
+            outcome = self._experiment_executor.execute(
+                experiment,
+                save_grids=self.save_grids,
+                continue_on_failure=self.continue_on_failure,
+            )
+            result = outcome.result
+            duration = outcome.duration
+            if result.success:
+                logger.info(
+                    "✓ Experiment %s completed in %.2fs", experiment.name, duration
                 )
-                duration = time.time() - exp_start_time
-                if result.success:
-                    logger.info(
-                        "✓ Experiment %s completed in %.2fs", experiment.name, duration
-                    )
-                else:
-                    error_msg = result.error_message or "Unknown error"
-                    logger.error(
-                        "✗ Experiment %s failed after %.2fs: %s",
-                        experiment.name,
-                        duration,
-                        error_msg,
-                    )
-                    if not self.continue_on_failure:
-                        raise RuntimeError(error_msg)
-            except Exception as e:
-                duration = time.time() - exp_start_time
-                result = ExperimentResult(
-                    experiment_name=experiment.name,
-                    success=False,
-                    duration=duration,
-                    error_message=str(e),
-                )
+            else:
+                error_msg = result.error_message or "Unknown error"
                 logger.error(
                     "✗ Experiment %s failed after %.2fs: %s",
                     experiment.name,
                     duration,
-                    str(e),
+                    error_msg,
                 )
-                if not self.continue_on_failure:
-                    raise
 
             # Update summary after each experiment
             self._save_results_summary([result])
@@ -397,6 +399,24 @@ class ExperimentSeriesRunner:
             results.append(result)
 
         return results
+
+    def _cleanup_experiment_batch_files(self, lines_dir: Path, experiment_name: str) -> int:
+        """Delete stale batch files for one experiment before execution."""
+        if not lines_dir.exists():
+            return 0
+
+        deleted_count = 0
+        for path in lines_dir.glob(f"{experiment_name}*batch_*_out_of_*.fits"):
+            path.unlink()
+            deleted_count += 1
+
+        if deleted_count > 0:
+            logger.info(
+                "Deleted %d stale batch file(s) for %s before rerun",
+                deleted_count,
+                experiment_name,
+            )
+        return deleted_count
 
     def run(self) -> SeriesResult:
         """Run the experiment series."""
@@ -482,31 +502,11 @@ class ExperimentSeriesRunner:
 
         # Filter experiments by number if specified
         if self.experiment_numbers is not None:
-            filtered_experiments = []
-            requested_numbers = set(self.experiment_numbers)
-            for exp in experiments:
-                # Extract experiment number from name (format: {series_name}_{number:03d})
-                try:
-                    name_parts = exp.name.rsplit("_", 1)
-                    if len(name_parts) == 2:
-                        exp_number = int(name_parts[1])
-                        if exp_number in requested_numbers:
-                            filtered_experiments.append(exp)
-                except (ValueError, IndexError):
-                    logger.warning(f"Could not parse experiment number from name: {exp.name}, skipping")
-            # Warn about requested numbers that weren't found
-            found_numbers = set()
-            for exp in filtered_experiments:
-                try:
-                    name_parts = exp.name.rsplit("_", 1)
-                    if len(name_parts) == 2:
-                        found_numbers.add(int(name_parts[1]))
-                except (ValueError, IndexError):
-                    pass
-            missing_numbers = requested_numbers - found_numbers
+            experiments, _, missing_numbers = filter_experiments_by_numbers(
+                experiments, self.experiment_numbers
+            )
             if missing_numbers:
                 logger.warning(f"Experiment numbers not found: {sorted(missing_numbers)}")
-            experiments = filtered_experiments
             logger.info(
                 f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
             )
@@ -574,11 +574,9 @@ class ExperimentSeriesRunner:
 
     def _get_remaining_experiments(self) -> List[ExperimentConfig]:
         """Load existing summary to find completed experiments."""
-        summary_path = (
-            self.output_directory
-            / self.series_config.name
-            / f"{self.series_config.name}_results_summary.yaml"
-        )
+        summary_path = policy_series_dir(
+            str(self.output_directory), self.series_config.name
+        ) / results_summary_filename(self.series_config.name)
         completed_experiments = set()
         if summary_path.exists():
             with open(summary_path) as f:
@@ -616,165 +614,49 @@ class ExperimentSeriesRunner:
         str
             Formatted string like "10.5s", "2.5min", "1.2h", or "3.5d".
         """
-        if seconds < 60:
-            return f"{seconds:.1f}s"
-        minutes = seconds / 60
-        if minutes < 60:
-            return f"{minutes:.1f}min"
-        hours = minutes / 60
-        if hours < 24:
-            return f"{hours:.1f}h"
-        days = hours / 24
-        return f"{days:.1f}d"
+        return format_duration(seconds)
 
     def _save_results_summary(self, experiment_results: List[ExperimentResult]) -> None:
         """Save results summary to YAML file."""
-        summary_path = (
-            self.output_directory
-            / self.series_config.name
-            / f"{self.series_config.name}_results_summary.yaml"
+        summary_repo = SummaryRepository()
+        summary = summary_repo.merge_summary(
+            output_dir=str(self.output_directory),
+            series_name=self.series_config.name,
+            experiment_results=experiment_results,
         )
-
-        # Load existing summary if it exists
-        existing_summary = {}
-        if summary_path.exists():
-            with open(summary_path) as f:
-                existing_summary = yaml.safe_load(f) or {}
-
-        # Merge with existing results
-        if "experiment_results" in existing_summary:
-            existing_results = {
-                r["name"]: r for r in existing_summary["experiment_results"]
-            }
-        else:
-            existing_results = {}
-
-        # Add new results
-        for result in experiment_results:
-            # Count batch files
-            batch_pattern = str(
-                self.output_directory
-                / self.series_config.name
-                / self.series_config.LINES_DIR
-                / f"{result.experiment_name}*batch_*_out_of_*.fits"
-            )
-            batch_files = glob.glob(batch_pattern)
-            logger.debug(f"Batch file pattern: {batch_pattern}")
-            logger.debug(f"Found batch files: {batch_files}")
-
-            # Create result dictionary with all fields
-            result_dict = {
-                "name": result.experiment_name,
-                "start_time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "duration": self._format_duration(result.duration),
-                "success": result.success,
-                "batch_files": len(batch_files),
-            }
-
-            # Add error message if present
-            if result.error_message:
-                result_dict["error"] = result.error_message
-
-            # Convert to OrderedDict
-            ordered_items = []
-            ordered_items.append(("name", result_dict["name"]))
-            ordered_items.append(("start_time", result_dict["start_time"]))
-            ordered_items.append(("duration", result_dict["duration"]))
-            ordered_items.append(("success", result_dict["success"]))
-            if "error" in result_dict:
-                ordered_items.append(("error", result_dict["error"]))
-            ordered_items.append(("batch_files", result_dict["batch_files"]))
-            result_dict = OrderedDict(ordered_items)
-
-            # Update or add result
-            if result.experiment_name in existing_results:
-                existing_results[result.experiment_name].update(result_dict)
-            else:
-                existing_results[result.experiment_name] = result_dict
-
-        # Sort results by name
-        sorted_results = sorted(existing_results.values(), key=lambda x: x["name"])
-
-        # Create new summary with updated statistics
-        summary = {
-            "series_name": self.series_config.name,
-            "last_update": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "total_experiments": len(sorted_results),
-            "successful_experiments": sum(1 for r in sorted_results if r["success"]),
-            "failed_experiments": sum(1 for r in sorted_results if not r["success"]),
-            "total_duration": self._format_duration(
-                sum(
-                    (
-                        float(r["duration"].rstrip("s"))
-                        if r["duration"].endswith("s")
-                        else (
-                            float(r["duration"].rstrip("min")) * 60
-                            if r["duration"].endswith("min")
-                            else (
-                                float(r["duration"].rstrip("h")) * 3600
-                                if r["duration"].endswith("h")
-                                else float(r["duration"].rstrip("d")) * 86400
-                            )
-                        )
-                    )
-                    for r in sorted_results
-                )
-            ),
-            "success_rate": (
-                sum(1 for r in sorted_results if r["success"])
-                / len(sorted_results)
-                * 100
-                if sorted_results
-                else 0.0
-            ),
-            "experiment_results": sorted_results,
-        }
-
-        # Create custom dumper to preserve dictionary order
-        class OrderedDumper(yaml.SafeDumper):
-            pass
-
-        def _dict_representer(
-            dumper: yaml.SafeDumper, data: OrderedDict
-        ) -> yaml.nodes.MappingNode:
-            return dumper.represent_mapping("tag:yaml.org,2002:map", data.items())
-
-        OrderedDumper.add_representer(OrderedDict, _dict_representer)
-
-        # Save summary
-        with open(summary_path, "w") as f:
-            yaml.dump(summary, f, Dumper=OrderedDumper, sort_keys=False, width=1000)
-
+        summary_path = summary_repo.save_summary(
+            output_dir=str(self.output_directory),
+            series_name=self.series_config.name,
+            summary=summary,
+        )
         logger.info(f"Results summary saved to: {summary_path}")
 
     def _save_series_config(self) -> None:
         """Save series configuration YAML file."""
-        configs_dir = (
-            self.output_directory
-            / self.series_config.name
-            / self.series_config.CONFIGS_DIR
+        config_repo = ConfigRepository()
+        configs_dir = policy_configs_dir(
+            str(self.output_directory), self.series_config.name
         )
         
         if not configs_dir.exists():
             configs_dir.mkdir(parents=True, exist_ok=True)
         
-        series_config_path = configs_dir / f"{self.series_config.name}_config.yaml"
+        series_config_path = configs_dir / series_config_filename(self.series_config.name)
         
         if not series_config_path.exists() or self._should_overwrite_file(
             series_config_path, file_type="configs"
         ):
-            save_config(self.series_config, series_config_path, overwrite=True)
+            config_repo.save_series_config(self.series_config, overwrite=True)
             logger.info(f"Saved series config to: {series_config_path}")
         else:
             logger.info(f"Series config file already exists, skipping: {series_config_path}")
 
     def _save_individual_configs(self, experiments: List[ExperimentConfig]) -> None:
         """Save individual experiment configurations."""
+        config_repo = ConfigRepository()
         # Use the series-specific configs directory
-        configs_dir = (
-            self.output_directory
-            / self.series_config.name
-            / self.series_config.CONFIGS_DIR
+        configs_dir = policy_configs_dir(
+            str(self.output_directory), self.series_config.name
         )
 
         logger.info(f"Saving {len(experiments)} individual configs to {configs_dir}")
@@ -786,7 +668,9 @@ class ExperimentSeriesRunner:
             ):
                 if not configs_dir.exists():
                     configs_dir.mkdir(parents=True, exist_ok=True)
-                save_config(experiment, config_path, overwrite=True)
+                config_repo.save_experiment_config(
+                    self.series_config, experiment, overwrite=True, subset=False
+                )
                 logger.info(f"Saved config to: {config_path}")
             else:
                 logger.info(f"Config file already exists, skipping: {config_path}")
@@ -818,6 +702,7 @@ class InMemoryExperimentSeriesRunner:
         self.experiment_numbers = experiment_numbers
         self.save_individual_configs = save_individual_configs
         self.save_grids = save_grids
+        self._experiment_executor = ExperimentExecutor(run_func=run_experiment)
 
         logger.info("Initialized in-memory series runner for: %s", series_config.name)
         logger.info("Keep results in memory: %s", keep_results)
@@ -841,60 +726,41 @@ class InMemoryExperimentSeriesRunner:
             experiment.tracing.keep_results_in_memory = True
             experiment.tracing.filename = None
 
-            # Run the experiment
-            exp_start_time = time.time()
-            try:
-                result = cast(
-                    ExperimentResult,
-                    run_experiment(experiment, save_grids=self.save_grids),
+            outcome = self._experiment_executor.execute(
+                experiment,
+                save_grids=self.save_grids,
+                continue_on_failure=self.continue_on_failure,
+            )
+            result = outcome.result
+            duration = outcome.duration
+
+            if result.success and result.results is not None:
+                # Estimate memory usage
+                result_memory_mb = result.results.estimate_size() / (1024 * 1024)
+                total_memory_used += result_memory_mb
+
+                logger.info(
+                    "✓ Experiment %s completed in %.2fs (%.1f MB)",
+                    experiment.name,
+                    duration,
+                    result_memory_mb,
                 )
-                duration = time.time() - exp_start_time
 
-                if result.success and result.results is not None:
-                    # Estimate memory usage
-                    result_memory_mb = result.results.estimate_size() / (1024 * 1024)
-                    total_memory_used += result_memory_mb
-
-                    logger.info(
-                        "✓ Experiment %s completed in %.2fs (%.1f MB)",
-                        experiment.name,
-                        duration,
-                        result_memory_mb,
-                    )
-
-                    # Check memory limit
-                    if total_memory_used > self.max_memory_mb:
-                        warning_msg = f"Memory usage ({total_memory_used:.1f} MB) exceeds limit ({self.max_memory_mb:.1f} MB)"
-                        logger.warning(warning_msg)
-                        if not self.keep_results:
-                            logger.info("Clearing results due to memory limit")
-                            result.results = None
-                else:
-                    error_msg = result.error_message or "Unknown error"
-                    logger.error(
-                        "✗ Experiment %s failed after %.2fs: %s",
-                        experiment.name,
-                        duration,
-                        error_msg,
-                    )
-                    if not self.continue_on_failure:
-                        raise RuntimeError(error_msg)
-            except Exception as e:
-                duration = time.time() - exp_start_time
-                result = ExperimentResult(
-                    experiment_name=experiment.name,
-                    success=False,
-                    duration=duration,
-                    error_message=str(e),
-                )
+                # Check memory limit
+                if total_memory_used > self.max_memory_mb:
+                    warning_msg = f"Memory usage ({total_memory_used:.1f} MB) exceeds limit ({self.max_memory_mb:.1f} MB)"
+                    logger.warning(warning_msg)
+                    if not self.keep_results:
+                        logger.info("Clearing results due to memory limit")
+                        result.results = None
+            else:
+                error_msg = result.error_message or "Unknown error"
                 logger.error(
                     "✗ Experiment %s failed after %.2fs: %s",
                     experiment.name,
                     duration,
-                    str(e),
+                    error_msg,
                 )
-                if not self.continue_on_failure:
-                    raise
 
             # Add result to the list (keep results in memory if requested)
             if not self.keep_results and result.results is not None:
@@ -916,31 +782,11 @@ class InMemoryExperimentSeriesRunner:
 
         # Filter experiments by number if specified
         if self.experiment_numbers is not None:
-            filtered_experiments = []
-            requested_numbers = set(self.experiment_numbers)
-            for exp in experiments:
-                # Extract experiment number from name (format: {series_name}_{number:03d})
-                try:
-                    name_parts = exp.name.rsplit("_", 1)
-                    if len(name_parts) == 2:
-                        exp_number = int(name_parts[1])
-                        if exp_number in requested_numbers:
-                            filtered_experiments.append(exp)
-                except (ValueError, IndexError):
-                    logger.warning(f"Could not parse experiment number from name: {exp.name}, skipping")
-            # Warn about requested numbers that weren't found
-            found_numbers = set()
-            for exp in filtered_experiments:
-                try:
-                    name_parts = exp.name.rsplit("_", 1)
-                    if len(name_parts) == 2:
-                        found_numbers.add(int(name_parts[1]))
-                except (ValueError, IndexError):
-                    pass
-            missing_numbers = requested_numbers - found_numbers
+            experiments, _, missing_numbers = filter_experiments_by_numbers(
+                experiments, self.experiment_numbers
+            )
             if missing_numbers:
                 logger.warning(f"Experiment numbers not found: {sorted(missing_numbers)}")
-            experiments = filtered_experiments
             logger.info(
                 f"Running {len(experiments)} selected experiments out of {total_experiments_in_series} total"
             )
@@ -996,36 +842,18 @@ def run_experiment_series(
     SeriesResult
         Results from running the experiment series.
     """
-    # Check if any experiments have save_results_to_disk=False and warn user
-    experiments = series_config.create_experiment_series(
-        save_configs=False, create_directories=False
-    )
-    for experiment in experiments:
-        if (
-            hasattr(experiment.tracing, "save_results_to_disk")
-            and not experiment.tracing.save_results_to_disk
-        ):
-            logger.warning(
-                "WARNING: run_experiment_series() will override save_results_to_disk=False "
-                "and force results to be saved to disk. Use run_experiment_series_in_memory() "
-                "if you want to keep results in memory only."
-            )
-            break
-
-    runner = ExperimentSeriesRunner(
+    return SeriesExecutor().run_disk_series(
         series_config=series_config,
-        save_individual_configs=save_individual_configs,
-        save_grids=save_grids,
-        continue_on_failure=continue_on_failure,
         experiment_numbers=experiment_numbers,
+        run_remaining=run_remaining,
         series_deletion_strategy=series_deletion_strategy,
         experiment_deletion_strategy=experiment_deletion_strategy,
         overwrite_strategy=overwrite_strategy,
-        run_remaining=run_remaining,
+        save_individual_configs=save_individual_configs,
+        save_grids=save_grids,
+        continue_on_failure=continue_on_failure,
         create_directories=create_directories,
     )
-
-    return runner.run()
 
 
 def run_experiment_series_from_file(
@@ -1041,17 +869,9 @@ def run_experiment_series_from_file(
     continue_on_failure: bool = True,
 ) -> SeriesResult:
     """Run experiment series from a configuration file."""
-    # Load series config
-    config_file = Path(config_file)
-    series_config = load_config(ExperimentSeriesConfig, config_file)
-
-    # Set input directory if provided
-    if input_directory is not None:
-        series_config.output_dir = input_directory
-
-    # Run series
-    return run_experiment_series(
-        series_config=series_config,
+    return SeriesExecutor().run_from_file(
+        config_file=Path(config_file),
+        input_directory=Path(input_directory) if input_directory is not None else None,
         experiment_numbers=experiment_numbers,
         run_remaining=run_remaining,
         series_deletion_strategy=series_deletion_strategy,
@@ -1092,17 +912,15 @@ def run_experiment_series_in_memory(
     SeriesResult
         Results from running the experiment series.
     """
-    runner = InMemoryExperimentSeriesRunner(
+    return SeriesExecutor().run_in_memory_series(
         series_config=series_config,
         keep_results=keep_results,
         max_memory_mb=max_memory_mb,
-        continue_on_failure=continue_on_failure,
         experiment_numbers=experiment_numbers,
+        continue_on_failure=continue_on_failure,
         save_individual_configs=save_individual_configs,
         save_grids=save_grids,
     )
-
-    return runner.run()
 
 
 def run_experiment_series_in_memory_from_file(
@@ -1116,21 +934,16 @@ def run_experiment_series_in_memory_from_file(
     continue_on_failure: bool = True,
 ) -> SeriesResult:
     """Run experiment series from a configuration file with results kept in memory."""
-    # Load series config
-    config_file = Path(config_file)
-    series_config = load_config(ExperimentSeriesConfig, config_file)
-
-    # Set input directory if provided
+    series_config = ExperimentSeriesConfig.load(Path(config_file))
     if input_directory is not None:
-        series_config.output_dir = input_directory
+        series_config.output_dir = str(input_directory)
 
-    # Run series in memory
-    return run_experiment_series_in_memory(
+    return SeriesExecutor().run_in_memory_series(
         series_config=series_config,
         keep_results=keep_results,
         max_memory_mb=max_memory_mb,
         experiment_numbers=experiment_numbers,
+        continue_on_failure=continue_on_failure,
         save_individual_configs=save_individual_configs,
         save_grids=save_grids,
-        continue_on_failure=continue_on_failure,
     )
