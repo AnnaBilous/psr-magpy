@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+import pytest
 
 from psr_magpy.experiment.experiment_config import ExperimentConfig
 from psr_magpy.experiment.experiment_lookup import (
@@ -53,6 +54,9 @@ class TestExperimentMatchesThDFQ:
 
 
 class TestExperimentLookupOnDisk:
+    @pytest.mark.filterwarnings(
+        "ignore:ExperimentConfig model I/O/workflow helpers.*:DeprecationWarning"
+    )
     def test_find_by_thD_fQ(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -79,3 +83,52 @@ class TestExperimentLookupOnDisk:
             assert infer_experiment_count(series) == 2
             assert find_experiment_numbers_by_thD_fQ(series, 20.0, 1.0) == [1]
             assert find_experiment_numbers_by_thD_fQ(series, 10.0, 0.0) == [0]
+
+    @pytest.mark.filterwarnings(
+        "ignore:ExperimentConfig model I/O/workflow helpers.*:DeprecationWarning"
+    )
+    def test_infer_count_uses_configs_when_summary_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            series_name = "lookup_from_configs"
+            configs = root / series_name / "configs"
+            configs.mkdir(parents=True)
+
+            for i, (th, fq) in enumerate([(10.0, 0.0), (20.0, 1.0), (30.0, 2.0)]):
+                exp = _minimal_experiment(f"{series_name}_{i:03d}", th, fq, 16)
+                exp.save(configs / f"{series_name}_{i:03d}.yaml", overwrite=True)
+
+            series = ExperimentSeriesConfig(
+                name=series_name,
+                field=FieldConfig(components=[]),
+                grid=GridConfig(healpix=HealpixGridConfig(nside=16)),
+                tracing=TracingConfig(),
+                template=FieldLineTemplate.template_line_coordinates_only(),
+                output_dir=str(root),
+            )
+
+            assert infer_experiment_count(series) == 3
+            assert find_experiment_numbers_by_thD_fQ(series, 30.0, 2.0) == [2]
+
+    def test_infer_count_uses_summary_when_configs_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            series_name = "lookup_from_summary"
+            series_root = root / series_name
+            series_root.mkdir(parents=True)
+            (series_root / f"{series_name}_results_summary.yaml").write_text(
+                "total_experiments: 4\n", encoding="utf-8"
+            )
+
+            series = ExperimentSeriesConfig(
+                name=series_name,
+                field=FieldConfig(components=[]),
+                grid=GridConfig(healpix=HealpixGridConfig(nside=16)),
+                tracing=TracingConfig(),
+                template=FieldLineTemplate.template_line_coordinates_only(),
+                output_dir=str(root),
+            )
+
+            assert infer_experiment_count(series) == 4
+            # Without config files, lookup has no per-experiment payload to match.
+            assert find_experiment_numbers_by_thD_fQ(series, 10.0, 0.0) == []

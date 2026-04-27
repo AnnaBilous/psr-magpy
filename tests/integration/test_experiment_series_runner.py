@@ -6,6 +6,7 @@ import shutil
 import yaml
 from datetime import datetime, timedelta
 from collections import OrderedDict
+from types import SimpleNamespace
 
 from psr_magpy.experiment import ExperimentSeriesConfig, ExperimentConfig
 from psr_magpy.experiment.experiment_series_runner import (
@@ -14,6 +15,7 @@ from psr_magpy.experiment.experiment_series_runner import (
     DeletionStrategy,
     OverwriteStrategy,
 )
+from psr_magpy.experiment.experiment_result import ExperimentResult
 from psr_magpy.experiment.factory_configs import (
     FieldFactoryConfig, GridFactoryConfig, TracingFactoryConfig,
     RandomGridFactoryConfig
@@ -352,3 +354,51 @@ def test_experiment_level_deletion(test_data_dir):
     assert any(lines_dir.glob(f"{exp_name}*.fits")), (
         f"Expected at least one FITS batch for {exp_name} under {lines_dir}"
     )
+
+
+def test_rerun_cleans_stale_batch_files_before_execution(test_data_dir):
+    """Rerun should remove stale batch files for the target experiment."""
+    series_config = create_test_series_config(test_data_dir)
+    experiments = series_config.create_experiment_series(save_configs=False)
+    exp = experiments[0]
+
+    runner = ExperimentSeriesRunner(
+        series_config=series_config,
+        overwrite_strategy=OverwriteStrategy.ALL,
+        save_grids=False,
+        continue_on_failure=True,
+    )
+
+    series_dir = Path(str(series_config.output_dir)) / series_config.name
+    lines_dir = series_dir / "lines"
+    lines_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create stale files for this experiment and one unrelated batch.
+    stale_a = lines_dir / f"{exp.name}_batch_001_out_of_002.fits"
+    stale_b = lines_dir / f"{exp.name}_batch_002_out_of_002.fits"
+    unrelated = lines_dir / "other_experiment_batch_001_out_of_001.fits"
+    stale_a.touch()
+    stale_b.touch()
+    unrelated.touch()
+
+    # Ensure run path is taken (not skipped).
+    (lines_dir / f"{exp.name}.fits").touch()
+
+    def fake_execute(*args, **kwargs):
+        return SimpleNamespace(
+            result=ExperimentResult(
+                experiment_name=exp.name,
+                success=True,
+                duration=0.1,
+                results=None,
+            ),
+            duration=0.1,
+        )
+
+    runner._experiment_executor.execute = fake_execute
+    runner._save_results_summary = lambda *_args, **_kwargs: None
+    runner._run_experiments([exp])
+
+    assert not stale_a.exists()
+    assert not stale_b.exists()
+    assert unrelated.exists()

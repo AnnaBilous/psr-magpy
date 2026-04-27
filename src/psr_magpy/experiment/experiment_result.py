@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Any, List
+from psr_magpy.experiment.services.formatting import format_duration
 
 
 @dataclass
@@ -43,16 +44,7 @@ class SeriesResult:
         str
             Formatted string like "10.5s", "2.5min", "1.2h", or "3.5d".
         """
-        if seconds < 60:
-            return f"{seconds:.1f}s"
-        minutes = seconds / 60
-        if minutes < 60:
-            return f"{minutes:.1f}min"
-        hours = minutes / 60
-        if hours < 24:
-            return f"{hours:.1f}h"
-        days = hours / 24
-        return f"{days:.1f}d"
+        return format_duration(seconds)
 
     def print_summary(
         self,

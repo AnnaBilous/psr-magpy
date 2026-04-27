@@ -2,6 +2,12 @@
 
 This module provides functionality to create multiple experiments from flexible
 parameter inputs, including lists for parameter variation.
+
+Architecture boundary note
+--------------------------
+This module is in transition toward a domain-focused role. New orchestration,
+persistence, and workflow-heavy logic should prefer dedicated modules under
+``experiment.services`` and ``experiment.infrastructure``.
 """
 
 from typing import List, Optional, Union, Dict, Any, ClassVar
@@ -9,6 +15,7 @@ from pydantic import BaseModel
 import yaml
 from pathlib import Path
 import shutil
+import warnings
 
 from .experiment_config import ExperimentConfig
 from .field_config import FieldConfig
@@ -19,19 +26,30 @@ from .factory_configs import (
     GridFactoryConfig,
     TemplateFactoryConfig,
     TracingFactoryConfig,
-    expand_field_configs,
-    expand_grid_configs,
-    expand_tracing_configs,
-    expand_template_configs,
 )
 from .experiment_metadata import create_experiment_metadata, generate_experiment_name
-from psr_magpy.io.config_io import reconstruct_from_yaml
+from .services.series_builder import SeriesBuilder
+from .infrastructure.path_policy import (
+    series_dir as policy_series_dir,
+    configs_dir as policy_configs_dir,
+    grids_dir as policy_grids_dir,
+    lines_dir as policy_lines_dir,
+    logs_dir as policy_logs_dir,
+    experiment_config_filename,
+    subset_experiment_config_filename,
+    results_summary_filename,
+)
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.utils.logging_config import get_logger
-from psr_magpy.utils.exceptions import PSRMagPyExperimentError, PSRMagPyIOError
+from psr_magpy.utils.exceptions import PSRMagPyIOError
 
 logger = get_logger(__name__, console_format_brief=True)
+
+_SIDE_EFFECT_DEPRECATION = (
+    "ExperimentSeriesConfig model I/O/workflow helpers are deprecated and will "
+    "move to services/repositories. Prefer dedicated service APIs."
+)
 
 
 class ExperimentSeriesConfig(BaseModel):
@@ -97,6 +115,7 @@ class ExperimentSeriesConfig(BaseModel):
         List[ExperimentConfig]
             List of experiment configurations.
         """
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
         logger.info("Creating experiment series: %s", self.name)
 
         # Create output directory structure if requested
@@ -167,9 +186,7 @@ class ExperimentSeriesConfig(BaseModel):
 
     def _create_output_directories(self, output_dir: str):
         """Create the standard output directory structure for experiment series."""
-        from pathlib import Path
-
-        base_dir = Path(output_dir) / self.name
+        base_dir = policy_series_dir(output_dir, self.name)
         directories = [self.CONFIGS_DIR, self.GRIDS_DIR, self.LINES_DIR, self.LOGS_DIR]
 
         for dir_name in directories:
@@ -187,29 +204,19 @@ class ExperimentSeriesConfig(BaseModel):
         Path
             Path to configs directory.
         """
-        output_dir = self.output_dir or "."
-        return Path(output_dir) / self.name / self.CONFIGS_DIR
+        return policy_configs_dir(self.output_dir, self.name)
 
     def get_grids_dir(self) -> Path:
         """Get the full path to the grids directory."""
-        from pathlib import Path
-
-        output_dir = self.output_dir or "."
-        return Path(output_dir) / self.name / self.GRIDS_DIR
+        return policy_grids_dir(self.output_dir, self.name)
 
     def get_lines_dir(self) -> Path:
         """Get the full path to the lines directory."""
-        from pathlib import Path
-
-        output_dir = self.output_dir or "."
-        return Path(output_dir) / self.name / self.LINES_DIR
+        return policy_lines_dir(self.output_dir, self.name)
 
     def get_logs_dir(self) -> Path:
         """Get the full path to the logs directory."""
-        from pathlib import Path
-
-        output_dir = self.output_dir or "."
-        return Path(output_dir) / self.name / self.LOGS_DIR
+        return policy_logs_dir(self.output_dir, self.name)
 
     def verify_directories(
         self, create_if_missing: bool = False
@@ -275,8 +282,12 @@ class ExperimentSeriesConfig(BaseModel):
             Path to the experiment config file.
         """
         # Try regular config first, then subset config
-        regular_path = self.get_configs_dir() / f"{self.name}_{experiment_number:03d}.yaml"
-        subset_path = self.get_configs_dir() / f"{self.name}_{experiment_number:03d}_subset.yaml"
+        regular_path = self.get_configs_dir() / experiment_config_filename(
+            self.name, experiment_number
+        )
+        subset_path = self.get_configs_dir() / subset_experiment_config_filename(
+            self.name, experiment_number
+        )
         
         if regular_path.exists():
             return regular_path
@@ -327,10 +338,13 @@ class ExperimentSeriesConfig(BaseModel):
         ExperimentConfig
             Loaded experiment configuration.
         """
-        from psr_magpy.experiment.experiment_config import ExperimentConfig
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        from psr_magpy.experiment.infrastructure.config_repository import ConfigRepository
 
-        config_path = self.get_experiment_config_path(experiment_number)
-        return ExperimentConfig.load(config_path)
+        repository = ConfigRepository()
+        return repository.load_experiment_config(
+            self, experiment_number, prefer_subset=True
+        )
 
     def get_total_experiments_from_summary(self) -> int:
         """Get the total number of experiments from the summary YAML file.
@@ -346,8 +360,9 @@ class ExperimentSeriesConfig(BaseModel):
             If summary.yaml does not exist.
             KeyError: If 'total_experiments' key is missing from summary
         """
-        output_dir = self.output_dir or "."
-        summary_path = Path(output_dir) / self.name / f"{self.name}_results_summary.yaml"
+        summary_path = policy_series_dir(self.output_dir, self.name) / results_summary_filename(
+            self.name
+        )
         
         if not summary_path.exists():
             raise FileNotFoundError(f"Summary file not found: {summary_path}")
@@ -368,12 +383,14 @@ class ExperimentSeriesConfig(BaseModel):
         filename : Optional[str], optional
             Optional filename. If not provided, uses "{series_name}_config.yaml". Default is None.
         """
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
         from psr_magpy.io import save_config
+        from psr_magpy.experiment.infrastructure.config_repository import ConfigRepository
 
         if filename is None:
-            filename = str(self.get_configs_dir() / f"{self.name}_config.yaml")
+            ConfigRepository().save_series_config(self, overwrite=True)
+            return
 
-        # Save with overwrite=True
         save_config(self, filename, overwrite=True)
 
     @classmethod
@@ -390,12 +407,14 @@ class ExperimentSeriesConfig(BaseModel):
         ExperimentSeriesConfig
             Loaded configuration.
         """
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
         from psr_magpy.io import load_config
 
         return load_config(cls, config_file)
 
     def print_yaml(self):
         """Print configuration as pretty YAML to screen."""
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
         from psr_magpy.io.config_io import ExperimentSeriesConfigIO
         from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy
         from psr_magpy.io.validator import ConfigIOValidator
@@ -573,9 +592,14 @@ class ExperimentSeriesConfig(BaseModel):
         PSRMagPyIOError
             If subset configs are expected but not found.
         """
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        from psr_magpy.experiment.infrastructure.config_repository import ConfigRepository
+
         configs_dir = self.get_configs_dir()
         if not configs_dir.exists():
             raise PSRMagPyIOError(f"Configs directory does not exist: {configs_dir}")
+
+        repository = ConfigRepository()
 
         # Check if subset grids are expected
         has_subset_grids = (
@@ -583,18 +607,14 @@ class ExperimentSeriesConfig(BaseModel):
             and self.metadata.get("has_subset_grids", False)
         )
 
-        # Load all experiment configs (skip series config)
-        all_config_files = [
-                f
-                for f in configs_dir.glob("*.yaml")
-                if not f.name.endswith("_config.yaml")
-            ]
-        
-        subset_config_files = [f for f in all_config_files if f.name.endswith("_subset.yaml")]
-        regular_config_files = [f for f in all_config_files if not f.name.endswith("_subset.yaml")]
-        
         # If subset grids are expected, use only subset configs
         if has_subset_grids:
+            subset_config_files = repository.list_experiment_config_files(
+                self, prefer_subset=True
+            )
+            subset_config_files = [
+                f for f in subset_config_files if f.name.endswith("_subset.yaml")
+            ]
             if not subset_config_files:
                 error_msg = (
                     f"Series metadata indicates subset grids should exist, "
@@ -607,6 +627,12 @@ class ExperimentSeriesConfig(BaseModel):
             logger.info(f"Loading {len(subset_config_files)} subset config files (has_subset_grids=True)")
         else:
             # Use regular configs if available, otherwise use subset configs as fallback
+            regular_config_files = repository.list_experiment_config_files(
+                self, prefer_subset=False
+            )
+            regular_config_files = [
+                f for f in regular_config_files if not f.name.endswith("_subset.yaml")
+            ]
             if regular_config_files:
                 experiment_files = sorted(regular_config_files)
                 logger.info(f"Loading {len(regular_config_files)} regular config files")
@@ -615,11 +641,22 @@ class ExperimentSeriesConfig(BaseModel):
 
         experiments = []
         for config_file in experiment_files:
-            experiment = ExperimentConfig.load(config_file)
+            experiment = repository.load_experiment_config(
+                self, self._parse_experiment_number_from_filename(config_file.name),
+                prefer_subset=config_file.name.endswith("_subset.yaml")
+            )
             experiments.append(experiment)
 
         logger.info(f"Loaded {len(experiments)} experiments from {configs_dir}")
         return experiments
+
+    @staticmethod
+    def _parse_experiment_number_from_filename(filename: str) -> int:
+        """Parse experiment number from config filename."""
+        base = filename[:-5] if filename.endswith(".yaml") else filename
+        if base.endswith("_subset"):
+            base = base[: -len("_subset")]
+        return int(base.rsplit("_", 1)[1])
 
     def create_directory_structure(self, delete_existing_configs: bool = False) -> None:
         """Create output directory structure.
@@ -629,64 +666,31 @@ class ExperimentSeriesConfig(BaseModel):
         delete_existing_configs : bool, optional
             Whether to delete existing configs directory. Default is False.
         """
-        if self.output_dir is None:
-            # Create series directory
-            series_dir = Path(self.name)
-            if not series_dir.exists():
-                series_dir.mkdir(parents=True, exist_ok=True)
-                logger.info("Created output directory structure under: %s", series_dir)
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        series_dir = (
+            Path(self.output_dir) / self.name
+            if self.output_dir is not None
+            else Path(self.name)
+        )
+        series_dir.mkdir(parents=True, exist_ok=True)
 
-                # Create subdirectories
-                for subdir in self.get_subdirectories():
-                    subdir_path = series_dir / subdir
-                    subdir_path.mkdir(parents=True, exist_ok=True)
-            else:
-                # Clean up directories if delete_existing_configs is True
-                if delete_existing_configs:
-                    for subdir in self.get_cleanup_directories():
-                        subdir_path = series_dir / subdir
-                        if subdir_path.exists():
-                            shutil.rmtree(subdir_path)
-                            logger.info(
-                                "Removed existing %s directory: %s", subdir, subdir_path
-                            )
+        if delete_existing_configs and series_dir.exists():
+            for subdir in self.get_cleanup_directories():
+                subdir_path = series_dir / subdir
+                if subdir_path.exists():
+                    shutil.rmtree(subdir_path)
+                    logger.info(
+                        "Removed existing %s directory: %s", subdir, subdir_path
+                    )
+            logger.info("Removed cleanup directories for: %s", series_dir)
 
-                    # Recreate cleaned directories
-                    for subdir in self.get_subdirectories():
-                        subdir_path = series_dir / subdir
-                        subdir_path.mkdir(parents=True, exist_ok=True)
-                    logger.info("Recreated output directories for: %s", series_dir)
-                else:
-                    logger.info("Using existing directory structure: %s", series_dir)
+        for subdir in self.get_subdirectories():
+            (series_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+        if delete_existing_configs:
+            logger.info("Recreated output directories for: %s", series_dir)
         else:
-            # Create series directory
-            series_dir = Path(self.output_dir) / self.name
-            if not series_dir.exists():
-                series_dir.mkdir(parents=True, exist_ok=True)
-                logger.info("Created output directory structure under: %s", series_dir)
-
-                # Create subdirectories
-                for subdir in self.get_subdirectories():
-                    subdir_path = series_dir / subdir
-                    subdir_path.mkdir(parents=True, exist_ok=True)
-            else:
-                # Clean up directories if delete_existing_configs is True
-                if delete_existing_configs:
-                    for subdir in self.get_cleanup_directories():
-                        subdir_path = series_dir / subdir
-                        if subdir_path.exists():
-                            shutil.rmtree(subdir_path)
-                            logger.info(
-                                "Removed existing %s directory: %s", subdir, subdir_path
-                            )
-
-                    # Recreate cleaned directories
-                    for subdir in self.get_subdirectories():
-                        subdir_path = series_dir / subdir
-                        subdir_path.mkdir(parents=True, exist_ok=True)
-                    logger.info("Recreated output directories for: %s", series_dir)
-                else:
-                    logger.info("Using existing directory structure: %s", series_dir)
+            logger.info("Using existing directory structure: %s", series_dir)
 
     def _create_experiments(self) -> List[ExperimentConfig]:
         """Create all experiment configurations from factory configs.
@@ -696,49 +700,15 @@ class ExperimentSeriesConfig(BaseModel):
         List[ExperimentConfig]
             List of experiment configurations.
         """
-        # Expand all factory configs
-        field_configs = expand_field_configs(self.field)
-        grid_configs = expand_grid_configs(self.grid)
-        tracing_configs = expand_tracing_configs(self.tracing)
-        template_configs = expand_template_configs(self.template)
-
-        # Create all combinations
-        experiments = []
-        experiment_count = -1  # Start from -1 so first increment gives 0
-
-        for field_config in field_configs:
-            for grid_config in grid_configs:
-                for tracing_config in tracing_configs:
-                    for template_config in template_configs:
-                        experiment_count += 1
-
-                        # Create metadata for this experiment
-                        metadata = create_experiment_metadata(
-                            self.name,
-                            self.metadata or {},
-                            experiment_count,
-                            field_config,
-                            grid_config,
-                            tracing_config,
-                            template_config,
-                        )
-
-                        # Create experiment name (zero-based numbering)
-                        name = f"{self.name}_{experiment_count:03d}"
-
-                        # Create experiment config
-                        experiment = ExperimentConfig(
-                            name=name,
-                            field=field_config,
-                            grid=grid_config,
-                            tracing=tracing_config,
-                            template=template_config,
-                            description=self.description,
-                            metadata=metadata,
-                        )
-                        experiments.append(experiment)
-
-        return experiments
+        return SeriesBuilder().build_experiments(
+            series_name=self.name,
+            field=self.field,
+            grid=self.grid,
+            tracing=self.tracing,
+            template=self.template,
+            description=self.description,
+            metadata=self.metadata,
+        )
 
     def create_subset_series_from_OFL(
         self,
@@ -776,126 +746,25 @@ class ExperimentSeriesConfig(BaseModel):
         ValueError
             If directories don't exist or experiments can't be processed.
         """
-        from psr_magpy.grid.grid import create_fine_resolution_subset_from_coarse_OFL
-        from psr_magpy.experiment.grid_config import GridConfig, HealpixGridConfig
-
-        # Verify coarse directories
-        coarse_status = coarse_series_config.verify_directories(create_if_missing=False)
-        if not coarse_status["configs"]["exists"] or not coarse_status["lines"]["exists"]:
-            raise PSRMagPyExperimentError("Coarse series directories (configs, lines) must exist")
-
-        # Verify/create fine directories
-        fine_status = self.verify_directories(create_if_missing=True)
-
-        # Create fine experiments
-        fine_experiments = self.create_experiment_series(save_configs=False)
-
-        # Get experiment numbers to process
-        if experiment_numbers is None:
-            coarse_experiments = coarse_series_config.create_experiment_series(
-                save_configs=False
-            )
-            experiment_numbers = list(range(len(coarse_experiments)))
-
-        logger.info(
-            f"Processing {len(experiment_numbers)} experiments for OFL subset creation"
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        from psr_magpy.experiment.services.subset_workflow_service import (
+            SubsetWorkflowService,
         )
 
-        successful_count = 0
-        failed_count = 0
-
-        for exp_num in experiment_numbers:
-            logger.info(f"Processing experiment {exp_num}...")
-
-            try:
-                # Load coarse experiment
-                coarse_experiment = coarse_series_config.load_experiment_config(exp_num)
-                logger.debug(f"Loaded coarse experiment: {coarse_experiment.name}")
-
-                # Get corresponding fine experiment
-                fine_experiment = self.get_experiment_by_index(exp_num, fine_experiments)
-                if fine_experiment is None:
-                    logger.warning(
-                        f"No corresponding fine experiment found for {exp_num}, skipping..."
-                    )
-                    failed_count += 1
-                    continue
-
-                logger.debug(f"Using fine experiment: {fine_experiment.name}")
-
-                # Create subset grid using helper function
-                coarse_lines_dir = coarse_series_config.get_lines_dir()
-                fine_grids_dir = self.get_grids_dir()
-
-                grid_filepath, updated_grid_config = (
-                    create_fine_resolution_subset_from_coarse_OFL(
-                        coarse_experiment=coarse_experiment,
-                        fine_experiment=fine_experiment,
-                        R_LC=R_LC,
-                        coarse_lines_dir=coarse_lines_dir,
-                        fine_grids_dir=fine_grids_dir,
-                        h_LC_coeff=h_LC_coeff,
-                    )
-                )
-
-                # Update fine experiment config
-                fine_experiment.grid = updated_grid_config
-
-                # Add subset metadata
-                subset_metadata = {
-                    "coarse_experiment": coarse_experiment.name,
-                    "subset_grid_type": "healpix",
-                    "is_subset_grid": True,
-                    "subset_grid_file": grid_filepath.name,
-                    "R_LC": R_LC,
-                    "h_LC_coeff": h_LC_coeff,
-                }
-
-                if fine_experiment.metadata is None:
-                    fine_experiment.metadata = {}
-                fine_experiment.metadata.update(subset_metadata)
-
-                # Save subset config
-                if save_configs:
-                    fine_config_file = (
-                        self.get_configs_dir() / f"{fine_experiment.name}_subset.yaml"
-                    )
-                    fine_experiment.save(str(fine_config_file), overwrite=True)
-                    logger.info(f"Saved subset experiment config: {fine_config_file}")
-
-                successful_count += 1
-
-            except Exception as e:
-                error_msg = f"Failed to process experiment {exp_num}: {e}"
-                logger.error(error_msg)
-                failed_count += 1
-                continue
-
-        logger.info(
-            f"OFL subset creation completed: {successful_count} successful, "
-            f"{failed_count} failed"
+        return SubsetWorkflowService().create_subset_series_from_ofl(
+            fine_series_config=self,
+            coarse_series_config=coarse_series_config,
+            R_LC=R_LC,
+            h_LC_coeff=h_LC_coeff,
+            experiment_numbers=experiment_numbers,
+            save_configs=save_configs,
         )
-
-        # Update series metadata
-        if self.metadata is None:
-            self.metadata = {}
-        self.metadata.update(
-            {
-                "original_series": self.name,
-                "subset_experiments": experiment_numbers,
-                "subset_grid_type": "healpix",
-                "has_subset_grids": True,
-                "coarse_series": coarse_series_config.name,
-                "R_LC": R_LC,
-                "h_LC_coeff": h_LC_coeff,
-            }
-        )
-
-        return self
 
     def infer_experiment_count(self) -> int:
         """Infer ``N`` such that experiment indices are ``0 .. N-1`` (summary or configs on disk)."""
-        from psr_magpy.experiment.experiment_lookup import infer_experiment_count
+        from psr_magpy.experiment.services.experiment_lookup_service import (
+            infer_experiment_count,
+        )
 
         return infer_experiment_count(self)
 
@@ -907,7 +776,9 @@ class ExperimentSeriesConfig(BaseModel):
         n_experiments: Optional[int] = None,
     ) -> List[int]:
         """Return experiment indices matching dipole colatitude ``thD`` and quadrupole ``fQ``."""
-        from psr_magpy.experiment.experiment_lookup import find_experiment_numbers_by_thD_fQ
+        from psr_magpy.experiment.services.experiment_lookup_service import (
+            find_experiment_numbers_by_thD_fQ,
+        )
 
         return find_experiment_numbers_by_thD_fQ(
             self,

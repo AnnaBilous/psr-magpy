@@ -1,20 +1,33 @@
-"""Experiment configuration for field line calculations."""
+"""Experiment configuration for field line calculations.
+
+Architecture boundary note
+--------------------------
+This module should remain primarily a configuration/data model. Batch data
+access and filesystem-heavy helpers are candidates for migration to
+``experiment.services`` and ``experiment.infrastructure``.
+"""
 
 from dataclasses import dataclass
 from typing import Optional, Union, Dict, Any, Iterator, Callable
 from pathlib import Path
+import warnings
 
 from .field_config import FieldConfig, FieldComponentConfig
 from .grid_config import GridConfig, SphericalGridConfig
 from .tracing_config import TracingConfig
+from .services.batch_data_reader import BatchDataReader
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.utils.logging_config import get_logger
-from psr_magpy.utils.exceptions import PSRMagPyValidationError
 from psr_magpy.line.tracing_parameters import TracingDefaults
 
 logger = get_logger(__name__, console_format_brief=True)
+
+_SIDE_EFFECT_DEPRECATION = (
+    "ExperimentConfig model I/O/workflow helpers are deprecated and will move "
+    "to services/repositories. Prefer dedicated service APIs."
+)
 
 
 @dataclass
@@ -61,6 +74,7 @@ class ExperimentConfig:
             If True, delete existing file before saving. If False and file exists,
             raises FileExistsError (handled by underlying I/O system). Default is False.
         """
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
         filepath = Path(filepath)
         
         # Handle overwrite flag
@@ -74,6 +88,7 @@ class ExperimentConfig:
 
     def print_yaml(self):
         """Print configuration as pretty YAML to screen."""
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
         from psr_magpy.io.config_io import ExperimentConfigIO
         from psr_magpy.io.validator import ValidationLevel, RecoveryStrategy
         from psr_magpy.io.validator import ConfigIOValidator
@@ -98,6 +113,7 @@ class ExperimentConfig:
     @classmethod
     def load(cls, filepath: Union[str, Path]) -> "ExperimentConfig":
         """Load configuration from YAML file."""
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
         from psr_magpy.io import load_config
 
         return load_config(cls, filepath)
@@ -105,75 +121,12 @@ class ExperimentConfig:
     def load_combined_batch_data(
         self, template: FieldLine, lines_dir: Optional[str] = None
     ) -> Optional["FieldLineSet"]:
-        """
-        Load and combine batch files for this experiment.
-
-        Parameters
-        ----------
-        template : FieldLine
-            FieldLine template specifying which properties to load.
-        lines_dir : Optional[str], optional
-            Optional path to lines directory. Defaults to experiment's output dir.
-
-        Returns
-        -------
-        Optional[FieldLineSet]
-            Combined field line set with specified properties.
-        """
-        import glob
-        from psr_magpy.line.field_line_set import FieldLineSet
-        from psr_magpy.io import load_data
-
-        # Determine lines directory
-        if lines_dir is None:
-            raise PSRMagPyValidationError("lines_dir must be specified")
-
-        # Find all batch files for this experiment
-        batch_pattern = f"{lines_dir}/{self.name}_batch_*.fits"
-        batch_files = glob.glob(batch_pattern)
-
-        if not batch_files:
-            logger.warning(f"No batch files found for {self.name}")
-            return None
-
-        logger.info(f"Found {len(batch_files)} batch files for {self.name}")
-
-        # Create combined field line set
-        combined_field_line_set = FieldLineSet(template, copy_data=False)
-
-        # Load data from each batch file
-        for batch_file in sorted(batch_files):
-            logger.debug(f"Loading {batch_file}")
-
-            # Load the field line set with template
-            from psr_magpy.io import load_data
-            field_line_set = load_data(
-                FieldLineSet, batch_file, template=template
-            )
-
-            # Append to combined set
-            combined_field_line_set.append(field_line_set)
-
-        logger.info(
-            f"Combined field line set: {combined_field_line_set.n_field_lines} field lines"
+        """Load and combine batch files for this experiment."""
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        return BatchDataReader(self.name).load_combined_batch_data(
+            template=template,
+            lines_dir=lines_dir,
         )
-
-        # Check for duplicate footpoint indices
-        if (
-            hasattr(combined_field_line_set, "footpoint_id")
-            and combined_field_line_set.footpoint_id is not None
-        ):
-            footpoint_ids = combined_field_line_set.footpoint_id
-            unique_ids = set(footpoint_ids)
-            if len(unique_ids) != len(footpoint_ids):
-                duplicates = [id for id in unique_ids if footpoint_ids.count(id) > 1]
-                raise PSRMagPyValidationError(
-                    f"Duplicate footpoint indices found: {duplicates[:10]}{'...' if len(duplicates) > 10 else ''}"
-                )
-            else:
-                logger.info(f"Verified {len(footpoint_ids)} unique footpoint indices")
-
-        return combined_field_line_set
 
     def iter_batch_files(self, lines_dir: str) -> Iterator[Path]:
         """Iterate over batch file paths for this experiment.
@@ -188,16 +141,8 @@ class ExperimentConfig:
         Path
             Path to each batch file in sorted order
         """
-        import glob
-        
-        if lines_dir is None:
-            raise PSRMagPyValidationError("lines_dir must be specified")
-        
-        batch_pattern = f"{lines_dir}/{self.name}_batch_*.fits"
-        batch_files = sorted(glob.glob(batch_pattern))
-        
-        for batch_file in batch_files:
-            yield Path(batch_file)
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        yield from BatchDataReader(self.name).iter_batch_files(lines_dir)
 
     def iter_batch_data(
         self, 
@@ -218,15 +163,11 @@ class ExperimentConfig:
         FieldLineSet
             Loaded field line set for each batch (skips empty batches)
         """
-        from psr_magpy.io import load_data
-        
-        for batch_file in self.iter_batch_files(lines_dir):
-            logger.debug(f"Loading batch: {batch_file.name}")
-            batch_data = load_data(FieldLineSet, batch_file, template=template)
-            if batch_data is not None and batch_data.n_field_lines > 0:
-                yield batch_data
-            else:
-                logger.debug(f"Skipping empty batch: {batch_file.name}")
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        yield from BatchDataReader(self.name).iter_batch_data(
+            template=template,
+            lines_dir=lines_dir,
+        )
 
     def process_batches_incremental(
         self,
@@ -287,23 +228,14 @@ class ExperimentConfig:
         ...     initial_value=None
         ... )
         """
-        result = initial_value
-        batch_count = 0
-        
-        for batch_data in self.iter_batch_data(template, lines_dir):
-            batch_count += 1
-            logger.debug(f"Processing batch {batch_count}: {batch_data.n_field_lines} field lines")
-            
-            batch_result = processor_fn(batch_data)
-            
-            if result is None and initial_value is None:
-                # First batch: use its result as initial value
-                result = batch_result
-            else:
-                result = accumulator_fn(result, batch_result)
-        
-        logger.info(f"Processed {batch_count} batches")
-        return result
+        warnings.warn(_SIDE_EFFECT_DEPRECATION, DeprecationWarning, stacklevel=2)
+        return BatchDataReader(self.name).process_batches_incremental(
+            template=template,
+            lines_dir=lines_dir,
+            processor_fn=processor_fn,
+            accumulator_fn=accumulator_fn,
+            initial_value=initial_value,
+        )
 
     @classmethod
     def create_dipole_example(cls) -> "ExperimentConfig":
