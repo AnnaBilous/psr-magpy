@@ -304,6 +304,7 @@ def get_OFL_edges_approximate(
 def _load_experiment_setup(
     experiment_config_path: Union[str, Path],
     lines_dir: Union[str, Path],
+    load_template: Optional[FieldLine] = None,
 ) -> tuple:
     """Load experiment configuration, grid, and minimal OFL data.
 
@@ -344,6 +345,10 @@ def _load_experiment_setup(
     except Exception as e:
         raise PSRMagPyGridError(f"Failed to create grid: {e}") from e
 
+    # Build source-data template for reading existing batch files.
+    if load_template is None:
+        load_template = experiment_config.template
+
     # Load minimal data for OFL calculation
     try:
         minimal_template = FieldLine(
@@ -352,9 +357,7 @@ def _load_experiment_setup(
             save_z_abs_max=True,
         )
 
-        OFL_data = experiment_config.load_combined_batch_data(
-            minimal_template, str(lines_dir)
-        )
+        OFL_data = experiment_config.load_combined_batch_data(minimal_template, str(lines_dir))
         if OFL_data is None:
             raise PSRMagPyIOError(f"No field line data found in {lines_dir}")
         logger.info(
@@ -363,12 +366,13 @@ def _load_experiment_setup(
     except Exception as e:
         raise PSRMagPyIOError(f"Failed to load field line data from {lines_dir}: {e}") from e
 
-    return experiment_config, grid, OFL_data
+    return experiment_config, grid, OFL_data, load_template
 
 
 def _extract_and_save_OFL_data(
     experiment_config,
-    template: FieldLine,
+    save_template: FieldLine,
+    load_template: Optional[FieldLine],
     lines_dir: Union[str, Path],
     batch_files: Optional[List[str]],
     footpoint_indices_list: List[np.ndarray],
@@ -387,8 +391,11 @@ def _extract_and_save_OFL_data(
     ----------
     experiment_config : ExperimentConfig
         Experiment configuration.
-    template : FieldLine
+    save_template : FieldLine
         FieldLine template specifying which properties to save.
+    load_template : Optional[FieldLine]
+        Template used to load source batch files. If None, defaults to
+        save_template (backward-compatible behavior).
     lines_dir : Union[str, Path]
         Directory containing batch files.
     batch_files : Optional[List[str]]
@@ -424,11 +431,18 @@ def _extract_and_save_OFL_data(
     
     logger = get_logger(__name__, console_format_brief=True)
     
-    # Ensure reversed_error is in template only if filtering is requested
+    if load_template is None:
+        load_template = save_template
+
+    # Keep backward-compatible behavior: if filtering is requested, ensure
+    # reversed_error is available on the save template passed by caller.
     if reversed_error_threshold is not None:
-        if not template.property_system.save_flags.save_reversed_error:
-            template.property_system.save_flags.save_reversed_error = True
-            logger.debug("Added reversed_error to template for filtering")
+        if not save_template.property_system.save_flags.save_reversed_error:
+            save_template.property_system.save_flags.save_reversed_error = True
+            logger.debug("Added reversed_error to save template for filtering")
+        if not load_template.property_system.save_flags.save_reversed_error:
+            load_template.property_system.save_flags.save_reversed_error = True
+            logger.debug("Added reversed_error to load template for filtering")
     
     # Find batch files if not provided
     if batch_files is None:
@@ -505,7 +519,7 @@ def _extract_and_save_OFL_data(
             logger.debug(f"  Processing batch file: {batch_file}")
 
             try:
-                batch_data = load_data(FieldLineSet, batch_file, template=template)
+                batch_data = load_data(FieldLineSet, batch_file, template=load_template)
 
                 if batch_data is None or batch_data.n_field_lines == 0:
                     logger.debug(f"    No data in batch file, skipping")
@@ -627,6 +641,7 @@ def calculate_and_save_OFL_edges(
     lines_dir: Union[str, Path],
     template: FieldLine,
     R_LC_values: np.ndarray,
+    load_template: Optional[FieldLine] = None,
     output_dir: Optional[Union[str, Path]] = None,
     h_LC_coeff: float = 3**1.5 / 2.0,
     trim_lines: bool = False,
@@ -718,8 +733,8 @@ def calculate_and_save_OFL_edges(
 
     # Phase 1: Load experiment setup
     logger.info("Phase 1: Loading minimal data for edge calculation")
-    experiment_config, grid, OFL_data = _load_experiment_setup(
-        experiment_config_path, lines_dir
+    experiment_config, grid, OFL_data, source_load_template = _load_experiment_setup(
+        experiment_config_path, lines_dir, load_template=load_template
     )
 
     # Calculate OFL edges
@@ -746,7 +761,8 @@ def calculate_and_save_OFL_edges(
     try:
         _extract_and_save_OFL_data(
             experiment_config=experiment_config,
-            template=template,
+            save_template=template,
+            load_template=source_load_template,
             lines_dir=lines_dir,
             batch_files=None,  # Will be found inside helper
             footpoint_indices_list=edge_result.edge_footpoints,
@@ -771,6 +787,7 @@ def calculate_and_save_OFL_regions(
     lines_dir: Union[str, Path],
     template: FieldLine,
     R_LC_values: np.ndarray,
+    load_template: Optional[FieldLine] = None,
     output_dir: Optional[Union[str, Path]] = None,
     h_LC_coeff: float = 3**1.5 / 2.0,
     trim_lines: bool = False,
@@ -853,8 +870,8 @@ def calculate_and_save_OFL_regions(
 
     # Phase 1: Load experiment setup
     logger.info("Phase 1: Loading minimal data for OFL region calculation")
-    experiment_config, grid, OFL_data = _load_experiment_setup(
-        experiment_config_path, lines_dir
+    experiment_config, grid, OFL_data, source_load_template = _load_experiment_setup(
+        experiment_config_path, lines_dir, load_template=load_template
     )
 
     # Calculate OFL regions (all footpoints, not just edges)
@@ -879,7 +896,8 @@ def calculate_and_save_OFL_regions(
     try:
         _extract_and_save_OFL_data(
             experiment_config=experiment_config,
-            template=template,
+            save_template=template,
+            load_template=source_load_template,
             lines_dir=lines_dir,
             batch_files=None,  # Will be found inside helper
             footpoint_indices_list=region_result.edge_footpoints,
