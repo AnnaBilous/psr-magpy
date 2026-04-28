@@ -5,7 +5,6 @@ from pathlib import Path
 
 from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
 from psr_magpy.utils.logging_config import get_logger
-from psr_magpy.utils.exceptions import PSRMagPyExperimentError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -52,11 +51,6 @@ def create_fine_subset_workflow(
     logger.info("Starting fine subset workflow")
     logger.info(f"Coarse series: {coarse_series_config.name}")
     logger.info(f"Fine series: {fine_series_config.name}")
-
-    # Verify coarse directories
-    coarse_status = coarse_series_config.verify_directories(create_if_missing=False)
-    if not coarse_status["configs"]["exists"] or not coarse_status["lines"]["exists"]:
-        raise PSRMagPyExperimentError("Coarse series directories (configs, lines) must exist")
 
     # Create subset series from OFL
     logger.info("Creating fine resolution subset grids from coarse OFL footpoints...")

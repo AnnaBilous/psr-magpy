@@ -40,6 +40,9 @@ from .services.experiment_lookup_service import (
 from .services.series_builder import SeriesBuilder
 from .services.series_executor import SeriesExecutor
 from .services.subset_workflow_service import SubsetWorkflowService
+from .services.ofl_reintegration_data_product_service import (
+    OFLReintegrationDataProductService,
+)
 
 __all__ = [
     "ExperimentConfig",
@@ -70,6 +73,7 @@ __all__ = [
     "SeriesBuilder",
     "SeriesExecutor",
     "SubsetWorkflowService",
+    "OFLReintegrationDataProductService",
     "experiment_matches_thD_fQ_service",
     "infer_experiment_count_service",
     "find_experiment_numbers_by_thD_fQ_service",
