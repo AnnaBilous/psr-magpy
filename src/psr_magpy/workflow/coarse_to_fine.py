@@ -13,6 +13,7 @@ def create_fine_subset_workflow(
     coarse_series_config: ExperimentSeriesConfig,
     fine_series_config: ExperimentSeriesConfig,
     R_LC: float,
+    r_max: Optional[float] = None,
     h_LC_coeff: float = 3**1.5 / 2.0,
     experiment_numbers: Optional[List[int]] = None,
 ) -> ExperimentSeriesConfig:
@@ -31,6 +32,9 @@ def create_fine_subset_workflow(
         Fine resolution series config.
     R_LC : float
         Light cylinder radius for OFL calculation.
+    r_max : Optional[float], optional
+        Optional override for ``fine_series_config.tracing.max_integration_radius``.
+        If None, keep the value already present in fine config.
     h_LC_coeff : float, optional
         Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
     experiment_numbers : Optional[List[int]], optional
@@ -51,6 +55,11 @@ def create_fine_subset_workflow(
     logger.info("Starting fine subset workflow")
     logger.info(f"Coarse series: {coarse_series_config.name}")
     logger.info(f"Fine series: {fine_series_config.name}")
+    if r_max is not None:
+        fine_series_config.tracing.max_integration_radius = float(r_max)
+        logger.info(
+            "Overriding fine tracing max_integration_radius to %.3f", float(r_max)
+        )
 
     # Create subset series from OFL
     logger.info("Creating fine resolution subset grids from coarse OFL footpoints...")
