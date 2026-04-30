@@ -247,12 +247,13 @@ class OFLReintegrationDataProductService:
                 )
                 continue
 
-            output_dir = (
+            data_products_dir = (
                 Path(series_config.output_dir)
                 / series_config.name
                 / "data_products"
-                / exp_config_path.stem
             )
+            output_subdir = "OFLR_edges" if selection_mode == "edge" else "OFLR_regions"
+            output_dir = data_products_dir / output_subdir
             output_dir.mkdir(parents=True, exist_ok=True)
 
             calc_result = self._calculate_footpoints_only(
