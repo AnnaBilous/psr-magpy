@@ -124,7 +124,13 @@ class OFLReintegrationDataProductService:
         }
 
         field = experiment_config.field.create_field()
-        base_params = experiment_config.tracing.create_tracing_parameters()
+        # Build base tracing params with output disabled to avoid validation
+        # failures when source experiment config has save_results_to_disk=True
+        # but no filename (common for series-level configs).
+        tracing_config_base = experiment_config.tracing.model_copy(
+            update={"save_results_to_disk": False, "filename": None}
+        )
+        base_params = tracing_config_base.create_tracing_parameters()
         if r_max is not None:
             if base_params.integration.threshold_line_distance >= r_max:
                 error_msg = (
