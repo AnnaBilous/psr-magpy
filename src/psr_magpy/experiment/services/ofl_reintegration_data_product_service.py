@@ -252,7 +252,7 @@ class OFLReintegrationDataProductService:
                 / series_config.name
                 / "data_products"
             )
-            output_subdir = "OFLR_edges" if selection_mode == "edge" else "OFLR_regions"
+            output_subdir = "OFLR_edges" if selection_mode == "edge" else "OFLR"
             output_dir = data_products_dir / output_subdir
             output_dir.mkdir(parents=True, exist_ok=True)
 

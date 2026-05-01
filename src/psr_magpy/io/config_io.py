@@ -177,7 +177,7 @@ class ExperimentConfigIO(YamlIO):
                 from psr_magpy.experiment.grid_config import HealpixGridConfig
                 healpix_config = HealpixGridConfig.model_validate(grid_data["healpix"])
                 grid = GridConfig(healpix=healpix_config)
-                logger.info(f"Reconstructed GridConfig with healpix: nside={healpix_config.nside}, subset={healpix_config.subset}, grid_file_path={healpix_config.grid_file_path}")
+                logger.debug(f"Reconstructed GridConfig with healpix: nside={healpix_config.nside}, subset={healpix_config.subset}, grid_file_path={healpix_config.grid_file_path}")
             elif "spherical" in grid_data and isinstance(grid_data["spherical"], dict):
                 from psr_magpy.experiment.grid_config import SphericalGridConfig
                 spherical_config = SphericalGridConfig.model_validate(grid_data["spherical"])
