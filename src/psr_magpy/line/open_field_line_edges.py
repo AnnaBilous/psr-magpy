@@ -305,6 +305,8 @@ def _load_experiment_setup(
     experiment_config_path: Union[str, Path],
     lines_dir: Union[str, Path],
     load_template: Optional[FieldLine] = None,
+    *,
+    batch_load_template: Optional[FieldLine] = None,
 ) -> tuple:
     """Load experiment configuration, grid, and minimal OFL data.
 
@@ -314,6 +316,9 @@ def _load_experiment_setup(
         Path to experiment configuration file.
     lines_dir : Union[str, Path]
         Directory containing field line batch files.
+    batch_load_template : Optional[FieldLine], optional
+        If set, used for :meth:`ExperimentConfig.load_combined_batch_data` instead
+        of the default footpoint / r_cyl_max / z_abs_max-only template.
 
     Returns
     -------
@@ -351,11 +356,14 @@ def _load_experiment_setup(
 
     # Load minimal data for OFL calculation
     try:
-        minimal_template = FieldLine(
-            save_footpoint_id=True,
-            save_r_cyl_max=True,
-            save_z_abs_max=True,
-        )
+        if batch_load_template is not None:
+            minimal_template = batch_load_template
+        else:
+            minimal_template = FieldLine(
+                save_footpoint_id=True,
+                save_r_cyl_max=True,
+                save_z_abs_max=True,
+            )
 
         OFL_data = experiment_config.load_combined_batch_data(minimal_template, str(lines_dir))
         if OFL_data is None:
