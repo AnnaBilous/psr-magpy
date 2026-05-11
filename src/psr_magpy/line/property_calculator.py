@@ -71,7 +71,7 @@ def calculate_pa_line(
             n_norm = n / n_abs                 
          
             
-            Omega = np.array([[0.0], [0.0], [1.0]])  # shape (3, 1)
+            Omega = np.array([[0.0], [0.0], [1.0]])  
 
             # Project Ω onto plane perpendicular to t
             Omega_dot_t = np.sum(Omega * t_norm, axis=0, keepdims=True)
@@ -92,30 +92,14 @@ def calculate_pa_line(
             nom = np.sum(n_norm * e1, axis=0)
             denom = np.sum(n_norm * e2, axis=0)
             
-            PA = np.arctan2(nom, denom)   
+            PA = np.arctan(nom, denom)   
+                   
             
-            PA = 270 - np.rad2deg(PA) 
-            #if B_dir == -1:
-            #    PA = PA + 180
+            PA = np.rad2deg(PA).astype(np.float32)
             
-            
-            # Wrap PA to [-180, 180) range
-            PA = (PA + 180) % 360 - 180
-            
-            
-            """
-            if B_dir == -1:
-                PA = PA + np.pi 
-            PA = (PA + np.pi) % (2 * np.pi) - np.pi
-            """
-            #PA = np.rad2deg(PA).astype(np.float32)
-            PA = PA.astype(np.float32)
             
             PA[unstable_points] = np.nan
-            if B_dir == -1:
-                PA = PA[::-1]
-            else:
-                PA = PA
+
             
             logger.debug(f"Calculated PA line with {len(PA)} points")
 
