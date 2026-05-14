@@ -676,7 +676,6 @@ class FieldLineSet(FieldLine):
             "cylinder",
             "sphere",
         ], "trim_type should be cylinder or sphere"
-        print("Trimming to light cylinder")
         # Check if r_line property is enabled
         if PropertyName.R_LINE not in self.property_system.get_enabled_properties():
             raise PSRMagPyPropertyError("r_line property must be enabled to trim field lines")
@@ -795,5 +794,8 @@ class FieldLineSet(FieldLine):
                 logger.debug(f"Property {prop} is not enabled, skipping")
 
         logger.info(
-            f"Trimmed {self.n_field_lines} field lines to light cylinder (R_LC={R_LC})"
+            "Trimmed %d field lines (trim_type=%s, R_LC=%.6g)",
+            self.n_field_lines,
+            trim_type,
+            float(R_LC),
         )

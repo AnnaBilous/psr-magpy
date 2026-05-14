@@ -9,8 +9,48 @@ from psr_magpy.workflow.line_batch_workflow_prep import (
     enrich_field_line_set_from_r_line,
     get_workflow_batch_load_template,
 )
-from psr_magpy.workflow.make_skymap import skymap_pixel_counts_from_prepared_batch
+from psr_magpy.workflow.make_skymap import (
+    DEFAULT_SKYMAP_OUTPUT_FILENAME_PATTERN,
+    format_skymap_output_filename,
+    skymap_pixel_counts_from_prepared_batch,
+)
 from psr_magpy.workflow.workflow_utils import create_healpix_grid
+
+
+def test_format_skymap_output_filename_custom_pattern():
+    from unittest.mock import MagicMock
+
+    ec = MagicMock()
+    ec.name = "healpix_nside_1024_grid_study_OFL_calc_main_009"
+    grid = create_healpix_grid(HealpixGridConfig(nside=16))
+    name = format_skymap_output_filename(
+        "skymap_{experiment_number:03d}_RLC_{r_lc:.2f}_nside_{nside}.fits",
+        experiment_config=ec,
+        series_name="series",
+        experiment_number=9,
+        grid=grid,
+        r_lc=23.85,
+    )
+    assert name == "skymap_009_RLC_23.85_nside_16.fits"
+
+
+def test_format_skymap_output_filename_default_matches_legacy_shape():
+    from unittest.mock import MagicMock
+
+    ec = MagicMock()
+    ec.name = "healpix_nside_1024_grid_study_OFL_calc_main_009"
+    grid = create_healpix_grid(HealpixGridConfig(nside=16))
+    name = format_skymap_output_filename(
+        DEFAULT_SKYMAP_OUTPUT_FILENAME_PATTERN,
+        experiment_config=ec,
+        series_name="series",
+        experiment_number=9,
+        grid=grid,
+        r_lc=23.85,
+    )
+    assert name == (
+        "skymap_healpix_nside_1024_grid_study_OFL_calc_main_009_nside016_RLC_23.85.fits"
+    )
 
 
 def test_skymap_pixel_counts_from_none():
