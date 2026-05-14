@@ -21,7 +21,11 @@ class BatchDataReader:
         self.experiment_name = experiment_name
 
     def load_combined_batch_data(
-        self, template: FieldLine, lines_dir: Optional[str] = None
+        self,
+        template: FieldLine,
+        lines_dir: Optional[str] = None,
+        *,
+        batch_filename_prefix: Optional[str] = None,
     ) -> Optional[FieldLineSet]:
         """Load and combine all batch files for the experiment."""
         from psr_magpy.io import load_data
@@ -29,15 +33,24 @@ class BatchDataReader:
         if lines_dir is None:
             raise PSRMagPyValidationError("lines_dir must be specified")
 
-        batch_pattern = f"{lines_dir}/{self.experiment_name}_batch_*.fits"
-        batch_files = glob.glob(batch_pattern)
+        prefix = (
+            batch_filename_prefix
+            if batch_filename_prefix is not None
+            else self.experiment_name
+        )
+        batch_pattern = f"{lines_dir}/{prefix}_batch_*.fits"
+        batch_files = sorted(glob.glob(batch_pattern))
         if not batch_files:
-            logger.warning(f"No batch files found for {self.experiment_name}")
+            single = Path(lines_dir) / f"{prefix}.fits"
+            if single.is_file():
+                batch_files = [str(single)]
+        if not batch_files:
+            logger.warning(f"No batch files found for {prefix}")
             return None
 
-        logger.info(f"Found {len(batch_files)} batch files for {self.experiment_name}")
+        logger.info(f"Found {len(batch_files)} batch files for {prefix}")
         combined = FieldLineSet(template, copy_data=False)
-        for batch_file in sorted(batch_files):
+        for batch_file in batch_files:
             logger.debug(f"Loading {batch_file}")
             field_line_set = load_data(FieldLineSet, batch_file, template=template)
             combined.append(field_line_set)
@@ -56,24 +69,52 @@ class BatchDataReader:
 
         return combined
 
-    def iter_batch_files(self, lines_dir: str) -> Iterator[Path]:
-        """Iterate batch file paths in sorted order."""
+    def iter_batch_files(
+        self,
+        lines_dir: str,
+        *,
+        batch_filename_prefix: Optional[str] = None,
+    ) -> Iterator[Path]:
+        """Iterate batch file paths in sorted order.
+
+        Parameters
+        ----------
+        lines_dir
+            Directory containing FITS files.
+        batch_filename_prefix
+            If set, match ``{prefix}_batch_*.fits`` (and optionally ``{prefix}.fits``).
+            Default: ``experiment_name`` from the reader constructor.
+        """
         if lines_dir is None:
             raise PSRMagPyValidationError("lines_dir must be specified")
 
-        batch_pattern = f"{lines_dir}/{self.experiment_name}_batch_*.fits"
-        for batch_file in sorted(glob.glob(batch_pattern)):
+        prefix = (
+            batch_filename_prefix
+            if batch_filename_prefix is not None
+            else self.experiment_name
+        )
+        batch_pattern = f"{lines_dir}/{prefix}_batch_*.fits"
+        found = sorted(glob.glob(batch_pattern))
+        if not found:
+            single = Path(lines_dir) / f"{prefix}.fits"
+            if single.is_file():
+                found = [str(single)]
+        for batch_file in found:
             yield Path(batch_file)
 
     def iter_batch_data(
         self,
         template: FieldLine,
         lines_dir: str,
+        *,
+        batch_filename_prefix: Optional[str] = None,
     ) -> Iterator[FieldLineSet]:
         """Iterate loaded non-empty batch datasets."""
         from psr_magpy.io import load_data
 
-        for batch_file in self.iter_batch_files(lines_dir):
+        for batch_file in self.iter_batch_files(
+            lines_dir, batch_filename_prefix=batch_filename_prefix
+        ):
             logger.debug(f"Loading batch: {batch_file.name}")
             batch_data = load_data(FieldLineSet, batch_file, template=template)
             if batch_data is not None and batch_data.n_field_lines > 0:
@@ -88,12 +129,16 @@ class BatchDataReader:
         processor_fn: Callable[[FieldLineSet], Any],
         accumulator_fn: Callable[[Any, Any], Any],
         initial_value: Any = None,
+        *,
+        batch_filename_prefix: Optional[str] = None,
     ) -> Any:
         """Process batches incrementally and accumulate result."""
         result = initial_value
         batch_count = 0
 
-        for batch_data in self.iter_batch_data(template, lines_dir):
+        for batch_data in self.iter_batch_data(
+            template, lines_dir, batch_filename_prefix=batch_filename_prefix
+        ):
             batch_count += 1
             logger.debug(
                 f"Processing batch {batch_count}: {batch_data.n_field_lines} field lines"

@@ -96,9 +96,10 @@ def resolve_data_products_oflr_directory(
 ) -> Path:
     """Return ``<parent>/<series>/data_products/<subdir>`` for OFLR line batch FITS.
 
-    Files use the same naming as raw line batches, e.g.
-    ``{experiment_name}_batch_001_out_of_004.fits`` (glob
-    ``{experiment_name}_batch_*.fits`` via :class:`~psr_magpy.experiment.services.batch_data_reader.BatchDataReader`).
+    Files use the same naming as reintegration trace output after spill/organize:
+    ``OFLR_lines_{experiment_number:03d}_RLC_{r:.2f}_batch_*_out_of_*.fits`` (glob
+    ``OFLR_lines_{nnn}_RLC_{r}_batch_*.fits`` via skymap workflow), or a single
+    ``OFLR_lines_{nnn}_RLC_{r:.2f}.fits`` if nothing was spilled.
     """
     root = Path(parent_dir).expanduser().resolve()
     return root / series_name / "data_products" / data_products_subdir

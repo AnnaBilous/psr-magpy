@@ -19,6 +19,7 @@ from psr_magpy.utils.exceptions import PSRMagPyIOError
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.workflow.line_batch_workflow_prep import (
     LineDataSource,
+    experiment_number_from_config,
     get_workflow_batch_load_template,
     prepare_line_batch_after_load,
     resolve_data_products_oflr_directory,
@@ -135,8 +136,14 @@ def _skymap_for_r_lc_batches(
     target_template: Optional[FieldLineTemplate],
     threshold_line_distance: float,
     field: Any,
+    batch_filename_prefix: Optional[str] = None,
 ) -> np.ndarray:
-    """Aggregate pixel counts over all ``{name}_batch_*.fits`` under ``batches_dir``."""
+    """Aggregate pixel counts over batch FITS under ``batches_dir``.
+
+    Batch stem is ``{batch_filename_prefix}_batch_*.fits`` when ``batch_filename_prefix``
+    is set; otherwise ``{experiment_config.name}_batch_*.fits``. If no batch
+    chunks exist, loads a single ``{prefix}.fits`` when present.
+    """
     grid_size = grid.nline
     if grid_size is None:
         raise PSRMagPyIOError("Skymap grid nline is None")
@@ -164,6 +171,7 @@ def _skymap_for_r_lc_batches(
         processor_fn=process_batch,
         accumulator_fn=_accumulate_counts,
         initial_value=None,
+        batch_filename_prefix=batch_filename_prefix,
     )
 
     if counts is None:
@@ -207,8 +215,10 @@ def make_skymap(
     line_source
         ``\"lines\"``: many ``{experiment}_batch_*.fits`` under ``<parent>/<series>/lines``
         (typically ``*_batch_*_out_of_*.fits``).
-        ``\"data_products_oflr\"``: same batch naming under ``<parent>/<series>/data_products/OFLR``;
-        batches are prepared with ``source=\"data_products_oflr\"`` (no OFL subsetting).
+        ``\"data_products_oflr\"``: reintegration spill files under ``data_products/OFLR``,
+        stem ``OFLR_lines_{experiment_number:03d}_RLC_{r:.2f}_batch_*.fits`` (same stem as
+        trace ``filename`` before ``BatchFileManager`` adds ``_out_of_``); falls back to
+        ``OFLR_lines_…_RLC_….fits`` if no chunks exist.
     healpix_grid_config, R_LC_values
         Grid config and light-cylinder radii to iterate (one skymap per value).
     save
@@ -267,6 +277,8 @@ def make_skymap(
             )
         elif line_source == "data_products_oflr":
             batches_dir = str(resolve_data_products_oflr_directory(parent, series_name))
+            exp_num = experiment_number_from_config(experiment_config)
+            oflr_prefix = f"OFLR_lines_{exp_num:03d}_RLC_{r_lc_f:05.2f}"
             result = _skymap_for_r_lc_batches(
                 experiment_config,
                 batches_dir,
@@ -281,6 +293,7 @@ def make_skymap(
                 target_template=target_template,
                 threshold_line_distance=threshold_line_distance,
                 field=field,
+                batch_filename_prefix=oflr_prefix,
             )
         else:
             raise ValueError(f"Unknown line_source: {line_source!r}")
