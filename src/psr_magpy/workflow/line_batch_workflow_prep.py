@@ -88,24 +88,20 @@ def resolve_lines_directory(parent_dir: Union[str, Path], series_name: str) -> P
     return Path(parent_dir).expanduser().resolve() / series_name / "lines"
 
 
-def resolve_oflr_lines_file_path(
+def resolve_data_products_oflr_directory(
     parent_dir: Union[str, Path],
     series_name: str,
-    experiment_number: int,
-    r_lc: float,
     *,
     data_products_subdir: str = "OFLR",
-    file_prefix: str = "OFLR_lines",
 ) -> Path:
-    """Return expected FITS path for reintegrated OFL region lines (one file per R_LC)."""
+    """Return ``<parent>/<series>/data_products/<subdir>`` for OFLR line batch FITS.
+
+    Files use the same naming as raw line batches, e.g.
+    ``{experiment_name}_batch_001_out_of_004.fits`` (glob
+    ``{experiment_name}_batch_*.fits`` via :class:`~psr_magpy.experiment.services.batch_data_reader.BatchDataReader`).
+    """
     root = Path(parent_dir).expanduser().resolve()
-    return (
-        root
-        / series_name
-        / "data_products"
-        / data_products_subdir
-        / f"{file_prefix}_{experiment_number:03d}_RLC_{float(r_lc):05.2f}.fits"
-    )
+    return root / series_name / "data_products" / data_products_subdir
 
 
 def iter_batch_paths_lines(lines_dir: Union[str, Path], experiment_name: str) -> Iterator[Path]:

@@ -8,7 +8,7 @@ from psr_magpy.workflow.line_batch_workflow_prep import (
     enrich_field_line_set_from_r_line,
     get_workflow_batch_load_template,
     prepare_line_batch_after_load,
-    resolve_oflr_lines_file_path,
+    resolve_data_products_oflr_directory,
 )
 
 
@@ -54,13 +54,11 @@ def test_prepare_line_batch_data_products_trim_only():
     assert np.all(radii < 2.5 + 1e-6)
 
 
-def test_resolve_oflr_lines_file_path():
-    p = resolve_oflr_lines_file_path(
-        "/data/heavy", "series_A", 93, 10.0, data_products_subdir="OFLR"
-    )
-    assert p.name == "OFLR_lines_093_RLC_10.00.fits"
-    assert "data_products" in str(p)
-    assert p.parent.name == "OFLR"
+def test_resolve_data_products_oflr_directory():
+    p = resolve_data_products_oflr_directory("/data/heavy", "series_A")
+    assert p.name == "OFLR"
+    assert p.parent.name == "data_products"
+    assert p.parent.parent.name == "series_A"
 
 
 def test_prepare_line_batch_r_min_trims_leading_points():

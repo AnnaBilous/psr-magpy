@@ -12,7 +12,6 @@ from psr_magpy.experiment.experiment_config import ExperimentConfig
 from psr_magpy.experiment.grid_config import HealpixGridConfig
 from psr_magpy.experiment.services.batch_data_reader import BatchDataReader
 from psr_magpy.grid.grid import FootpointGrid, HealpixGrid
-from psr_magpy.io import load_data
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.field_line_template import FieldLineTemplate
@@ -20,11 +19,10 @@ from psr_magpy.utils.exceptions import PSRMagPyIOError
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.workflow.line_batch_workflow_prep import (
     LineDataSource,
-    experiment_number_from_config,
     get_workflow_batch_load_template,
     prepare_line_batch_after_load,
+    resolve_data_products_oflr_directory,
     resolve_lines_directory,
-    resolve_oflr_lines_file_path,
 )
 from psr_magpy.workflow.workflow_utils import (
     create_healpix_grid,
@@ -122,13 +120,14 @@ def _accumulate_counts(acc: Optional[np.ndarray], new: np.ndarray) -> np.ndarray
     return acc + new
 
 
-def _skymap_for_r_lc_lines(
+def _skymap_for_r_lc_batches(
     experiment_config: ExperimentConfig,
-    lines_dir: str,
+    batches_dir: str,
     load_template: FieldLine,
     grid: HealpixGrid,
     r_lc: float,
     *,
+    prepare_source: LineDataSource,
     trim_type: str,
     max_radius: Optional[float],
     r_min: Optional[float],
@@ -137,7 +136,7 @@ def _skymap_for_r_lc_lines(
     threshold_line_distance: float,
     field: Any,
 ) -> np.ndarray:
-    """Aggregate pixel counts over all batch FITS under ``lines_dir``."""
+    """Aggregate pixel counts over all ``{name}_batch_*.fits`` under ``batches_dir``."""
     grid_size = grid.nline
     if grid_size is None:
         raise PSRMagPyIOError("Skymap grid nline is None")
@@ -147,7 +146,7 @@ def _skymap_for_r_lc_lines(
     def process_batch(batch_data: FieldLineSet) -> np.ndarray:
         prepared = prepare_line_batch_after_load(
             batch_data,
-            source="lines",
+            source=prepare_source,
             r_lc=r_lc,
             trim_type=trim_type,
             max_radius=max_radius,
@@ -161,7 +160,7 @@ def _skymap_for_r_lc_lines(
 
     counts = reader.process_batches_incremental(
         template=load_template,
-        lines_dir=lines_dir,
+        lines_dir=batches_dir,
         processor_fn=process_batch,
         accumulator_fn=_accumulate_counts,
         initial_value=None,
@@ -173,52 +172,6 @@ def _skymap_for_r_lc_lines(
 
     total_points = float(np.sum(counts))
     logger.info("Counted %.0f points in HEALPix bins for R_LC = %.1f", total_points, r_lc)
-    return counts.astype(np.float64)
-
-
-def _skymap_for_r_lc_oflr(
-    oflr_path: Path,
-    load_template: FieldLine,
-    grid: HealpixGrid,
-    r_lc: float,
-    *,
-    trim_type: str,
-    max_radius: Optional[float],
-    r_min: Optional[float],
-    reversed_error_threshold: float,
-    target_template: Optional[FieldLineTemplate],
-    threshold_line_distance: float,
-    field: Any,
-) -> np.ndarray:
-    """Pixel counts from a single OFLR reintegrated lines FITS (one ``R_LC``)."""
-    grid_size = grid.nline
-    if grid_size is None:
-        raise PSRMagPyIOError("Skymap grid nline is None")
-
-    if not oflr_path.is_file():
-        logger.warning("OFLR lines file missing: %s", oflr_path)
-        return np.zeros(grid_size, dtype=np.float64)
-
-    batch = load_data(FieldLineSet, oflr_path, template=load_template)
-    if batch is None or batch.n_field_lines == 0:
-        logger.warning("Empty or missing batch in %s", oflr_path)
-        return np.zeros(grid_size, dtype=np.float64)
-
-    prepared = prepare_line_batch_after_load(
-        batch,
-        source="data_products_oflr",
-        r_lc=r_lc,
-        trim_type=trim_type,
-        max_radius=max_radius,
-        r_min=r_min,
-        reversed_error_threshold=reversed_error_threshold,
-        target_template=target_template,
-        threshold_line_distance=threshold_line_distance,
-        field=field,
-    )
-    counts = skymap_pixel_counts_from_prepared_batch(prepared, grid)
-    total_points = float(np.sum(counts))
-    logger.info("Counted %.0f points for R_LC = %.1f from %s", total_points, r_lc, oflr_path.name)
     return counts.astype(np.float64)
 
 
@@ -245,15 +198,17 @@ def make_skymap(
     Parameters
     ----------
     experiment_config
-        Experiment metadata (name for batch glob; number for OFLR filenames).
+        Experiment metadata (``name`` for batch FITS glob under ``lines`` or OFLR dir).
     parent_dir
         Series root, e.g. the heavy-data directory containing ``<series_name>/lines``.
     series_name
         Subdirectory name for the series (folder that contains ``lines`` or
         ``data_products/OFLR``).
     line_source
-        ``\"lines\"``: many ``*_batch_*.fits`` under ``<parent>/<series>/lines``.
-        ``\"data_products_oflr\"``: one ``OFLR_lines_*.fits`` per ``R_LC``.
+        ``\"lines\"``: many ``{experiment}_batch_*.fits`` under ``<parent>/<series>/lines``
+        (typically ``*_batch_*_out_of_*.fits``).
+        ``\"data_products_oflr\"``: same batch naming under ``<parent>/<series>/data_products/OFLR``;
+        batches are prepared with ``source=\"data_products_oflr\"`` (no OFL subsetting).
     healpix_grid_config, R_LC_values
         Grid config and light-cylinder radii to iterate (one skymap per value).
     save
@@ -294,13 +249,14 @@ def make_skymap(
         logger.info("  trim_radius = %.2f", max_radius)
 
         if line_source == "lines":
-            lines_path = str(resolve_lines_directory(parent, series_name))
-            result = _skymap_for_r_lc_lines(
+            batches_dir = str(resolve_lines_directory(parent, series_name))
+            result = _skymap_for_r_lc_batches(
                 experiment_config,
-                lines_path,
+                batches_dir,
                 load_template,
                 grid,
                 r_lc_f,
+                prepare_source="lines",
                 trim_type=trim_type,
                 max_radius=max_radius,
                 r_min=r_min,
@@ -310,13 +266,14 @@ def make_skymap(
                 field=field,
             )
         elif line_source == "data_products_oflr":
-            exp_num = experiment_number_from_config(experiment_config)
-            oflr_path = resolve_oflr_lines_file_path(parent, series_name, exp_num, r_lc_f)
-            result = _skymap_for_r_lc_oflr(
-                oflr_path,
+            batches_dir = str(resolve_data_products_oflr_directory(parent, series_name))
+            result = _skymap_for_r_lc_batches(
+                experiment_config,
+                batches_dir,
                 load_template,
                 grid,
                 r_lc_f,
+                prepare_source="data_products_oflr",
                 trim_type=trim_type,
                 max_radius=max_radius,
                 r_min=r_min,
