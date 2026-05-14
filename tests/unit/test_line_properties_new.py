@@ -70,12 +70,11 @@ class TestNewProperties:
         footpoint_id = 1
         B_initial = np.array([1.0, 0.0, 0.0])
         dotprod = 0.5
-        K = 1.0
         dt = 0.1
         
         # Calculate properties
         props = calculator.calculate_line_properties(
-            footpoint_id, r, B_initial, dotprod, K, dt, template
+            footpoint_id, r, B_initial, dotprod, dt, template
         )
         
         # Check that B_line was calculated
@@ -106,12 +105,11 @@ class TestNewProperties:
         footpoint_id = 1
         B_initial = np.array([1.0, 0.0, 0.0])
         dotprod = 0.5
-        K = 1.0
         dt = 0.1
         
         # Calculate properties
         props = calculator.calculate_line_properties(
-            footpoint_id, r, B_initial, dotprod, K, dt, template
+            footpoint_id, r, B_initial, dotprod, dt, template
         )
         
         # Check that curvature_line was calculated
@@ -135,12 +133,11 @@ class TestNewProperties:
         footpoint_id = 1
         B_initial = np.array([1.0, 0.0, 0.0])
         dotprod = 0.5
-        K = 1.0
         dt = 0.1
         
         # Calculate properties
         props = calculator.calculate_line_properties(
-            footpoint_id, r, B_initial, dotprod, K, dt, template
+            footpoint_id, r, B_initial, dotprod, dt, template
         )
         
         # B_line should be None (no field provided)
@@ -169,12 +166,11 @@ class TestNewProperties:
         footpoint_id = 1
         B_initial = np.array([1.0, 0.0, 0.0])
         dotprod = 0.5
-        K = 1.0
         dt = 0.1
         
         # Calculate properties
         props = calculator.calculate_line_properties(
-            footpoint_id, r, B_initial, dotprod, K, dt, template
+            footpoint_id, r, B_initial, dotprod, dt, template
         )
         
         # Properties should not be in results

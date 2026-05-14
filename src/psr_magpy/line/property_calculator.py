@@ -17,11 +17,9 @@ logger = get_logger(__name__, console_format_brief=True)
 
 def calculate_pa_line(
     r: np.ndarray,
-    B_dir: float,
     line_R_max: float,
     threshold_line_distance: float,
     template: FieldLine,
-    tangent_norm: Optional[np.ndarray] = None,
 ) -> Optional[np.ndarray]:
     """Calculate position angle along the field line (standalone function).
 
@@ -33,16 +31,12 @@ def calculate_pa_line(
     ----------
     r : np.ndarray
         Field line coordinates, shape (3, N) where N is number of points.
-    B_dir : float
-        Magnetic field direction (+1 or -1).
     line_R_max : float
         Maximum distance reached by the field line.
     threshold_line_distance : float
         Distance threshold for line tracing.
     template : FieldLine
         Field line template with save flags.
-    tangent_norm : Optional[np.ndarray], optional
-        Pre-computed normalized tangent vectors. Default is None.
 
     Returns
     -------
@@ -52,54 +46,51 @@ def calculate_pa_line(
     if getattr(template.save_flags, PropertyName.PA_LINE.flag_name):
         if line_R_max >= threshold_line_distance:
             
-            r64 = r.astype(np.float64)
-
-            ds = 1.0 # uniform sampling
-            r1 = np.gradient(r64, ds, axis=1)     
-            r2 = np.gradient(r1,  ds, axis=1)     
-
-            # tangent vector
-            t_abs = np.linalg.norm(r1, axis=0, keepdims=True)
-            t_abs = np.maximum(t_abs, 1e-10)    
-            t_norm = r1 / t_abs                 
-
-            # curvature normal
-            proj = np.sum(r2 * t_norm, axis=0, keepdims=True) * t_norm
-            n = r2 - proj                      
-            n_abs = np.linalg.norm(n, axis=0, keepdims=True)
-            n_abs = np.maximum(n_abs, 1e-10)
-            n_norm = n / n_abs                 
-         
+            r64 = r.astype(np.float64)  # Shape: (3, n_points)
             
-            Omega = np.array([[0.0], [0.0], [1.0]])  
-
+            ds = 1.0  # uniform sampling
+            r1 = np.gradient(r64, ds, axis=1)
+            r2 = np.gradient(r1, ds, axis=1)
+            
+            unstable_threshold = 1.1e-10
+            
+            # Tangent vector along whole line
+            t_abs = np.linalg.norm(r1, axis=0, keepdims=True)
+            t_unstable = t_abs <= unstable_threshold
+            t_norm = r1 / t_abs
+            
+            # Curvature normal along whole line
+            proj = np.sum(r2 * t_norm, axis=0, keepdims=True) * t_norm
+            n = r2 - proj
+            n_abs = np.linalg.norm(n, axis=0, keepdims=True)
+            n_unstable = n_abs <= unstable_threshold
+            n_norm = n / n_abs
+            
+            
+            Omega = np.array([[0.0], [0.0], [1.0]]) 
             # Project Ω onto plane perpendicular to t
             Omega_dot_t = np.sum(Omega * t_norm, axis=0, keepdims=True)
-            e1 = Omega - Omega_dot_t * t_norm
+            Omega_p = Omega - Omega_dot_t * t_norm
 
-            e1_norm = np.linalg.norm(e1, axis=0, keepdims=True)
-            e1_norm = np.maximum(e1_norm, 1e-10)   # avoid division by zero near alignment
-            e1 /= e1_norm
+    
+            # Binormal vector
+            b = np.cross(t_norm.T, n_norm.T).T
+            b_abs = np.linalg.norm(b, axis=0, keepdims=True)
+            b_unstable = b_abs <= unstable_threshold
+            b_norm = b / b_abs
 
-            # Second vector: completes right-handed frame
-            e2 = np.cross(t_norm.T, e1.T).T
-            e2_norm = np.linalg.norm(e2, axis=0, keepdims=True)
-            e2_norm = np.maximum(e2_norm, 1e-10)
-            e2 /= e2_norm
-        
-            unstable_points = (n_abs[0, :] <= 1.1e-10) | (t_abs[0, :] <= 1.1e-10) | (e1_norm[0, :] <= 1.1e-10) | (e2_norm[0, :] <= 1.1e-10)
-     
-            nom = np.sum(n_norm * e1, axis=0)
-            denom = np.sum(n_norm * e2, axis=0)
+            # Project curvature normal onto this basis
+            nom = np.sum(Omega_p * b_norm, axis=0)
+            denom = np.sum(Omega_p * n_norm, axis=0)
             
-            PA = np.arctan(nom, denom)   
-                   
-            
-            PA = np.rad2deg(PA).astype(np.float32)
-            
-            
+            PA = np.arctan2(nom, denom)
+            PA = np.rad2deg(PA) % 180
+            PA[PA >= 90] -= 180
+            PA[PA < -90] += 180
+                                  
+            unstable_points = n_unstable[0, :] | t_unstable[0, :] | b_unstable[0, :]
             PA[unstable_points] = np.nan
-
+            
             
             logger.debug(f"Calculated PA line with {len(PA)} points")
 
@@ -140,7 +131,6 @@ class PropertyCalculator:
         r: np.ndarray,
         B_initial: np.ndarray,
         dotprod: float,
-        K: float,
         dt: float,
         template: FieldLine,
     ) -> Dict[str, Any]:
@@ -155,7 +145,6 @@ class PropertyCalculator:
         # Pre-calculate tangent vector if needed for any property
         needs_tangent = any(
             [
-                getattr(template.save_flags, PropertyName.PA_LINE.flag_name),
                 getattr(template.save_flags, PropertyName.TANGENT_THETA.flag_name),
                 getattr(template.save_flags, PropertyName.TANGENT_PHI.flag_name),
             ]
@@ -212,9 +201,7 @@ class PropertyCalculator:
                 else:
                     props[prop.key_name] = None
             elif prop.key_name == "pa_line":
-                props[prop.key_name] = self.prep_pa_line(
-                    r, K, line_R_max, template, tangent_norm
-                )
+                props[prop.key_name] = self.prep_pa_line(r, line_R_max, template)
             elif prop.key_name == "curvature_line":
                 if getattr(template.save_flags, prop.flag_name):
                     curvature = self.prep_curvature_line(r, dt, line_R_max, template)
@@ -309,10 +296,8 @@ class PropertyCalculator:
     def prep_pa_line(
         self,
         r: np.ndarray,
-        B_dir: float,
         line_R_max: float,
         template: FieldLine,
-        tangent_norm: Optional[np.ndarray] = None,
     ) -> Optional[np.ndarray]:
         """Calculate position angle along the field line.
 
@@ -322,11 +307,9 @@ class PropertyCalculator:
         """
         return calculate_pa_line(
             r=r,
-            B_dir=B_dir,
             line_R_max=line_R_max,
             threshold_line_distance=self.threshold_line_distance,
             template=template,
-            tangent_norm=tangent_norm,
         )
 
     def prep_b_line(

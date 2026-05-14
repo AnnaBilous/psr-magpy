@@ -40,7 +40,6 @@ class TestTangentProperties:
             r=r,
             B_initial=self.field.get_total_field(np.array([1.0, 0.0, 0.0])),
             dotprod=1.0,
-            K=1.0,
             dt=1.0,
             template=template
         )
@@ -69,7 +68,6 @@ class TestTangentProperties:
             r=r,
             B_initial=self.field.get_total_field(np.array([1.0, 0.0, 0.0])),
             dotprod=1.0,
-            K=1.0,
             dt=1.0,
             template=template
         )
@@ -99,7 +97,6 @@ class TestTangentProperties:
             r=r,
             B_initial=self.field.get_total_field(np.array([1.0, 0.0, 0.0])),
             dotprod=1.0,
-            K=1.0,
             dt=1.0,
             template=template
         )
@@ -124,7 +121,6 @@ class TestTangentProperties:
             r=r,
             B_initial=self.field.get_total_field(np.array([0.1, 0.0, 0.0])),
             dotprod=1.0,
-            K=1.0,
             dt=1.0,
             template=template
         )
@@ -152,7 +148,6 @@ class TestTangentProperties:
             r=r,
             B_initial=self.field.get_total_field(np.array([1.0, 0.0, 0.0])),
             dotprod=1.0,
-            K=1.0,
             dt=1.0,
             template=template
         )
@@ -178,7 +173,6 @@ class TestTangentProperties:
             r=r,
             B_initial=self.field.get_total_field(np.array([1.0, 0.0, 0.0])),
             dotprod=1.0,
-            K=1.0,
             dt=1.0,
             template=template
         )

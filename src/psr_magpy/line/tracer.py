@@ -254,7 +254,7 @@ class FieldLineTracer:
 
         # Use property calculator
         props = self.property_calculator.calculate_line_properties(
-            footpoint_id, r, B_initial, dotprod, K, dt, template
+            footpoint_id, r, B_initial, dotprod, dt, template
         )
 
         output.set_property(**props)
