@@ -20,6 +20,7 @@ from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.workflow.line_batch_workflow_prep import (
     LineDataSource,
     experiment_number_from_config,
+    get_oflr_data_product_load_template,
     get_workflow_batch_load_template,
     prepare_line_batch_after_load,
     resolve_data_products_oflr_directory,
@@ -218,7 +219,9 @@ def make_skymap(
         ``\"data_products_oflr\"``: reintegration spill files under ``data_products/OFLR``,
         stem ``OFLR_lines_{experiment_number:03d}_RLC_{r:.2f}_batch_*.fits`` (same stem as
         trace ``filename`` before ``BatchFileManager`` adds ``_out_of_``); falls back to
-        ``OFLR_lines_…_RLC_….fits`` if no chunks exist.
+        ``OFLR_lines_…_RLC_….fits`` if no chunks exist. FITS are loaded with
+        :func:`~psr_magpy.workflow.line_batch_workflow_prep.get_oflr_data_product_load_template`
+        (``r_line`` on disk); :func:`prepare_line_batch_after_load` enriches to the workflow template.
     healpix_grid_config, R_LC_values
         Grid config and light-cylinder radii to iterate (one skymap per value).
     save
@@ -247,7 +250,13 @@ def make_skymap(
     if grid_size is None:
         raise PSRMagPyIOError("Skymap grid nline is None")
 
-    load_template = FieldLine.from_template(get_workflow_batch_load_template())
+    if line_source == "lines":
+        load_template = FieldLine.from_template(get_workflow_batch_load_template())
+    elif line_source == "data_products_oflr":
+        load_template = FieldLine.from_template(get_oflr_data_product_load_template())
+    else:
+        raise ValueError(f"Unknown line_source: {line_source!r}")
+
     parent = Path(parent_dir).expanduser().resolve()
 
     all_skymaps: Dict[float, np.ndarray] = {}

@@ -35,6 +35,15 @@ def get_workflow_batch_load_template() -> FieldLineTemplate:
     return get_basic_batch_template()
 
 
+def get_oflr_data_product_load_template() -> FieldLineTemplate:
+    """Minimal template for OFLR reintegration FITS (typically ``r_line`` only on disk).
+
+    After load, :func:`prepare_line_batch_after_load` enriches toward the workflow
+    template (tangents from ``r_line``, etc.).
+    """
+    return FieldLineTemplate(save_r_line=True)
+
+
 def merge_field_line_templates(*templates: FieldLineTemplate) -> FieldLineTemplate:
     """OR-merge save flags from several templates (``save_footpoint_id`` stays True)."""
     merged: dict[str, bool] = {}
@@ -501,7 +510,8 @@ def prepare_line_batch_after_load(
     Parameters
     ----------
     batch
-        Loaded batch (typically with :func:`get_workflow_batch_load_template`).
+        Loaded batch; use :func:`get_workflow_batch_load_template` for raw ``lines/``,
+        :func:`get_oflr_data_product_load_template` for reintegrated OFLR products.
     target_template
         Properties to fill via :func:`enrich_field_line_set_from_r_line`. Defaults
         to the workflow load template.

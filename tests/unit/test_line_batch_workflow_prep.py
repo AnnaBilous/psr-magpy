@@ -6,6 +6,7 @@ from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.property_system import PropertyName
 from psr_magpy.workflow.line_batch_workflow_prep import (
     enrich_field_line_set_from_r_line,
+    get_oflr_data_product_load_template,
     get_workflow_batch_load_template,
     prepare_line_batch_after_load,
     resolve_data_products_oflr_directory,
@@ -52,6 +53,14 @@ def test_prepare_line_batch_data_products_trim_only():
     pts = np.asarray(rl).reshape(-1, 3)
     radii = np.sqrt(np.sum(pts**2, axis=1))
     assert np.all(radii < 2.5 + 1e-6)
+
+
+def test_get_oflr_data_product_load_template_minimal():
+    t = get_oflr_data_product_load_template()
+    names = t.get_enabled_property_names()
+    assert "footpoint_id" in names
+    assert "r_line" in names
+    assert "tangent_theta" not in names
 
 
 def test_resolve_data_products_oflr_directory():
