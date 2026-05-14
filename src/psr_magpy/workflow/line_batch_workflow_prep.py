@@ -143,9 +143,29 @@ def _log_non_aposteriori_on_target(target_template: FieldLineTemplate) -> None:
             )
 
 
+def _expand_batch_save_flags_for_r_line_synthesis(
+    batch: FieldLineSet, target_template: FieldLineTemplate
+) -> None:
+    """Turn on along-line save flags needed for :func:`enrich_field_line_set_from_r_line`.
+
+    Reintegration FITS may be loaded with ``r_line`` only; tangents etc. are filled
+    from ``r_line`` but :meth:`PropertySystem.set_property` requires those flags
+    enabled on the batch.
+    """
+    if PropertyName.R_LINE not in batch.property_system.get_enabled_properties():
+        return
+    want = target_template.property_system.get_enabled_properties() & _RECON_FROM_R_LINE
+    ps = batch.property_system
+    for prop in want:
+        if not ps.is_property_enabled(prop):
+            setattr(ps.save_flags, prop.flag_name, True)
+    ps.enabled_properties = ps.get_enabled_properties()
+
+
 def _ensure_batch_enables_target_computable(
     batch: FieldLineSet, target_template: FieldLineTemplate
 ) -> None:
+    """Require batch save flags for along-line targets that are not filled from ``r_line``."""
     want = target_template.property_system.get_enabled_properties() & _RECON_FROM_R_LINE
     have = batch.property_system.get_enabled_properties()
     missing = want - have
@@ -241,10 +261,8 @@ def enrich_field_line_set_from_r_line(
     Parameters
     ----------
     batch
-        In-place update. Must enable every ``target_template`` along-line flag
-        that maps to :class:`PropertyCalculator` ``prep_*`` methods (tangents,
-        ``pa_line``, ``curvature_line``, ``b_line``); use
-        :func:`recommend_load_template_for_target` when choosing the reader template.
+        In-place update. If only ``r_line`` is loaded, along-line flags required by
+        ``target_template`` are enabled automatically before enrichment.
     threshold_line_distance
         Passed to :class:`PropertyCalculator` (default ``0`` accepts any non-empty
         ``r_line`` for along-line reconstruction).
@@ -255,6 +273,7 @@ def enrich_field_line_set_from_r_line(
     ref = reference_template or get_workflow_batch_load_template()
     _log_template_diff(ref, target_template)
     _log_non_aposteriori_on_target(target_template)
+    _expand_batch_save_flags_for_r_line_synthesis(batch, target_template)
     _ensure_batch_enables_target_computable(batch, target_template)
 
     r_lines = batch.get_property("r_line")

@@ -94,3 +94,25 @@ def test_prepare_line_batch_r_min_trims_leading_points():
     pts = np.asarray(rl).reshape(-1, 3)
     assert pts.shape[0] == 2
     assert np.all(np.linalg.norm(pts, axis=1) >= 1.0 - 1e-6)
+
+
+def test_prepare_line_batch_oflr_from_minimal_template_enriches_tangents():
+    """OFLR-style load (r_line only): save flags expand so enrichment can set tangents."""
+    load_t = get_oflr_data_product_load_template()
+    batch = FieldLineSet(load_t, copy_data=False)
+    r_line = np.array([[1.0, 2.0, 3.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=np.float32)
+    batch.property_system._properties[PropertyName.FOOTPOINT_ID] = np.array([0], dtype=int)
+    batch.property_system._properties[PropertyName.R_LINE] = [r_line.T]
+    batch.n_field_lines = 1
+
+    out = prepare_line_batch_after_load(
+        batch,
+        source="data_products_oflr",
+        r_lc=10.0,
+        trim_type="sphere",
+        max_radius=2.5,
+        reversed_error_threshold=0.01,
+    )
+    assert out is not None
+    assert out.get_property("tangent_theta")[0] is not None
+    assert out.get_property("tangent_phi")[0] is not None
