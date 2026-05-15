@@ -161,7 +161,7 @@ class FieldLineTemplate:
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.
         """
-        return cls(save_r_line=True, save_reversed_error=True)
+        return cls(save_r_line=True)
 
     @classmethod
     def template_properties_along_line(cls) -> "FieldLineTemplate":

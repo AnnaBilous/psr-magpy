@@ -965,6 +965,7 @@ def load_OFLR_line_data(
     from psr_magpy.io import load_data
     from psr_magpy.line.field_line_set import FieldLineSet
     from psr_magpy.line.field_line import FieldLine
+    from psr_magpy.line.field_line_template import FieldLineTemplate
     import glob
 
     logger = get_logger(__name__, console_format_brief=True)
@@ -973,9 +974,9 @@ def load_OFLR_line_data(
     R_LC_values = np.array(R_LC_values) if not isinstance(R_LC_values, np.ndarray) else R_LC_values
 
 
-    # Set up template
+    # Set up template (edge/region products are saved with r_line only)
     if template is None:
-        template = FieldLine.template_all()
+        template = FieldLine.from_template(FieldLineTemplate(save_r_line=True))
 
     # Determine filename prefix based on data type
     if data_type == "edge":
