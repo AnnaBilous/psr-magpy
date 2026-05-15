@@ -10,8 +10,13 @@ from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.property_system import PropertyName
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.exceptions import PSRMagPyIOError
+from psr_magpy.workflow.line_batch_workflow_prep import experiment_number_from_config
 
 logger = get_logger(__name__, console_format_brief=True)
+
+DEFAULT_OFLR_MAP_OUTPUT_FILENAME_PATTERN = (
+    "OFLR_map_{experiment_number:03d}.fits"
+)
 
 
 def extract_ofl_map(
@@ -22,6 +27,7 @@ def extract_ofl_map(
     save: bool = True,
     output_dir: Optional[Union[str, Path]] = None,
     reversed_error_threshold: Optional[float] = None,
+    output_filename_pattern: Optional[str] = None,
 ) -> Dict[int, np.ndarray]:
     """Extract OFL maps from an experiment series.
 
@@ -76,6 +82,10 @@ def extract_ofl_map(
     else:
         exp_output_dir = Path(output_dir)
 
+    map_pattern = (
+        output_filename_pattern or DEFAULT_OFLR_MAP_OUTPUT_FILENAME_PATTERN
+    )
+
     for exp_num in experiment_numbers:
         try:
             experiment = series_config.load_experiment_config(exp_num)
@@ -91,6 +101,7 @@ def extract_ofl_map(
                 save=save,
                 output_dir=exp_output_dir,
                 reversed_error_threshold=reversed_error_threshold,
+                output_filename_pattern=map_pattern,
             )
 
             results[exp_num] = ofl_map
@@ -111,6 +122,7 @@ def find_OFL_regions_from_batch_files(
     save: bool = True,
     output_dir: Optional[Union[str, Path]] = None,
     reversed_error_threshold: Optional[float] = None,
+    output_filename_pattern: Optional[str] = None,
 ) -> np.ndarray:
     """Load all batch files for a specific experiment and create OFL map for each R_LC.
 
@@ -215,7 +227,14 @@ def find_OFL_regions_from_batch_files(
         
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        ofl_map_path = output_dir / f"OFLR_map_{experiment_config.name}.fits"
+        map_pattern = (
+            output_filename_pattern or DEFAULT_OFLR_MAP_OUTPUT_FILENAME_PATTERN
+        )
+        exp_no = experiment_number_from_config(experiment_config)
+        ofl_map_path = output_dir / map_pattern.format(
+            experiment_number=exp_no,
+            experiment_name=experiment_config.name,
+        )
         
         # Save as FITS using astropy with two columns: OFL map and grid indices
         col1 = fits.Column(name='OFLR_MAP', format='E', array=ofl_map)

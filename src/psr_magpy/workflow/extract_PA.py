@@ -31,6 +31,11 @@ from psr_magpy.workflow.workflow_utils import (
 
 logger = get_logger(__name__, console_format_brief=True)
 
+DEFAULT_EXTRACT_PA_OUTPUT_FILENAME_PATTERN = (
+    "extract_PA_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits"
+)
+
+
 # Template for loading batch data with required properties
 _PA_EXTRACTION_TEMPLATE = FieldLineTemplate(
     save_footpoint_id=True,
@@ -275,6 +280,7 @@ def make_extract_PA(
     r_min: Optional[float] = None,
     trim_type: str = "cylinder",
     reversed_error_threshold: float = 0.01,
+    output_filename_pattern: Optional[str] = None,
 ) -> Union[FieldLineSet, Dict[float, FieldLineSet]]:
     """Extract PA data filtered by theta tolerance from line batches.
 
@@ -293,8 +299,11 @@ def make_extract_PA(
     save, output_dir
         When ``save`` is True, write one FITS per ``R_LC`` immediately after that
         radius is processed (not deferred until all radii finish). Paths:
-        ``{experiment}_extract_PA_RLC_{r:.2f}.fits`` under
+        ``extract_PA_{experiment_number:03d}_RLC_{r:.2f}.fits`` under
         ``<parent>/<series>/data_products/extracted_PA`` when ``output_dir`` is None.
+    output_filename_pattern
+        :meth:`str.format` pattern for saved FITS; default uses ``experiment_number``
+        and ``r_lc``.
     trim_radius_coeff, r_min, trim_type, reversed_error_threshold
         Forwarded to :func:`prepare_line_batch_after_load`.
     """
@@ -315,6 +324,9 @@ def make_extract_PA(
 
     parent = Path(parent_dir).expanduser().resolve()
     experiment_number = experiment_number_from_config(experiment_config)
+    pa_pattern = (
+        output_filename_pattern or DEFAULT_EXTRACT_PA_OUTPUT_FILENAME_PATTERN
+    )
 
     if line_source == "lines":
         load_template = FieldLine.from_template(get_workflow_batch_load_template())
@@ -362,7 +374,9 @@ def make_extract_PA(
             batches_dir = str(
                 resolve_data_products_oflr_directory(parent, series_name)
             )
-            oflr_prefix = f"OFLR_lines_{experiment_number:03d}_RLC_{r_lc_f:05.2f}"
+            oflr_prefix = (
+                f"OFLR_lines_{experiment_number:03d}_RLC_{r_lc_f:05.2f}"
+            )
             result = _extract_pa_for_r_lc_batches(
                 experiment_config,
                 batches_dir,
@@ -381,8 +395,10 @@ def make_extract_PA(
         all_results[r_lc_f] = result
 
         if save and out is not None:
-            filepath = out / (
-                f"{experiment_config.name}_extract_PA_RLC_{r_lc_f:05.2f}.fits"
+            filepath = out / pa_pattern.format(
+                experiment_number=experiment_number,
+                experiment_name=experiment_config.name,
+                r_lc=r_lc_f,
             )
             _save_extracted_pa_field_line_set(result, filepath)
             logger.info(
@@ -434,9 +450,12 @@ def extract_PA_processor(
         if output_path is None:
             output_dir = Path(lines_dir).parent / "data_products" / "extracted_PA"
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = (
-                output_dir
-                / f"{experiment_config.name}_extract_PA_RLC_{float(r_lc):05.2f}.fits"
+            pa_pattern = DEFAULT_EXTRACT_PA_OUTPUT_FILENAME_PATTERN
+            exp_no = experiment_number_from_config(experiment_config)
+            output_path = output_dir / pa_pattern.format(
+                experiment_number=exp_no,
+                experiment_name=experiment_config.name,
+                r_lc=float(r_lc),
             )
         else:
             output_path = Path(output_path)

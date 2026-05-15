@@ -34,23 +34,19 @@ def test_format_skymap_output_filename_custom_pattern():
     assert name == "skymap_009_RLC_23.85_nside_16.fits"
 
 
-def test_format_skymap_output_filename_default_matches_legacy_shape():
+def test_format_skymap_output_filename_default_pattern():
     from unittest.mock import MagicMock
 
     ec = MagicMock()
     ec.name = "healpix_nside_1024_grid_study_OFL_calc_main_009"
-    grid = create_healpix_grid(HealpixGridConfig(nside=16))
     name = format_skymap_output_filename(
         DEFAULT_SKYMAP_OUTPUT_FILENAME_PATTERN,
         experiment_config=ec,
         series_name="series",
         experiment_number=9,
-        grid=grid,
         r_lc=23.85,
     )
-    assert name == (
-        "skymap_healpix_nside_1024_grid_study_OFL_calc_main_009_nside016_RLC_23.85.fits"
-    )
+    assert name == "skymap_009_RLC_23.85.fits"
 
 
 def test_skymap_pixel_counts_from_none():

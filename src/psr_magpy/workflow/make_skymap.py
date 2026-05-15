@@ -35,7 +35,11 @@ from psr_magpy.workflow.workflow_utils import (
 logger = get_logger(__name__, console_format_brief=True)
 
 DEFAULT_SKYMAP_OUTPUT_FILENAME_PATTERN = (
-    "skymap_{experiment_name}_nside{nside:03d}_RLC_{r_lc:05.2f}.fits"
+    "skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits"
+)
+
+DEFAULT_OFLR_LINES_BATCH_STEM_PATTERN = (
+    "OFLR_lines_{experiment_number:03d}_RLC_{r_lc:05.2f}"
 )
 
 
@@ -45,25 +49,23 @@ def format_skymap_output_filename(
     experiment_config: ExperimentConfig,
     series_name: str,
     experiment_number: int,
-    grid: HealpixGrid,
     r_lc: float,
+    grid: Optional[HealpixGrid] = None,
 ) -> str:
     """Build a skymap FITS filename from a :meth:`str.format` pattern.
 
     Available fields: ``experiment_number``, ``experiment_name``, ``series_name``,
-    ``r_lc``, ``nside``. Include ``.fits`` in the pattern, or it is appended if missing.
-
-    Examples
-    --------
-    ``"skymap_{experiment_number:03d}_RLC_{r_lc:.2f}_nside_{nside}.fits"``
+    ``r_lc``, and optionally ``nside`` if the pattern references it.
     """
-    name = pattern.format(
-        experiment_number=int(experiment_number),
-        experiment_name=experiment_config.name,
-        series_name=series_name,
-        r_lc=float(r_lc),
-        nside=int(grid.nside),
-    )
+    fields = {
+        "experiment_number": int(experiment_number),
+        "experiment_name": experiment_config.name,
+        "series_name": series_name,
+        "r_lc": float(r_lc),
+    }
+    if grid is not None:
+        fields["nside"] = int(grid.nside)
+    name = pattern.format(**fields)
     lower = name.lower()
     if not (lower.endswith(".fits") or lower.endswith(".fit")):
         name = f"{name}.fits"
@@ -237,6 +239,7 @@ def make_skymap(
     threshold_line_distance: float = 0.0,
     field: Any = None,
     skymap_output_filename_pattern: Optional[str] = None,
+    oflr_batch_stem_pattern: Optional[str] = None,
 ) -> Union[np.ndarray, Dict[float, np.ndarray]]:
     """Create HEALPix skymaps from line batches under ``parent_dir`` / ``series_name``.
 
@@ -279,7 +282,9 @@ def make_skymap(
         :meth:`str.format` pattern for each saved FITS basename under ``output_dir``.
         Fields: ``experiment_number``, ``experiment_name``, ``series_name``, ``r_lc``,
         ``nside``. Default matches historical names
-        (``skymap_{experiment_name}_nside{nside:03d}_RLC_{r_lc:05.2f}.fits``).
+        (``skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits`` by default).
+    oflr_batch_stem_pattern
+        Stem for OFLR batch glob (no ``.fits``); default ``OFLR_lines_{nnn}_RLC_{r}``.
 
     Returns
     -------
@@ -302,6 +307,9 @@ def make_skymap(
     experiment_number = experiment_number_from_config(experiment_config)
     filename_pattern = (
         skymap_output_filename_pattern or DEFAULT_SKYMAP_OUTPUT_FILENAME_PATTERN
+    )
+    oflr_stem_pattern = (
+        oflr_batch_stem_pattern or DEFAULT_OFLR_LINES_BATCH_STEM_PATTERN
     )
 
     all_skymaps: Dict[float, np.ndarray] = {}
@@ -331,7 +339,12 @@ def make_skymap(
             )
         elif line_source == "data_products_oflr":
             batches_dir = str(resolve_data_products_oflr_directory(parent, series_name))
-            oflr_prefix = f"OFLR_lines_{experiment_number:03d}_RLC_{r_lc_f:05.2f}"
+            oflr_prefix = oflr_stem_pattern.format(
+                experiment_number=experiment_number,
+                experiment_name=experiment_config.name,
+                series_name=series_name,
+                r_lc=r_lc_f,
+            )
             result = _skymap_for_r_lc_batches(
                 experiment_config,
                 batches_dir,
