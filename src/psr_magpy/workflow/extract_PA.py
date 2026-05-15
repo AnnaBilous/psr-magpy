@@ -1,22 +1,33 @@
 """Workflow for extracting PA data filtered by theta tolerance."""
 
-from typing import Optional, Union, Dict
+from __future__ import annotations
+
 from pathlib import Path
+from typing import Dict, Optional, Union
+
 import numpy as np
 
 from psr_magpy.experiment.experiment_config import ExperimentConfig
-from psr_magpy.grid.grid import FootpointGrid
+from psr_magpy.experiment.services.batch_data_reader import BatchDataReader
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.io import save_data
+from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyPropertyError
+from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.workflow.line_batch_workflow_prep import (
+    LineDataSource,
+    experiment_number_from_config,
+    get_oflr_data_product_load_template,
+    get_workflow_batch_load_template,
+    prepare_line_batch_after_load,
+    resolve_data_products_oflr_directory,
+    resolve_lines_directory,
+)
 from psr_magpy.workflow.workflow_utils import (
-    prepare_batch_subset,
     extract_line_properties,
     normalize_line_arrays,
 )
-from psr_magpy.io import save_data
-from psr_magpy.utils.logging_config import get_logger
-from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyPropertyError
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -140,106 +151,235 @@ def patch_PA(results):
 
 
 
+def _extract_pa_from_prepared_batch(
+    prepared: Optional[FieldLineSet],
+    *,
+    grid_theta: np.ndarray,
+    theta_tolerance: float,
+) -> FieldLineSet:
+    """Theta-filter prepared lines and return a compact :class:`FieldLineSet`."""
+    if prepared is None or prepared.n_field_lines == 0:
+        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
+    try:
+        prepared, _, _, _ = patch_PA(prepared)
+        tangent_theta_lines, tangent_phi_lines, r_line_data, pa_line_data = (
+            extract_line_properties(prepared, require_pa=True)
+        )
+        filtered_lines = _filter_field_line_points(
+            batch_subset=prepared,
+            tangent_theta_lines=tangent_theta_lines,
+            tangent_phi_lines=tangent_phi_lines,
+            r_line_data=r_line_data,
+            pa_line_data=pa_line_data,
+            grid_theta=grid_theta,
+            theta_tolerance=theta_tolerance,
+        )
+        if filtered_lines:
+            return FieldLineSet(filtered_lines, copy_data=True)
+        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
+    except Exception as exc:
+        logger.warning("Error extracting PA from prepared batch: %s", exc)
+        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
+
+
+def _accumulate_pa_field_lines(
+    acc: Optional[FieldLineSet], new: FieldLineSet
+) -> FieldLineSet:
+    if acc is None:
+        return new
+    if new.n_field_lines == 0:
+        return acc
+    acc.append(new)
+    return acc
+
+
+def _extract_pa_for_r_lc_batches(
+    experiment_config: ExperimentConfig,
+    batches_dir: str,
+    load_template: FieldLine,
+    r_lc: float,
+    *,
+    prepare_source: LineDataSource,
+    trim_type: str,
+    max_radius: Optional[float],
+    r_min: Optional[float],
+    reversed_error_threshold: float,
+    grid_theta: np.ndarray,
+    theta_tolerance: float,
+    batch_filename_prefix: Optional[str] = None,
+) -> FieldLineSet:
+    """Aggregate theta-filtered PA lines over batch FITS under ``batches_dir``."""
+    reader = BatchDataReader(experiment_config.name)
+
+    def process_batch(batch_data: FieldLineSet) -> FieldLineSet:
+        prepared = prepare_line_batch_after_load(
+            batch_data,
+            source=prepare_source,
+            r_lc=float(r_lc),
+            trim_type=trim_type,
+            max_radius=max_radius,
+            r_min=r_min,
+            reversed_error_threshold=reversed_error_threshold,
+            target_template=_PA_EXTRACTION_TEMPLATE,
+        )
+        return _extract_pa_from_prepared_batch(
+            prepared,
+            grid_theta=grid_theta,
+            theta_tolerance=theta_tolerance,
+        )
+
+    filtered_result = reader.process_batches_incremental(
+        template=load_template,
+        lines_dir=batches_dir,
+        processor_fn=process_batch,
+        accumulator_fn=_accumulate_pa_field_lines,
+        initial_value=None,
+        batch_filename_prefix=batch_filename_prefix,
+    )
+
+    if filtered_result is None or filtered_result.n_field_lines == 0:
+        logger.warning("No filtered PA data for R_LC = %.2f", r_lc)
+        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
+
+    logger.info(
+        "Extracted %d filtered field lines for R_LC = %.2f",
+        filtered_result.n_field_lines,
+        r_lc,
+    )
+    return filtered_result
+
+
 def make_extract_PA(
     experiment_config: ExperimentConfig,
     R_LC_values: np.ndarray,
     theta_tolerance: float,
     grid_theta: np.ndarray,
+    *,
+    parent_dir: Optional[Union[str, Path]] = None,
+    series_name: Optional[str] = None,
+    line_source: Optional[LineDataSource] = None,
     lines_dir: Optional[Union[str, Path]] = None,
     save: bool = True,
     output_dir: Optional[Union[str, Path]] = None,
     trim_radius_coeff: float = 1.0,
-    r_min: float = 1.0,
+    r_min: Optional[float] = None,
     trim_type: str = "cylinder",
+    reversed_error_threshold: float = 0.01,
 ) -> Union[FieldLineSet, Dict[float, FieldLineSet]]:
-    """Extract PA data filtered by theta tolerance from experiment data.
-    
+    """Extract PA data filtered by theta tolerance from line batches.
+
+    Batch layout and preparation match :func:`~psr_magpy.workflow.make_skymap.make_skymap`
+    (``line_source``, ``parent_dir`` / ``series_name``, ``prepare_line_batch_after_load``).
+
     Parameters
     ----------
-    experiment_config : ExperimentConfig
-        Experiment configuration containing field line data.
-    R_LC_values : np.ndarray
-        Array of light cylinder radii to process.
-    theta_tolerance : float
-        Tolerance in degrees for filtering points by tangent_theta.
-    grid_theta : np.ndarray
-        Grid theta values (colatitude in degrees) to filter against.
-    lines_dir : Optional[Union[str, Path]], optional
-        Directory containing batch files. If None, uses experiment's lines directory.
-        Default is None.
-    save : bool, optional
-        Whether to save the filtered FieldLineSet to file. Default is True.
-    output_dir : Optional[Union[str, Path]], optional
-        Directory to save filtered FieldLineSet. If None, creates data_products/extracted_PA directory.
-        Default is None.
-    trim_radius_coeff : float, optional
-        Coefficient for trimming field lines (actual trim_radius = trim_radius_coeff * r_lc).
-        Default is 1.0.
-    r_min : float, optional
-        Minimum radius for filtering points. Default is 1.0.
-    trim_type : str, optional
-        Type of trimming to apply ("cylinder" or "sphere"). Default is "cylinder".
-        
-    Returns
-    -------
-    Union[FieldLineSet, Dict[float, FieldLineSet]]
-        If single R_LC: single FieldLineSet.
-        If multiple R_LC: dict mapping R_LC values to FieldLineSet objects.
+    experiment_config, R_LC_values, theta_tolerance, grid_theta
+        Experiment metadata, light-cylinder radii, and observer colatitude grid.
+    parent_dir, series_name, line_source
+        Series root and batch source (``\"lines\"`` or ``\"data_products_oflr\"``).
+        Preferred over legacy ``lines_dir``.
+    lines_dir
+        Legacy: raw ``lines/`` directory (equivalent to ``line_source=\"lines\"``).
+    save, output_dir
+        Write ``{experiment}_extract_PA_RLC_{r:.2f}.fits`` under
+        ``<parent>/<series>/data_products/extracted_PA`` when ``output_dir`` is None.
+    trim_radius_coeff, r_min, trim_type, reversed_error_threshold
+        Forwarded to :func:`prepare_line_batch_after_load`.
     """
-    if lines_dir is None:
-        raise PSRMagPyIOError("lines_dir must be specified")
-    
-    # Process each R_LC value separately
-    all_results = {}  # Dict to store FieldLineSets per R_LC: {r_lc: FieldLineSet}
-    
-    for r_lc in R_LC_values:
-        logger.info(f"Processing R_LC = {r_lc:.2f}")
-        
-        # Calculate actual radius: trim_radius = trim_radius_coeff * r_lc
-        max_radius = trim_radius_coeff * r_lc
-        
-        logger.info(f"  Processing with r_min = {r_min:.2f}, trim_radius = {max_radius:.2f}")
-        
-        # Execute processor with radius range (from r_min to max_radius), don't save yet
-        result = extract_PA_processor(
-            experiment_config=experiment_config,
-            r_lc=r_lc,
-            lines_dir=lines_dir,
-            theta_tolerance=theta_tolerance,
-            grid_theta=grid_theta,
-            save=False,
-            output_path=None,
-            radius_range=(r_min, max_radius),
-            trim_type=trim_type,
-        )
-        
-        all_results[r_lc] = result
-    
-    # Save if requested (one file per R_LC)
-    if save:
-        if output_dir is None:
-            output_dir = Path(lines_dir).parent / "data_products" / "extracted_PA"
-        else:
-            output_dir = Path(output_dir)
-        
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Save each R_LC to its own file
-        for r_lc, field_line_set in all_results.items():
-            # Generate filename for this R_LC
-            filename = f"{experiment_config.name}_extract_PA_RLC_{r_lc:05.2f}.fits"
-            filepath = output_dir / filename
-            
-            # Save FieldLineSet for this R_LC
-            save_data(field_line_set, filepath, overwrite=True)
-            
-            logger.info(f"Saved filtered FieldLineSet for R_LC={r_lc:05.2f} to {filepath}")
-    
-    # Return structure: if single R_LC, return FieldLineSet; otherwise return dict
-    if len(R_LC_values) == 1:
-        return all_results[R_LC_values[0]]
+    if line_source is not None:
+        if parent_dir is None or series_name is None:
+            error_msg = "parent_dir and series_name are required when line_source is set"
+            logger.error(error_msg)
+            raise PSRMagPyIOError(error_msg)
+    elif lines_dir is not None:
+        line_source = "lines"
+        batches_root = Path(lines_dir).expanduser().resolve()
+        parent_dir = batches_root.parent.parent
+        series_name = batches_root.parent.name
     else:
-        return all_results
+        error_msg = "Specify line_source with parent_dir/series_name, or lines_dir"
+        logger.error(error_msg)
+        raise PSRMagPyIOError(error_msg)
+
+    parent = Path(parent_dir).expanduser().resolve()
+    experiment_number = experiment_number_from_config(experiment_config)
+
+    if line_source == "lines":
+        load_template = FieldLine.from_template(get_workflow_batch_load_template())
+    elif line_source == "data_products_oflr":
+        load_template = FieldLine.from_template(get_oflr_data_product_load_template())
+    else:
+        raise ValueError(f"Unknown line_source: {line_source!r}")
+
+    all_results: Dict[float, FieldLineSet] = {}
+
+    for r_lc in R_LC_values:
+        r_lc_f = float(r_lc)
+        max_radius = float(trim_radius_coeff) * r_lc_f
+        logger.info("Processing R_LC = %.2f", r_lc_f)
+        logger.info(
+            "  r_min=%s, trim_radius=%.2f",
+            r_min if r_min is not None else "None",
+            max_radius,
+        )
+
+        if line_source == "lines":
+            batches_dir = str(resolve_lines_directory(parent, series_name))
+            result = _extract_pa_for_r_lc_batches(
+                experiment_config,
+                batches_dir,
+                load_template,
+                r_lc_f,
+                prepare_source="lines",
+                trim_type=trim_type,
+                max_radius=max_radius,
+                r_min=r_min,
+                reversed_error_threshold=reversed_error_threshold,
+                grid_theta=grid_theta,
+                theta_tolerance=theta_tolerance,
+            )
+        else:
+            batches_dir = str(
+                resolve_data_products_oflr_directory(parent, series_name)
+            )
+            oflr_prefix = f"OFLR_lines_{experiment_number:03d}_RLC_{r_lc_f:05.2f}"
+            result = _extract_pa_for_r_lc_batches(
+                experiment_config,
+                batches_dir,
+                load_template,
+                r_lc_f,
+                prepare_source="data_products_oflr",
+                trim_type=trim_type,
+                max_radius=max_radius,
+                r_min=r_min,
+                reversed_error_threshold=reversed_error_threshold,
+                grid_theta=grid_theta,
+                theta_tolerance=theta_tolerance,
+                batch_filename_prefix=oflr_prefix,
+            )
+
+        all_results[r_lc_f] = result
+
+    if save:
+        out = (
+            Path(output_dir).expanduser().resolve()
+            if output_dir is not None
+            else parent / series_name / "data_products" / "extracted_PA"
+        )
+        out.mkdir(parents=True, exist_ok=True)
+
+        for r_lc_f, field_line_set in all_results.items():
+            filepath = out / (
+                f"{experiment_config.name}_extract_PA_RLC_{r_lc_f:05.2f}.fits"
+            )
+            save_result = FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
+            save_result.append(field_line_set)
+            save_data(save_result, filepath, overwrite=True)
+            logger.info("Saved filtered FieldLineSet for R_LC=%.2f to %s", r_lc_f, filepath)
+
+    if len(R_LC_values) == 1:
+        return all_results[float(R_LC_values[0])]
+    return all_results
 
 
 def extract_PA_processor(
@@ -252,130 +392,49 @@ def extract_PA_processor(
     output_path: Optional[Union[str, Path]] = None,
     radius_range: Optional[tuple] = None,
     trim_type: str = "cylinder",
+    reversed_error_threshold: float = 0.01,
 ) -> FieldLineSet:
-    """Extract field line points filtered by theta tolerance and save filtered FieldLineSet.
-    
-    This processor filters points on field lines where abs(tangent_theta - theta_grid) < theta_tolerance
-    for each grid point, and saves a filtered FieldLineSet with properties: r_line, pa_line, 
-    tangent_theta, tangent_phi.
-    
-    Parameters
-    ----------
-    experiment_config : ExperimentConfig
-        Experiment configuration containing field line data.
-    r_lc : float
-        Light cylinder radius.
-    lines_dir : str
-        Directory containing batch files.
-    theta_tolerance : float
-        Tolerance in degrees for filtering points by tangent_theta.
-    grid_theta : np.ndarray
-        Grid theta values (colatitude in degrees) to filter against.
-    save : bool, optional
-        Whether to save the filtered FieldLineSet. Default is True.
-    output_path : Optional[Union[str, Path]], optional
-        Path to save filtered FieldLineSet. If None and save=True, constructs path from lines_dir.
-        Default is None.
-    radius_range : Optional[tuple], optional
-        Tuple (min_radius, max_radius) to filter points by radius.
-        If None, no radius filtering is applied. Default is None.
-    trim_type : str, optional
-        Type of trimming to apply ("cylinder" or "sphere"). Default is "cylinder".
-        
-    Returns
-    -------
-    FieldLineSet
-        Filtered FieldLineSet with properties r_line, pa_line, tangent_theta, tangent_phi.
+    """Extract PA from raw ``lines/`` batches (legacy single-directory API).
+
+    Prefer :func:`make_extract_PA` with ``parent_dir``, ``series_name``, and
+    ``line_source``.
     """
-    # Extract radius range if provided
     min_radius = radius_range[0] if radius_range is not None else None
     max_radius = radius_range[1] if radius_range is not None else None
-    
-    # Process batches to filter points by theta tolerance
-    def process_batch(batch_data):
-        """Filter points by theta tolerance and create filtered FieldLineSet."""
-        try:
-            # Prepare batch subset (OFL extraction, reversed_error filtering, and trimming)
-            batch_subset = prepare_batch_subset(
-                batch_data, r_lc, trim_type=trim_type, max_radius=max_radius
-            )
-            
-            if batch_subset is None:
-                return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
-            
-            # Patch PA
-            batch_subset, _, _, _ = patch_PA(batch_subset)
-            
-            # Extract properties
-            tangent_theta_lines, tangent_phi_lines, r_line_data, pa_line_data = extract_line_properties(
-                batch_subset, require_pa=True
-            )
-            
-            # Filter points for each field line
-            filtered_lines = _filter_field_line_points(
-                batch_subset=batch_subset,
-                tangent_theta_lines=tangent_theta_lines,
-                tangent_phi_lines=tangent_phi_lines,
-                r_line_data=r_line_data,
-                pa_line_data=pa_line_data,
-                grid_theta=grid_theta,
-                theta_tolerance=theta_tolerance,
-            )
-            
-            # Create FieldLineSet from filtered lines
-            if len(filtered_lines) > 0:
-                return FieldLineSet(filtered_lines, copy_data=True)
-            else:
-                return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
-            
-        except Exception as e:
-            logger.warning(f"Error processing batch: {e}")
-            return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
-    
-    def accumulate_field_lines(acc: Optional[FieldLineSet], new: FieldLineSet) -> FieldLineSet:
-        """Accumulate filtered FieldLineSets from batches."""
-        if acc is None:
-            return new
-        if new.n_field_lines == 0:
-            return acc
-        # Append new lines to accumulated set
-        acc.append(new)
-        return acc
-    
-    # Process all batches incrementally
-    filtered_result = experiment_config.process_batches_incremental(
-        template=_PA_EXTRACTION_TEMPLATE,
-        lines_dir=lines_dir,
-        processor_fn=process_batch,
-        accumulator_fn=accumulate_field_lines,
-        initial_value=None,
+
+    load_template = FieldLine.from_template(get_workflow_batch_load_template())
+
+    filtered_result = _extract_pa_for_r_lc_batches(
+        experiment_config,
+        lines_dir,
+        load_template,
+        float(r_lc),
+        prepare_source="lines",
+        trim_type=trim_type,
+        max_radius=max_radius,
+        r_min=min_radius,
+        reversed_error_threshold=reversed_error_threshold,
+        grid_theta=grid_theta,
+        theta_tolerance=theta_tolerance,
     )
-    
-    if filtered_result is None or filtered_result.n_field_lines == 0:
-        logger.warning(f"No filtered data for R_LC = {r_lc:.2f}")
-        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
-    
-    logger.info(f"Extracted {filtered_result.n_field_lines} filtered field lines for R_LC = {r_lc:.2f}")
-    
-    # Save if requested
+
     if save:
         if output_path is None:
-            # Construct output path from lines_dir
             output_dir = Path(lines_dir).parent / "data_products" / "extracted_PA"
             output_dir.mkdir(parents=True, exist_ok=True)
-            filename = f"PA_data_{experiment_config.name}_RLC_{r_lc:05.1f}.fits"
-            output_path = output_dir / filename
+            output_path = (
+                output_dir
+                / f"{experiment_config.name}_extract_PA_RLC_{float(r_lc):05.2f}.fits"
+            )
         else:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Create a new FieldLineSet with save template to avoid warnings about missing properties
+
         save_result = FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
         save_result.append(filtered_result)
-        
         save_data(save_result, output_path, overwrite=True)
-        logger.info(f"Saved filtered FieldLineSet to {output_path}")
-    
+        logger.info("Saved filtered FieldLineSet to %s", output_path)
+
     return filtered_result
 
 
