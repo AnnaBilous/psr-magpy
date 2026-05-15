@@ -40,7 +40,8 @@ def extract_ofl_map(
     save : bool, optional
         Whether to save the OFL maps as FITS files. Default is True.
     output_dir : Optional[Union[str, Path]], optional
-        Directory to save OFL maps. If None, uses lines_dir/OFL_maps. Default is None.
+        Directory to save OFL maps. If None, uses
+        ``<output_dir>/<series>/data_products/OFLR_maps``. Default is None.
     reversed_error_threshold : Optional[float], optional
         Threshold for filtering by reversed_error. If None, no filtering is performed.
         Default is None.
@@ -62,10 +63,16 @@ def extract_ofl_map(
 
     results = {}
     lines_dir = series_config.get_lines_dir()
-    
-    # Determine output directory
+
     if output_dir is None:
-        exp_output_dir = Path(lines_dir) / "OFL_maps"
+        if series_config.output_dir is None:
+            raise PSRMagPyIOError("series_config.output_dir must be set")
+        exp_output_dir = (
+            Path(series_config.output_dir)
+            / series_config.name
+            / "data_products"
+            / "OFLR_maps"
+        )
     else:
         exp_output_dir = Path(output_dir)
 
@@ -120,7 +127,8 @@ def find_OFL_regions_from_batch_files(
     save : bool, optional
         Whether to save the OFL map as FITS file. Default is True.
     output_dir : Optional[Union[str, Path]], optional
-        Directory to save OFL maps. If None, uses lines_dir/OFL_maps. Default is None.
+        Directory to save OFL maps. If None, uses
+        ``<output_dir>/<series>/data_products/OFLR_maps``. Default is None.
     reversed_error_threshold : Optional[float], optional
         Threshold for filtering by reversed_error. If None, no filtering is performed.
         Default is None.
