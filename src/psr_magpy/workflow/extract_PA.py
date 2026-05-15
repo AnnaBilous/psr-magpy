@@ -159,7 +159,7 @@ def _extract_pa_from_prepared_batch(
 ) -> FieldLineSet:
     """Theta-filter prepared lines and return a compact :class:`FieldLineSet`."""
     if prepared is None or prepared.n_field_lines == 0:
-        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
+        return FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
     try:
         prepared, _, _, _ = patch_PA(prepared)
         tangent_theta_lines, tangent_phi_lines, r_line_data, pa_line_data = (
@@ -176,10 +176,10 @@ def _extract_pa_from_prepared_batch(
         )
         if filtered_lines:
             return FieldLineSet(filtered_lines, copy_data=True)
-        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
+        return FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
     except Exception as exc:
         logger.warning("Error extracting PA from prepared batch: %s", exc)
-        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
+        return FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
 
 
 def _accumulate_pa_field_lines(
@@ -239,7 +239,7 @@ def _extract_pa_for_r_lc_batches(
 
     if filtered_result is None or filtered_result.n_field_lines == 0:
         logger.warning("No filtered PA data for R_LC = %.2f", r_lc)
-        return FieldLineSet(_PA_EXTRACTION_TEMPLATE, copy_data=False)
+        return FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
 
     logger.info(
         "Extracted %d filtered field lines for R_LC = %.2f",
@@ -247,6 +247,16 @@ def _extract_pa_for_r_lc_batches(
         r_lc,
     )
     return filtered_result
+
+
+def _save_extracted_pa_field_line_set(
+    field_line_set: FieldLineSet,
+    filepath: Path,
+) -> None:
+    """Write one extracted-PA FITS (``field_line_set`` must use ``_PA_SAVE_TEMPLATE``)."""
+    filepath = Path(filepath)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    save_data(field_line_set, filepath, overwrite=True)
 
 
 def make_extract_PA(
@@ -281,7 +291,9 @@ def make_extract_PA(
     lines_dir
         Legacy: raw ``lines/`` directory (equivalent to ``line_source=\"lines\"``).
     save, output_dir
-        Write ``{experiment}_extract_PA_RLC_{r:.2f}.fits`` under
+        When ``save`` is True, write one FITS per ``R_LC`` immediately after that
+        radius is processed (not deferred until all radii finish). Paths:
+        ``{experiment}_extract_PA_RLC_{r:.2f}.fits`` under
         ``<parent>/<series>/data_products/extracted_PA`` when ``output_dir`` is None.
     trim_radius_coeff, r_min, trim_type, reversed_error_threshold
         Forwarded to :func:`prepare_line_batch_after_load`.
@@ -312,6 +324,14 @@ def make_extract_PA(
         raise ValueError(f"Unknown line_source: {line_source!r}")
 
     all_results: Dict[float, FieldLineSet] = {}
+    out: Optional[Path] = None
+    if save:
+        out = (
+            Path(output_dir).expanduser().resolve()
+            if output_dir is not None
+            else parent / series_name / "data_products" / "extracted_PA"
+        )
+        out.mkdir(parents=True, exist_ok=True)
 
     for r_lc in R_LC_values:
         r_lc_f = float(r_lc)
@@ -360,22 +380,14 @@ def make_extract_PA(
 
         all_results[r_lc_f] = result
 
-    if save:
-        out = (
-            Path(output_dir).expanduser().resolve()
-            if output_dir is not None
-            else parent / series_name / "data_products" / "extracted_PA"
-        )
-        out.mkdir(parents=True, exist_ok=True)
-
-        for r_lc_f, field_line_set in all_results.items():
+        if save and out is not None:
             filepath = out / (
                 f"{experiment_config.name}_extract_PA_RLC_{r_lc_f:05.2f}.fits"
             )
-            save_result = FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
-            save_result.append(field_line_set)
-            save_data(save_result, filepath, overwrite=True)
-            logger.info("Saved filtered FieldLineSet for R_LC=%.2f to %s", r_lc_f, filepath)
+            _save_extracted_pa_field_line_set(result, filepath)
+            logger.info(
+                "Saved filtered FieldLineSet for R_LC=%.2f to %s", r_lc_f, filepath
+            )
 
     if len(R_LC_values) == 1:
         return all_results[float(R_LC_values[0])]
@@ -430,9 +442,7 @@ def extract_PA_processor(
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        save_result = FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
-        save_result.append(filtered_result)
-        save_data(save_result, output_path, overwrite=True)
+        _save_extracted_pa_field_line_set(filtered_result, Path(output_path))
         logger.info("Saved filtered FieldLineSet to %s", output_path)
 
     return filtered_result
@@ -491,7 +501,7 @@ def _filter_field_line_points(
         filtered_pa_line = pa_line[combined_mask] if pa_line is not None else None
         
         # Create FieldLine object for this filtered line
-        filtered_line = FieldLine.from_template(_PA_EXTRACTION_TEMPLATE)
+        filtered_line = FieldLine.from_template(_PA_SAVE_TEMPLATE)
         filtered_line.set_property(
             footpoint_id=batch_subset.get_property('footpoint_id')[line_idx],
             r_line=filtered_r_line,
