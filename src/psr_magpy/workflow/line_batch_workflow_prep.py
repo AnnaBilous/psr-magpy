@@ -572,6 +572,7 @@ def prepare_line_batch_after_load(
             trim_type=trim_type,
             max_radius=max_radius,
             reversed_error_threshold=reversed_error_threshold,
+            r_min=r_min,
         )
         if out is None:
             return None
@@ -584,7 +585,9 @@ def prepare_line_batch_after_load(
         if working.n_field_lines == 0:
             return None
         if max_radius is not None:
-            working.trim_to_light_cylinder(R_LC=max_radius, trim_type=trim_type)
+            working.trim_to_light_cylinder(
+                R_LC=max_radius, trim_type=trim_type, r_trim_min=r_min
+            )
         if working.n_field_lines == 0:
             return None
         if r_min is not None and r_min > 0:

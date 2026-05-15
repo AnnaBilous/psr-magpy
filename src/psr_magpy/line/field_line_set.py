@@ -654,7 +654,12 @@ class FieldLineSet(FieldLine):
         return self.subset_by_footpoint_ids(filtered_footpoint_ids)
 
     def trim_to_light_cylinder(
-        self, R_LC, h_LC_coeff=3**1.5 / 2.0, trim_type="cylinder"
+        self,
+        R_LC,
+        h_LC_coeff=3**1.5 / 2.0,
+        trim_type="cylinder",
+        *,
+        r_trim_min: Optional[float] = None,
     ):
         """
         Trim field lines to points before light cylinder penetration.
@@ -662,11 +667,14 @@ class FieldLineSet(FieldLine):
         Parameters
         ----------
         R_LC : float
-            Light cylinder radius.
+            Outer trim radius (light cylinder / sphere cap), logged as ``R_trim_max``.
         h_LC_coeff : float, optional
             Height coefficient for cylinder trimming. Default is 3^1.5 / 2.0.
         trim_type : str, optional
             Trimming method: "cylinder" or "sphere". Default is "cylinder".
+        r_trim_min : float, optional
+            Inner radius (e.g. minimum emission radius) for logging only; this
+            method does not apply an inner trim.
 
         Notes
         -----
@@ -793,9 +801,15 @@ class FieldLineSet(FieldLine):
             else:
                 logger.debug(f"Property {prop} is not enabled, skipping")
 
+        r_min_log = (
+            f"{float(r_trim_min):.6g}"
+            if r_trim_min is not None and float(r_trim_min) > 0
+            else "n/a"
+        )
         logger.info(
-            "Trimmed %d field lines (trim_type=%s, R_LC=%.6g)",
+            "Trimmed %d field lines (trim_type=%s, R_trim_max=%.6g, R_trim_min=%s)",
             self.n_field_lines,
             trim_type,
             float(R_LC),
+            r_min_log,
         )

@@ -65,6 +65,7 @@ def prepare_batch_subset(
     trim_type: str,
     max_radius: Optional[float] = None,
     reversed_error_threshold: float = 0.01,
+    r_min: Optional[float] = None,
 ) -> Optional[FieldLineSet]:
     """Extract OFL footpoints, filter by reversed_error, and trim by radius.
     
@@ -80,7 +81,10 @@ def prepare_batch_subset(
         Maximum radius for trimming. If None, no trimming is applied.
     reversed_error_threshold : float, optional
         Threshold for reversed_error filtering. Default is 0.01.
-        
+    r_min : float, optional
+        Passed to :meth:`~psr_magpy.line.field_line_set.FieldLineSet.trim_to_light_cylinder`
+        as ``r_trim_min`` for logging only (inner trim, if any, is applied later in the caller).
+
     Returns
     -------
     Optional[FieldLineSet]
@@ -101,7 +105,9 @@ def prepare_batch_subset(
     
     # Trim to maximum radius if specified
     if max_radius is not None:
-        batch_subset.trim_to_light_cylinder(R_LC=max_radius, trim_type=trim_type)
+        batch_subset.trim_to_light_cylinder(
+            R_LC=max_radius, trim_type=trim_type, r_trim_min=r_min
+        )
     
     return batch_subset
 
