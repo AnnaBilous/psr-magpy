@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Literal, Union
+from typing import Any, Dict, List, Optional, Sequence, Literal, Union
 
 import numpy as np
 
@@ -219,6 +219,7 @@ class OFLReintegrationDataProductService:
         template: FieldLineTemplate,
         r_max: Optional[Union[float, np.ndarray, Dict[float, float]]] = None,
         skip_verify_by_reversing: bool = True,
+        n_cores: Optional[int] = None,
     ) -> None:
         """Integrate selected footpoints and save line data products."""
         experiment_config = ExperimentConfig.load(experiment_config_path)
@@ -241,14 +242,17 @@ class OFLReintegrationDataProductService:
         # Build base tracing params with output disabled to avoid validation
         # failures when source experiment config has save_results_to_disk=True
         # but no filename (common for series-level configs).
+        tracing_update: Dict[str, Any] = {
+            "save_results_to_disk": False,
+            "filename": None,
+            # Reintegration is data-product generation; reverse check can
+            # be disabled to avoid effectively tracing each line twice.
+            "verify_by_reversing": not skip_verify_by_reversing,
+        }
+        if n_cores is not None:
+            tracing_update["n_cores"] = int(n_cores)
         tracing_config_base = experiment_config.tracing.model_copy(
-            update={
-                "save_results_to_disk": False,
-                "filename": None,
-                # Reintegration is data-product generation; reverse check can
-                # be disabled to avoid effectively tracing each line twice.
-                "verify_by_reversing": not skip_verify_by_reversing,
-            }
+            update=tracing_update
         )
         base_params = tracing_config_base.create_tracing_parameters()
         r_max_values = self._resolve_r_max_values(r_max=r_max, r_lc_values=r_lc_values)
@@ -338,6 +342,7 @@ class OFLReintegrationDataProductService:
         h_lc_coeff: float = 3**1.5 / 2.0,
         reversed_error_threshold: Optional[float] = None,
         skip_verify_by_reversing: bool = True,
+        n_cores: Optional[int] = None,
     ) -> Dict[int, ReintegrationDataProductResult]:
         """Build OFL data products for selected experiments.
 
@@ -345,6 +350,7 @@ class OFLReintegrationDataProductService:
         -----
         - This service does not persist any target experiment config.
         - Outputs are always written to data-products folders.
+        - ``n_cores``, if set, overrides each experiment YAML for the integration step.
         - For ``selection_mode="region"``, ``reversed_error_threshold`` keeps lines with
           ``reversed_error <= threshold`` (and NaNs); requires batches saved with
           ``reversed_error``.
@@ -413,6 +419,7 @@ class OFLReintegrationDataProductService:
                 template=template,
                 r_max=r_max,
                 skip_verify_by_reversing=skip_verify_by_reversing,
+                n_cores=n_cores,
             )
 
             counts = [len(x) for x in calc_result.edge_footpoints]
