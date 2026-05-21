@@ -59,114 +59,20 @@ _PA_SAVE_TEMPLATE = FieldLineTemplate(
 
 
 
-def patch_PA(results):
-    """Calculate basis vectors and PA for all points on all field lines.
-    
-    Args:
-        results: FieldLineSet with r_line and pa_line properties
-    
-    Returns:
-        FieldLineSet: Modified results with calculated PA stored in pa_line property
-    """
-    r_lines = results.get_property('r_line')
-    
-    if r_lines is None or len(r_lines) == 0:
-        error_msg = "No field line data found in results"
-        logger.error(error_msg)
-        return results
-    
-    e1_list = []
-    e2_list = []
-    n_norm_list = []
-    PA_calculated = []
-    
-    for line_idx in range(len(r_lines)):
-        if line_idx >= len(r_lines):
-            continue
-        
-        r_line = r_lines[line_idx]
-        
-        if r_line is None or len(r_line) == 0:
-            # Append None/empty arrays to maintain list structure
-            e1_list.append(None)
-            e2_list.append(None)
-            n_norm_list.append(None)
-            PA_calculated.append(np.array([], dtype=np.float32))
-            continue
-                
-        # Calculate along whole line
-        r64 = r_line.T.astype(np.float64)  # Shape: (3, n_points)
-        
-        ds = 1.0  # uniform sampling
-        r1 = np.gradient(r64, ds, axis=1)
-        r2 = np.gradient(r1, ds, axis=1)
-        
-        # Tangent vector along whole line
-        t_abs = np.linalg.norm(r1, axis=0, keepdims=True)
-        t_abs = np.maximum(t_abs, 1e-12)
-        t_norm = r1 / t_abs
-        
-        # Curvature normal along whole line
-        proj = np.sum(r2 * t_norm, axis=0, keepdims=True) * t_norm
-        n = r2 - proj
-        n_abs = np.linalg.norm(n, axis=0, keepdims=True)
-        n_abs = np.maximum(n_abs, 1e-12)
-        n_norm = n / n_abs
-        
-        
-        Omega = np.array([[0.0], [0.0], [1.0]])  # shape (3, 1)
-
-        # Project Ω onto plane perpendicular to t
-        Omega_dot_t = np.sum(Omega * t_norm, axis=0, keepdims=True)
-        e1 = Omega - Omega_dot_t * t_norm
-
-        e1_norm = np.linalg.norm(e1, axis=0, keepdims=True)
-        e1_norm = np.maximum(e1_norm, 1e-12)   # avoid division by zero near alignment
-        e1 /= e1_norm
-
-        # Second vector: completes right-handed frame
-        e2 = np.cross(t_norm.T, e1.T).T
-        e2_norm = np.linalg.norm(e2, axis=0, keepdims=True)
-        e2_norm = np.maximum(e2_norm, 1e-12)
-        e2 /= e2_norm
-
-        # Project curvature normal onto this basis
-        nom = np.sum(n_norm * e1, axis=0)
-        denom = np.sum(n_norm * e2, axis=0)
-        
-        PA = np.arctan2(nom, denom)
-        PA = 90 - np.rad2deg(PA)
-        PA = (PA + 90) % 180 -90
-        unstable_points = (n_abs[0, :] <= 1.1e-12) | (t_abs[0, :] <= 1.1e-12) | (e1_norm[0, :] <= 1.1e-12) | (e2_norm[0, :] <= 1.1e-12)
-        PA[unstable_points] = np.nan
-        
-        e1_list.append(e1)
-        e2_list.append(e2)
-        n_norm_list.append(n_norm)
-        # Convert to float32 to match stored PA format
-        PA = PA.astype(np.float32)
-        PA_calculated.append(PA)
-    
-    # Store calculated PA in results
-    results.set_property(pa_line=PA_calculated)
-    
-    return results, e1_list, e2_list, n_norm_list
-
-
-
-
-
 def _extract_pa_from_prepared_batch(
     prepared: Optional[FieldLineSet],
     *,
     grid_theta: np.ndarray,
     theta_tolerance: float,
 ) -> FieldLineSet:
-    """Theta-filter prepared lines and return a compact :class:`FieldLineSet`."""
+    """Theta-filter prepared lines and return a compact :class:`FieldLineSet`.
+
+    Expects ``prepare_line_batch_after_load`` to have filled ``pa_line`` via
+    :func:`~psr_magpy.line.property_calculator.calculate_pa_line` (same as tracing).
+    """
     if prepared is None or prepared.n_field_lines == 0:
         return FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
     try:
-        prepared, _, _, _ = patch_PA(prepared)
         tangent_theta_lines, tangent_phi_lines, r_line_data, pa_line_data = (
             extract_line_properties(prepared, require_pa=True)
         )

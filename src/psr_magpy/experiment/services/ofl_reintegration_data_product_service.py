@@ -220,6 +220,7 @@ class OFLReintegrationDataProductService:
         r_max: Optional[Union[float, np.ndarray, Dict[float, float]]] = None,
         skip_verify_by_reversing: bool = True,
         n_cores: Optional[int] = None,
+        dt_reint: Optional[float] = None,
     ) -> None:
         """Integrate selected footpoints and save line data products."""
         experiment_config = ExperimentConfig.load(experiment_config_path)
@@ -251,6 +252,8 @@ class OFLReintegrationDataProductService:
         }
         if n_cores is not None:
             tracing_update["n_cores"] = int(n_cores)
+        if dt_reint is not None:
+            tracing_update["dt"] = float(dt_reint)
         tracing_config_base = experiment_config.tracing.model_copy(
             update=tracing_update
         )
@@ -343,6 +346,7 @@ class OFLReintegrationDataProductService:
         reversed_error_threshold: Optional[float] = None,
         skip_verify_by_reversing: bool = True,
         n_cores: Optional[int] = None,
+        dt_reint: Optional[float] = None,
     ) -> Dict[int, ReintegrationDataProductResult]:
         """Build OFL data products for selected experiments.
 
@@ -420,6 +424,7 @@ class OFLReintegrationDataProductService:
                 r_max=r_max,
                 skip_verify_by_reversing=skip_verify_by_reversing,
                 n_cores=n_cores,
+                dt_reint=dt_reint,
             )
 
             counts = [len(x) for x in calc_result.edge_footpoints]
