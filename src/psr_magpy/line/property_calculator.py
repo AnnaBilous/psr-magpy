@@ -14,6 +14,21 @@ from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
 
+_MIN_ARC_SEGMENT = 1.0e-15
+
+
+def _arc_length_samples(r: np.ndarray) -> np.ndarray:
+    """Cumulative arc length ``s`` along ``r`` with shape ``(3, N)``; returns length ``N``."""
+    n_pts = int(r.shape[1])
+    if n_pts == 0:
+        return np.array([], dtype=np.float64)
+    if n_pts == 1:
+        return np.zeros(1, dtype=np.float64)
+    dr = np.diff(r, axis=1)
+    ds_seg = np.linalg.norm(dr, axis=0)
+    ds_seg = np.maximum(ds_seg, _MIN_ARC_SEGMENT)
+    return np.concatenate(([0.0], np.cumsum(ds_seg)))
+
 
 def calculate_pa_line(
     r: np.ndarray,
@@ -47,10 +62,9 @@ def calculate_pa_line(
         if line_R_max >= threshold_line_distance:
             
             r64 = r.astype(np.float64)  # Shape: (3, n_points)
-            
-            ds = 1.0  # uniform sampling
-            r1 = np.gradient(r64, ds, axis=1)
-            r2 = np.gradient(r1, ds, axis=1)
+            s = _arc_length_samples(r64)
+            r1 = np.gradient(r64, s, axis=1)
+            r2 = np.gradient(r1, s, axis=1)
             
             unstable_threshold = 1.1e-10
             
@@ -252,7 +266,7 @@ class PropertyCalculator:
         Parameters
         ----------
         r : np.ndarray
-            3D parametric curve r[k] = (x,y,z) sampled at uniform steps dt.
+            3D parametric curve r[k] = (x,y,z) with shape ``(3, N)``.
         
         Returns
         -------
@@ -262,9 +276,9 @@ class PropertyCalculator:
         if getattr(template.save_flags, PropertyName.CURVATURE_LINE.flag_name):
             if line_R_max >= self.threshold_line_distance:
                 r64 = r.astype(np.float64)
-                ds = 1.0 # uniform sampling
-                r1 = np.gradient(r64, ds, axis=1)     
-                r2 = np.gradient(r1,  ds, axis=1)     
+                s = _arc_length_samples(r64)
+                r1 = np.gradient(r64, s, axis=1)
+                r2 = np.gradient(r1, s, axis=1)     
                 t_abs = np.linalg.norm(r1, axis=0)    
                 t_norm = r1 / t_abs[None, :]           
                 proj = (np.sum(r2 * t_norm, axis=0, keepdims=True)) * t_norm
