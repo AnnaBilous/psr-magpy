@@ -22,7 +22,7 @@ class FieldCalculator(ABC):
     
     Provides unified interface for field calculation that supports both
     Python and Numba-compiled implementations. All calculations use
-    float64 for precision, with conversion to float32 handled at storage layer.
+    float64 for precision; ``r_line`` is stored as float64 at save time.
     
     Attributes
     ----------

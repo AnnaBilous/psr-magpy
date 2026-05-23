@@ -65,15 +65,31 @@ class IOUtils:
         return path
 
     @staticmethod
+    def _vla_fits_format(sample: Any) -> str:
+        """FITS variable-length array format: ``PE`` (float32) or ``PD`` (float64)."""
+        if sample is None:
+            return "PE"
+        arr = np.asarray(sample)
+        if arr.dtype == np.float64:
+            return "PD"
+        return "PE"
+
+    @staticmethod
     def get_fits_format(value: Any) -> str:
         """Determine FITS format for a value."""
         if value is None:
             return "D"
 
         if isinstance(value, list):
+            for item in value:
+                if item is not None and np.size(item) > 0:
+                    return IOUtils._vla_fits_format(item)
             return "PE"
 
         if isinstance(value, np.ndarray) and value.dtype == object and value.size > 0:
+            for item in value.ravel():
+                if item is not None and np.size(item) > 0:
+                    return IOUtils._vla_fits_format(item)
             return "PE"
 
         if isinstance(value, np.ndarray) and value.size > 0:

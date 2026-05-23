@@ -244,11 +244,11 @@ class PropertyCalculator:
         """Prepare position vectors for saving."""
         if getattr(template.save_flags, PropertyName.R_LINE.flag_name):
             if line_R_max >= self.threshold_line_distance:
-                r_line_save = r.T.astype(np.float32)
+                r_line_save = r.T.astype(np.float64)
                 logger.debug(f"Prepared r_line with {r_line_save.shape[0]} points")
             else:
                 r_line_save = np.array(
-                    [], dtype=np.float32
+                    [], dtype=np.float64
                 )  # Line traced but didn't reach threshold_line_distance
                 logger.debug(
                     "Line did not reach threshold_line_distance, saving empty array"

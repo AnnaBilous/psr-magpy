@@ -131,15 +131,20 @@ class FieldLineTemplate:
             save_b_r_ini_angle=True,
             save_reversed_error=True,
         )
-
+        
     @classmethod
-    def template_OFL_calc(cls) -> "FieldLineTemplate":
-        """Create configuration template with properties for open field line calculation (r_max, r_cyl_max, z_abs_max).
+    def template_OFL_and_line_coordinates(cls) -> "FieldLineTemplate":
+        """Create configuration template with properties for open field line calculation and line coordinates.
 
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.
         """
-        return cls(save_r_max=True, save_r_cyl_max=True, save_z_abs_max=True, save_reversed_error=True)
+        return cls(
+            save_r_cyl_max=True,
+            save_z_abs_max=True,
+            save_r_line=True,
+            save_reversed_error=True,
+        )
 
     @classmethod
     def template_OFL_subset(cls) -> "FieldLineTemplate":

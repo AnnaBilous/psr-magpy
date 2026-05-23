@@ -87,6 +87,11 @@ class TestIOUtils:
         arr_2d = np.array([[1, 2], [3, 4]])
         assert IOUtils.get_fits_format(arr_2d) == "2D"
 
+        r64 = [np.zeros(6, dtype=np.float64).reshape(2, 3)]
+        assert IOUtils.get_fits_format(r64) == "PD"
+        r32 = [np.zeros(6, dtype=np.float32).reshape(2, 3)]
+        assert IOUtils.get_fits_format(r32) == "PE"
+
 
 class TestDataIO:
     """Test data I/O base class."""

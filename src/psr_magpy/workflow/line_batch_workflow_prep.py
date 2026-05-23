@@ -216,7 +216,10 @@ def _along_line_need_fill(
         return False
     if existing is None:
         return True
-    ex = np.asarray(existing).ravel()
+    try:
+        ex = np.asarray(existing, dtype=np.float64).ravel()
+    except (TypeError, ValueError):
+        return True
     if ex.size == 0:
         return False
     if ex.size != n_points:

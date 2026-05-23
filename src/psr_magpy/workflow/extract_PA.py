@@ -93,6 +93,24 @@ def _extract_pa_from_prepared_batch(
         return FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
 
 
+def _field_line_from_load_template(
+    load_template: Optional[Union[FieldLineTemplate, FieldLine]],
+    line_source: LineDataSource,
+) -> FieldLine:
+    """Resolve FITS load template; defaults depend on ``line_source``."""
+    if load_template is not None:
+        if isinstance(load_template, FieldLineTemplate):
+            return FieldLine.from_template(load_template)
+        return load_template
+    if line_source == "lines":
+        return FieldLine.from_template(get_workflow_batch_load_template())
+    if line_source == "data_products_oflr":
+        return FieldLine.from_template(get_oflr_data_product_load_template())
+    error_msg = f"Unknown line_source: {line_source!r}"
+    logger.error(error_msg)
+    raise ValueError(error_msg)
+
+
 def _accumulate_pa_field_lines(
     acc: Optional[FieldLineSet], new: FieldLineSet
 ) -> FieldLineSet:
@@ -118,9 +136,11 @@ def _extract_pa_for_r_lc_batches(
     grid_theta: np.ndarray,
     theta_tolerance: float,
     batch_filename_prefix: Optional[str] = None,
+    target_template: Optional[FieldLineTemplate] = None,
 ) -> FieldLineSet:
     """Aggregate theta-filtered PA lines over batch FITS under ``batches_dir``."""
     reader = BatchDataReader(experiment_config.name)
+    enrich_template = target_template or _PA_EXTRACTION_TEMPLATE
 
     def process_batch(batch_data: FieldLineSet) -> FieldLineSet:
         prepared = prepare_line_batch_after_load(
@@ -131,7 +151,7 @@ def _extract_pa_for_r_lc_batches(
             max_radius=max_radius,
             r_min=r_min,
             reversed_error_threshold=reversed_error_threshold,
-            target_template=_PA_EXTRACTION_TEMPLATE,
+            target_template=enrich_template,
         )
         return _extract_pa_from_prepared_batch(
             prepared,
@@ -187,6 +207,8 @@ def make_extract_PA(
     trim_type: str = "cylinder",
     reversed_error_threshold: float = 0.01,
     output_filename_pattern: Optional[str] = None,
+    load_template: Optional[Union[FieldLineTemplate, FieldLine]] = None,
+    target_template: Optional[FieldLineTemplate] = None,
 ) -> Union[FieldLineSet, Dict[float, FieldLineSet]]:
     """Extract PA data filtered by theta tolerance from line batches.
 
@@ -212,6 +234,17 @@ def make_extract_PA(
         and ``r_lc``.
     trim_radius_coeff, r_min, trim_type, reversed_error_threshold
         Forwarded to :func:`prepare_line_batch_after_load`.
+    load_template
+        FITS columns to read per batch. If ``None``, ``\"lines\"`` uses
+        :func:`~psr_magpy.workflow.line_batch_workflow_prep.get_workflow_batch_load_template`
+        and ``\"data_products_oflr\"`` uses
+        :func:`~psr_magpy.workflow.line_batch_workflow_prep.get_oflr_data_product_load_template`.
+        Pass a template matching on-disk columns (e.g.
+        :meth:`~psr_magpy.line.field_line_template.FieldLineTemplate.template_OFL_and_line_coordinates`
+        for ``r_line`` without tangents); missing along-line fields are filled in
+        ``prepare_line_batch_after_load`` via ``target_template``.
+    target_template
+        Properties to enrich before trim/filter. Default is ``_PA_EXTRACTION_TEMPLATE``.
     """
     if line_source is not None:
         if parent_dir is None or series_name is None:
@@ -234,12 +267,7 @@ def make_extract_PA(
         output_filename_pattern or DEFAULT_EXTRACT_PA_OUTPUT_FILENAME_PATTERN
     )
 
-    if line_source == "lines":
-        load_template = FieldLine.from_template(get_workflow_batch_load_template())
-    elif line_source == "data_products_oflr":
-        load_template = FieldLine.from_template(get_oflr_data_product_load_template())
-    else:
-        raise ValueError(f"Unknown line_source: {line_source!r}")
+    load_field_line = _field_line_from_load_template(load_template, line_source)
 
     all_results: Dict[float, FieldLineSet] = {}
     out: Optional[Path] = None
@@ -266,7 +294,7 @@ def make_extract_PA(
             result = _extract_pa_for_r_lc_batches(
                 experiment_config,
                 batches_dir,
-                load_template,
+                load_field_line,
                 r_lc_f,
                 prepare_source="lines",
                 trim_type=trim_type,
@@ -275,6 +303,7 @@ def make_extract_PA(
                 reversed_error_threshold=reversed_error_threshold,
                 grid_theta=grid_theta,
                 theta_tolerance=theta_tolerance,
+                target_template=target_template,
             )
         else:
             batches_dir = str(
@@ -286,7 +315,7 @@ def make_extract_PA(
             result = _extract_pa_for_r_lc_batches(
                 experiment_config,
                 batches_dir,
-                load_template,
+                load_field_line,
                 r_lc_f,
                 prepare_source="data_products_oflr",
                 trim_type=trim_type,
@@ -296,6 +325,7 @@ def make_extract_PA(
                 grid_theta=grid_theta,
                 theta_tolerance=theta_tolerance,
                 batch_filename_prefix=oflr_prefix,
+                target_template=target_template,
             )
 
         all_results[r_lc_f] = result
@@ -327,6 +357,8 @@ def extract_PA_processor(
     radius_range: Optional[tuple] = None,
     trim_type: str = "cylinder",
     reversed_error_threshold: float = 0.01,
+    load_template: Optional[Union[FieldLineTemplate, FieldLine]] = None,
+    target_template: Optional[FieldLineTemplate] = None,
 ) -> FieldLineSet:
     """Extract PA from raw ``lines/`` batches (legacy single-directory API).
 
@@ -336,12 +368,12 @@ def extract_PA_processor(
     min_radius = radius_range[0] if radius_range is not None else None
     max_radius = radius_range[1] if radius_range is not None else None
 
-    load_template = FieldLine.from_template(get_workflow_batch_load_template())
+    load_field_line = _field_line_from_load_template(load_template, "lines")
 
     filtered_result = _extract_pa_for_r_lc_batches(
         experiment_config,
         lines_dir,
-        load_template,
+        load_field_line,
         float(r_lc),
         prepare_source="lines",
         trim_type=trim_type,
@@ -350,6 +382,7 @@ def extract_PA_processor(
         reversed_error_threshold=reversed_error_threshold,
         grid_theta=grid_theta,
         theta_tolerance=theta_tolerance,
+        target_template=target_template,
     )
 
     if save:
