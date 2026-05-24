@@ -45,6 +45,12 @@ from .open_field_line_edges import (
     calculate_and_save_OFL_regions,
 )
 from .solver import SolverError
+from .pa_theta_filter import (
+    FilteredPAData,
+    filter_field_line_set_by_theta,
+    filter_fieldline_points_by_theta,
+    theta_point_mask,
+)
 
 
 __all__ = [
@@ -71,4 +77,8 @@ __all__ = [
     "calculate_and_save_OFL_edges",
     "calculate_and_save_OFL_regions",
     "SolverError",
+    "FilteredPAData",
+    "filter_fieldline_points_by_theta",
+    "filter_field_line_set_by_theta",
+    "theta_point_mask",
 ]

@@ -8,6 +8,8 @@ from .grid_config import (
     RandomGridConfig,
     HealpixGridConfig,
     CustomGridConfig,
+    create_full_healpix_grid,
+    create_full_healpix_grid_for_experiment,
 )
 from .tracing_config import TracingConfig
 from .experiment_metadata import create_experiment_metadata
@@ -54,6 +56,8 @@ __all__ = [
     "RandomGridConfig",
     "HealpixGridConfig",
     "CustomGridConfig",
+    "create_full_healpix_grid",
+    "create_full_healpix_grid_for_experiment",
     "create_experiment_metadata",
     "ExperimentSeriesConfig",
     "experiment_matches_thD_fQ",

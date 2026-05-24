@@ -9,11 +9,9 @@ PSR-MagPy Documentation
 
    installation
    quickstart
-   user_guide/index
-   api/index
-   examples/index
-   contributing
-   changelog
+   pa_snapshot
+   tutorials/index
+   api/modules
 
 Indices and tables
 =================

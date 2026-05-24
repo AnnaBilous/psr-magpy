@@ -24,10 +24,7 @@ from psr_magpy.workflow.line_batch_workflow_prep import (
     resolve_data_products_oflr_directory,
     resolve_lines_directory,
 )
-from psr_magpy.workflow.workflow_utils import (
-    extract_line_properties,
-    normalize_line_arrays,
-)
+from psr_magpy.line.pa_theta_filter import filter_field_line_set_by_theta
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -73,17 +70,12 @@ def _extract_pa_from_prepared_batch(
     if prepared is None or prepared.n_field_lines == 0:
         return FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
     try:
-        tangent_theta_lines, tangent_phi_lines, r_line_data, pa_line_data = (
-            extract_line_properties(prepared, require_pa=True)
-        )
-        filtered_lines = _filter_field_line_points(
-            batch_subset=prepared,
-            tangent_theta_lines=tangent_theta_lines,
-            tangent_phi_lines=tangent_phi_lines,
-            r_line_data=r_line_data,
-            pa_line_data=pa_line_data,
-            grid_theta=grid_theta,
-            theta_tolerance=theta_tolerance,
+        filtered_lines = filter_field_line_set_by_theta(
+            prepared,
+            grid_theta,
+            theta_tolerance,
+            _PA_SAVE_TEMPLATE,
+            require_pa=True,
         )
         if filtered_lines:
             return FieldLineSet(filtered_lines, copy_data=True)
@@ -405,71 +397,4 @@ def extract_PA_processor(
 
     return filtered_result
 
-
-
-
-def _create_theta_mask(theta_line, grid_theta, theta_tolerance):
-    """Create mask for filtering points by theta tolerance (vectorized)."""
-    # Vectorized comparison: (N_points, 1) vs (1, N_grid) -> (N_points, N_grid)
-    theta_diff = np.abs(theta_line[:, np.newaxis] - grid_theta[np.newaxis, :])
-    # Check if any grid point matches for each field line point
-    return np.any(theta_diff < theta_tolerance, axis=1)
-
-
-def _filter_field_line_points(
-    batch_subset,
-    tangent_theta_lines,
-    tangent_phi_lines,
-    r_line_data,
-    pa_line_data,
-    grid_theta,
-    theta_tolerance,
-):
-    """Filter points on field lines by theta tolerance."""
-    filtered_lines = []
-    
-    for line_idx in range(batch_subset.n_field_lines):
-        theta_line = tangent_theta_lines[line_idx]
-        phi_line = tangent_phi_lines[line_idx]
-        r_line = r_line_data[line_idx]
-        pa_line = pa_line_data[line_idx] if pa_line_data is not None else None
-        
-        if theta_line is None or phi_line is None or r_line is None:
-            continue
-        
-        # Normalize arrays
-        result = normalize_line_arrays(theta_line, phi_line, r_line)
-        if result is None:
-            continue
-        theta_line, phi_line, r_line, point_radii = result
-        
-        # Create mask
-        theta_mask = _create_theta_mask(theta_line, grid_theta, theta_tolerance)
-        
-        # Use theta mask directly
-        combined_mask = theta_mask
-        
-        if not np.any(combined_mask):
-            continue
-        
-        # Apply filter
-        filtered_r_line = r_line[combined_mask]
-        filtered_theta_line = theta_line[combined_mask]
-        filtered_phi_line = phi_line[combined_mask]
-        filtered_pa_line = pa_line[combined_mask] if pa_line is not None else None
-        
-        # Create FieldLine object for this filtered line
-        filtered_line = FieldLine.from_template(_PA_SAVE_TEMPLATE)
-        filtered_line.set_property(
-            footpoint_id=batch_subset.get_property('footpoint_id')[line_idx],
-            r_line=filtered_r_line,
-            tangent_theta=filtered_theta_line,
-            tangent_phi=filtered_phi_line,
-        )
-        if filtered_pa_line is not None:
-            filtered_line.set_property(pa_line=filtered_pa_line)
-        
-        filtered_lines.append(filtered_line)
-    
-    return filtered_lines
 

@@ -234,3 +234,55 @@ class GridConfig(BaseModel):
         else:
             raise PSRMagPyGridError("No grid type specified")
 
+
+def create_full_healpix_grid(healpix_config: HealpixGridConfig) -> HealpixGrid:
+    """Create a full HEALPix sphere, ignoring subset flags and saved grid files.
+
+    Use when array indices (e.g. ``footpoint_id`` on extracted PA lines) refer to
+    the complete pixel ordering at ``healpix_config.nside``, not a stored subset grid.
+
+    Parameters
+    ----------
+    healpix_config
+        Experiment HEALPix settings; only ``nside`` is used for the new grid.
+
+    Returns
+    -------
+    HealpixGrid
+        Full sphere with ``nline == 12 * nside**2``.
+    """
+    full_config = healpix_config.model_copy(
+        update={"subset": False, "grid_file_path": None},
+    )
+    grid = GridConfig(healpix=full_config).create_grid()
+    if grid is None:
+        error_msg = "Failed to create full HEALPix grid from config"
+        logger.error(error_msg)
+        raise PSRMagPyGridError(error_msg)
+    if not isinstance(grid, HealpixGrid):
+        error_msg = f"Expected HealpixGrid, got {type(grid).__name__}"
+        logger.error(error_msg)
+        raise PSRMagPyGridError(error_msg)
+    logger.info(
+        "Created full HEALPix grid nside=%d, npix=%d (subset/file ignored)",
+        grid.nside,
+        grid.nline,
+    )
+    return grid
+
+
+def create_full_healpix_grid_for_experiment(
+    experiment_config: Any,
+) -> HealpixGrid:
+    """Full HEALPix grid for one experiment config (see :func:`create_full_healpix_grid`)."""
+    grid_cfg = getattr(experiment_config, "grid", None)
+    healpix = getattr(grid_cfg, "healpix", None) if grid_cfg is not None else None
+    if healpix is None:
+        error_msg = (
+            f"Experiment {getattr(experiment_config, 'name', experiment_config)!r} "
+            "has no healpix grid configuration"
+        )
+        logger.error(error_msg)
+        raise PSRMagPyGridError(error_msg)
+    return create_full_healpix_grid(healpix)
+
