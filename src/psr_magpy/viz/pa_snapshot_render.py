@@ -5,13 +5,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from psr_magpy.line.pa_theta_filter import FilteredPAData, filter_fieldline_points_by_theta
 from psr_magpy.utils.logging_config import get_logger
+from psr_magpy.viz.field_line_plotting import FieldLinePlotConfig
 from psr_magpy.viz.healpix import project_array_to_equirectangular
 from psr_magpy.viz.oflr import plot_OFLR_em_map, plot_OFLR_map
 from psr_magpy.viz.pa import compute_colors_with_radius_saturation, plot_PA_vs_phi
@@ -58,6 +59,9 @@ class SnapshotRenderConfig:
     lw_los: float = 1.0
     show_axes_inset: bool = DEFAULT_SHOW_AXES_INSET
     skymap_vmax_percentile: float = 99.0
+    field_line_cfg_for_r_lc: Optional[
+        Callable[[float], FieldLinePlotConfig]
+    ] = None
 
     def resolved_save_dir(self) -> Optional[Path]:
         """Explicit ``save_dir`` or first set env var (if enabled)."""
@@ -72,6 +76,12 @@ class SnapshotRenderConfig:
         if self.projection is not None:
             return self.projection
         return pa_snapshot_projection_config(r_lc)
+
+    def field_line_cfg_for(self, r_lc: float) -> FieldLinePlotConfig:
+        """Per-panel field-line style; default from ``viz.presets``."""
+        if self.field_line_cfg_for_r_lc is not None:
+            return self.field_line_cfg_for_r_lc(r_lc)
+        return pa_field_line_cfg_for_r_lc(r_lc)
 
 
 @dataclass
@@ -283,7 +293,7 @@ def render_pa_snapshot_panel(
         rotph0=rot_ph0,
         incl=incl,
         projection=projection,
-        cfg=pa_field_line_cfg_for_r_lc(snapshot.R_LC),
+        cfg=cfg.field_line_cfg_for(snapshot.R_LC),
         r_line_stacked=scatter.r_line_stacked,
         scatter_colors=scatter.scatter_colors,
         show_axes_inset=cfg.show_axes_inset,
@@ -363,6 +373,7 @@ def render_pa_snapshot_batch(
         lw_los=cfg.lw_los,
         show_axes_inset=cfg.show_axes_inset,
         skymap_vmax_percentile=cfg.skymap_vmax_percentile,
+        field_line_cfg_for_r_lc=cfg.field_line_cfg_for_r_lc,
         resolve_save_dir_from_env=False,
         apply_rcparams=False,
     )
