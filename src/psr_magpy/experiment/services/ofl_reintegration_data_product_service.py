@@ -85,6 +85,41 @@ class OFLReintegrationDataProductService:
         logger.error(error_msg)
         raise TypeError(error_msg)
 
+    def _build_r_max_lookup(
+        self,
+        r_max: Optional[Union[float, np.ndarray, Dict[float, float]]],
+        r_lc_values: np.ndarray,
+    ) -> Dict[float, Optional[float]]:
+        """Map each ``R_LC`` to its integration cap (caller input order)."""
+        resolved = self._resolve_r_max_values(
+            r_max=r_max, r_lc_values=r_lc_values
+        )
+        return {float(r_lc): resolved[i] for i, r_lc in enumerate(r_lc_values)}
+
+    def _align_r_max_to_r_lc(
+        self,
+        r_lc_values: np.ndarray,
+        r_max_lookup: Dict[float, Optional[float]],
+    ) -> List[Optional[float]]:
+        """Return ``r_max`` values in the same order as ``r_lc_values``."""
+        aligned: List[Optional[float]] = []
+        for r_lc in r_lc_values:
+            key = float(r_lc)
+            if key in r_max_lookup:
+                aligned.append(r_max_lookup[key])
+                continue
+            match = None
+            for lookup_key, value in r_max_lookup.items():
+                if np.isclose(lookup_key, key, rtol=0.0, atol=1e-6):
+                    match = value
+                    break
+            if match is None:
+                error_msg = f"r_max missing for R_LC={key:.2f}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            aligned.append(match)
+        return aligned
+
     def _calculate_footpoints_only(
         self,
         *,
@@ -311,6 +346,11 @@ class OFLReintegrationDataProductService:
                 tracing_params = base_params.model_copy(
                     update={"integration": integration_params}
                 )
+                logger.info(
+                    "Reintegration R_LC=%.2f: max_integration_radius=%.4f",
+                    r_lc,
+                    r_max_cur,
+                )
 
             output_params = tracing_params.output.model_copy(
                 update={
@@ -378,6 +418,8 @@ class OFLReintegrationDataProductService:
         if r_lc.size == 0:
             raise ValueError("r_lc_values must contain at least one value")
 
+        r_max_lookup = self._build_r_max_lookup(r_max=r_max, r_lc_values=r_lc)
+
         if template is None:
             # Default minimal template for reintegration data products.
             template = FieldLineTemplate.template_line_coordinates_only()
@@ -414,14 +456,16 @@ class OFLReintegrationDataProductService:
                 selection_mode=selection_mode,
                 reversed_error_threshold=reversed_error_threshold,
             )
+            calc_r_lc = np.asarray(calc_result.R_LC, dtype=float)
+            r_max_aligned = self._align_r_max_to_r_lc(calc_r_lc, r_max_lookup)
             self._integrate_selected_footpoints(
                 experiment_config_path=exp_config_path,
                 selection_mode=selection_mode,
                 output_dir=output_dir,
-                r_lc_values=np.asarray(calc_result.R_LC, dtype=float),
+                r_lc_values=calc_r_lc,
                 selected_footpoints=calc_result.edge_footpoints,
                 template=template,
-                r_max=r_max,
+                r_max=np.asarray(r_max_aligned, dtype=float),
                 skip_verify_by_reversing=skip_verify_by_reversing,
                 n_cores=n_cores,
                 dt_reint=dt_reint,
