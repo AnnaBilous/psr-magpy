@@ -147,6 +147,21 @@ class FieldLineTemplate:
         )
 
     @classmethod
+    def template_OFL_calc(cls) -> "FieldLineTemplate":
+        """Create configuration template for open field line calculation (no along-line coords).
+
+        Saves ``r_max``, ``r_cyl_max``, ``z_abs_max`` for OFL footpoint selection on the
+        initial healpix integration grid. Use :meth:`template_OFL_and_line_coordinates`
+        when ``r_line`` is required during tracing.
+        """
+        return cls(
+            save_r_max=True,
+            save_r_cyl_max=True,
+            save_z_abs_max=True,
+            save_reversed_error=True,
+        )
+
+    @classmethod
     def template_OFL_subset(cls) -> "FieldLineTemplate":
         """Create minimal configuration template for OFL subset grid creation.
 
