@@ -33,7 +33,7 @@ def prepare_pa_scatter_data(
     *,
     radius_coeff: float = 0.2,
 ) -> PreparedPAScatter:
-    """Sort by radius and optional HSV scatter colours."""
+    """Sort by radius (descending draw order: smallest r on top) and optional colours."""
     pa_values = filtered.pa_values
     phi_values = filtered.phi_values
     colatitude_values = filtered.colatitude_values
@@ -56,7 +56,7 @@ def prepare_pa_scatter_data(
             vmax=180,
             cycle_period=10.0,
         )
-        order = np.argsort(radii)
+        order = np.argsort(radii)[::-1]
         pa_values = pa_values[order]
         phi_values = phi_values[order]
         colatitude_values = colatitude_values[order]

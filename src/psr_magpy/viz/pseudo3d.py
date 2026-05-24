@@ -200,8 +200,15 @@ def load_oflr_edge_lines_for_r_lc(
     oflr_edges_dir: Path,
     experiment_number: int,
     r_lc: float,
+    *,
+    r_max: Optional[float] = None,
+    trim_type: str = "sphere",
+    r_trim_min: Optional[float] = None,
 ) -> Optional[FieldLineSet]:
-    """Load OFLR edge lines for one experiment and ``R_LC`` (trimmed to cylinder)."""
+    """Load OFLR edge lines for one experiment and ``R_LC``.
+
+    Trims in-place to ``r_max`` (emission cap) when given; otherwise to ``r_lc``.
+    """
     try:
         fls_all = load_OFLR_line_data(
             experiment_number,
@@ -237,7 +244,12 @@ def load_oflr_edge_lines_for_r_lc(
         )
         fls = fls_all[r_lc_rounded]
 
-    fls.trim_to_light_cylinder(R_LC=r_lc, trim_type="cylinder")
+    r_trim = float(r_max) if r_max is not None else float(r_lc)
+    fls.trim_to_light_cylinder(
+        R_LC=r_trim,
+        trim_type=trim_type,
+        r_trim_min=r_trim_min,
+    )
     return fls
 
 
@@ -321,12 +333,20 @@ def plot_field_lines_on_axes(
     scatter_colors: Optional[np.ndarray] = None,
     show_axes_inset: bool = False,
     edge_field_line_set: Optional[FieldLineSet] = None,
+    edge_r_max: Optional[float] = None,
+    edge_trim_type: str = "sphere",
+    edge_r_trim_min: Optional[float] = None,
 ) -> None:
     """Pseudo-3D edge lines + optional PA scatter on each axis in ``axs_FL``."""
     fls = edge_field_line_set
     if fls is None:
         fls = load_oflr_edge_lines_for_r_lc(
-            Path(oflr_edges_dir), experiment_number, R_LC
+            Path(oflr_edges_dir),
+            experiment_number,
+            R_LC,
+            r_max=edge_r_max,
+            trim_type=edge_trim_type,
+            r_trim_min=edge_r_trim_min,
         )
 
     nlayers = get_Nlayers(projection.XZview, projection.YtoX, projection.K)

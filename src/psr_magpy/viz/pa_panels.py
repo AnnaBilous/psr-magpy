@@ -13,6 +13,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
+from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.pa_theta_filter import FilteredPAData, filter_fieldline_points_by_theta
 from psr_magpy.viz.field_line_style import FieldLinePlotConfig
 from psr_magpy.viz.healpix import project_array_to_equirectangular
@@ -96,7 +97,7 @@ def plot_snapshot_oflr_panel(
     theta_obs: float,
     filtered: FilteredPAData,
     *,
-    nscl: str = "LightCyan",
+    color_NS: str = "cyan",
     cl_los: str = "b",
     lw_los: float = 1.0,
     **imshow_kwargs: Any,
@@ -107,7 +108,7 @@ def plot_snapshot_oflr_panel(
         snapshot.oflr_longitude_deg,
         snapshot.oflr_latitude_deg,
         ax=ax,
-        NScl=nscl,
+        NScl=color_NS,
         theta_obs=theta_obs,
         cl_LOS=cl_los,
         lw_LOS=lw_los,
@@ -124,7 +125,7 @@ def plot_snapshot_oflr_panel(
         oflr_em_lon,
         oflr_em_lat,
         ax=ax,
-        NScl=nscl,
+        NScl=color_NS,
         theta_obs=theta_obs,
         cl_LOS=cl_los,
         lw_LOS=lw_los,
@@ -141,6 +142,8 @@ def plot_snapshot_pa_panel(
     theta_tolerance: float = 0.5,
     scatter_size: float = 0.5,
     scatter_alpha: float = 1.0,
+    scatter_marker: str = ".",
+    scatter_edgecolors: Optional[str] = "none",
 ) -> Tuple[Figure, Axes]:
     """Draw PA vs φ panel (RVM curve + scatter)."""
     fig = ax.figure
@@ -158,8 +161,11 @@ def plot_snapshot_pa_panel(
     plot_kwargs = dict(
         s=scatter_size,
         alpha=scatter_alpha,
+        marker=scatter_marker,
         theta_tolerance=theta_tolerance,
     )
+    if scatter_edgecolors is not None:
+        plot_kwargs["edgecolors"] = scatter_edgecolors
     if scatter.scatter_colors is not None:
         plot_PA_vs_phi(
             scatter.pa_values,
@@ -197,6 +203,10 @@ def plot_snapshot_field_lines_panel(
     projection: ProjectionConfig,
     field_line_cfg: FieldLinePlotConfig,
     show_axes_inset: bool = False,
+    edge_field_line_set: Optional[FieldLineSet] = None,
+    edge_r_max: Optional[float] = None,
+    edge_trim_type: str = "sphere",
+    edge_r_trim_min: Optional[float] = None,
 ) -> None:
     """Draw pseudo-3D field-line panels on ``axes`` (typically three subplots)."""
     plot_field_lines_on_axes(
@@ -211,4 +221,8 @@ def plot_snapshot_field_lines_panel(
         r_line_stacked=scatter.r_line_stacked,
         scatter_colors=scatter.scatter_colors,
         show_axes_inset=show_axes_inset,
+        edge_field_line_set=edge_field_line_set,
+        edge_r_max=edge_r_max,
+        edge_trim_type=edge_trim_type,
+        edge_r_trim_min=edge_r_trim_min,
     )
