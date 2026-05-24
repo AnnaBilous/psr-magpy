@@ -13,7 +13,11 @@ import pytest
 
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
-from psr_magpy.viz.presets import PA_cfg_small_RLC
+from psr_magpy.viz.field_line_style import (
+    FieldLinePlotConfig,
+    NamedColorGenerator,
+    PowerLawWidthGenerator,
+)
 from psr_magpy.viz.pseudo3d import (
     ProjectionConfig,
     create_plot_figure,
@@ -24,6 +28,22 @@ from psr_magpy.viz.pseudo3d import (
     plot_field_lines_on_axes,
     plot_scattered_points,
 )
+
+
+_TEST_FIELD_LINE_CFG = FieldLinePlotConfig(
+    [NamedColorGenerator(colors=["LightSlateGray", "SlateGray", "DarkSlateGray"])],
+    [
+        PowerLawWidthGenerator(
+            np.array([0.002]), np.array([0.08]), np.array([0.01])
+        )
+    ],
+    color_NS="PaleTurquoise",
+    color_space="w",
+)
+
+
+def _test_field_line_cfg() -> FieldLinePlotConfig:
+    return _TEST_FIELD_LINE_CFG
 
 
 def test_projection_config_axis_limit_default():
@@ -65,7 +85,7 @@ def test_create_plot_figure_smoke():
         ZtoX=1.0,
         Nlayers=20,
         K=30.0,
-        cfg=PA_cfg_small_RLC,
+        cfg=_test_field_line_cfg(),
         n_plots=1,
     )
     assert fig is not None
@@ -78,7 +98,7 @@ def test_create_plot_figure_smoke():
 def test_plot_field_lines_for_r_lc_smoke():
     fls = _sample_field_line_set()
     fig, ax, line_groups, zorder_layer = create_plot_figure(
-        5.0, 1.0, 20, 30.0, PA_cfg_small_RLC, 1
+        5.0, 1.0, 20, 30.0, _test_field_line_cfg(), 1
     )
     plot_field_lines_for_r_lc(
         fls,
@@ -89,7 +109,7 @@ def test_plot_field_lines_for_r_lc_smoke():
         YtoX=3.5,
         K=30.0,
         zorder_layer=zorder_layer,
-        color_func=PA_cfg_small_RLC.color_functions[0],
+        color_func=_test_field_line_cfg().color_functions[0],
         plot_idx=0,
     )
     assert len(ax.lines) > 0 or len(ax.collections) > 0
@@ -118,7 +138,7 @@ def test_plot_field_lines_on_axes_no_edges(tmp_path):
             rotph0=[-90, 0, 90],
             incl=[-7, -7, -7],
             projection=projection,
-            cfg=PA_cfg_small_RLC,
+            cfg=_test_field_line_cfg(),
         )
     plt.close(fig)
 
@@ -135,7 +155,7 @@ def test_plot_field_lines_on_axes_with_edge_set():
         rotph0=[-90.0],
         incl=[-7.0],
         projection=projection,
-        cfg=PA_cfg_small_RLC,
+        cfg=_test_field_line_cfg(),
         edge_field_line_set=fls,
         show_axes_inset=True,
     )

@@ -152,7 +152,7 @@ def load_snapshot_data(
     Returns
     -------
     SnapshotData
-        Bundle for :func:`render_pa_snapshot_panel` (Phase 6).
+        Bundle for :func:`analysis.pa_snapshot.render.render_pa_snapshot_panel`.
     """
     data_dir = Path(data_dir)
     r_lc = float(r_lc)

@@ -1,4 +1,4 @@
-"""Field line plotting configuration and color/width generators."""
+"""Field line style configuration and color/width generators."""
 
 import numpy as np
 import matplotlib

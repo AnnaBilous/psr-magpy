@@ -15,7 +15,6 @@ from psr_magpy.viz.los import overlay_observer_los
 from psr_magpy.viz.oflr import plot_OFLR_em_map, plot_OFLR_map, plot_healpix_scatter
 from psr_magpy.viz.pa import plot_PA_vs_phi
 from psr_magpy.viz.skymap import plot_skymap
-from psr_magpy.viz.style import PA_SNAPSHOT_RCPARAMS, apply_pa_snapshot_rcparams
 
 
 @pytest.fixture(autouse=True)
@@ -71,13 +70,6 @@ def test_overlay_observer_los():
     assert len(ax.lines) == 1
     overlay_observer_los(ax, None)
     assert len(ax.lines) == 1
-
-
-def test_apply_pa_snapshot_rcparams():
-    apply_pa_snapshot_rcparams()
-    assert matplotlib.rcParams["xtick.labelsize"] == PA_SNAPSHOT_RCPARAMS[
-        "xtick.labelsize"
-    ]
 
 
 def test_plot_healpix_scatter_smoke():

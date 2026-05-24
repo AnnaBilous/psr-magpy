@@ -2,16 +2,74 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
+from psr_magpy.line.pa_theta_filter import FilteredPAData
 from psr_magpy.utils.logging_config import get_logger
 from psr_magpy.utils.physical_conversions import PA_RVM
 
 logger = get_logger(__name__, console_format_brief=True)
+
+
+@dataclass
+class PreparedPAScatter:
+    """θ-filtered PA samples ready for PA and pseudo-3D scatter panels."""
+
+    pa_values: np.ndarray
+    phi_values: np.ndarray
+    colatitude_values: Optional[np.ndarray]
+    r_line_stacked: Optional[np.ndarray]
+    scatter_colors: Optional[np.ndarray]
+
+
+def prepare_pa_scatter_data(
+    filtered: FilteredPAData,
+    r_lc: float,
+    *,
+    radius_coeff: float = 0.2,
+) -> PreparedPAScatter:
+    """Sort by radius and optional HSV scatter colours."""
+    pa_values = filtered.pa_values
+    phi_values = filtered.phi_values
+    colatitude_values = filtered.colatitude_values
+    r_line_stacked = filtered.r_line_stacked
+    scatter_colors = None
+
+    if (
+        len(pa_values) > 0
+        and r_line_stacked is not None
+        and len(r_line_stacked) == len(pa_values)
+        and colatitude_values is not None
+    ):
+        radii = np.linalg.norm(r_line_stacked, axis=1)
+        scatter_colors = compute_colors_with_radius_saturation(
+            colatitude_values,
+            radii,
+            radius_coeff * float(r_lc),
+            cmap_name="hsv",
+            vmin=0,
+            vmax=180,
+            cycle_period=10.0,
+        )
+        order = np.argsort(radii)
+        pa_values = pa_values[order]
+        phi_values = phi_values[order]
+        colatitude_values = colatitude_values[order]
+        r_line_stacked = r_line_stacked[order]
+        scatter_colors = scatter_colors[order]
+
+    return PreparedPAScatter(
+        pa_values=pa_values,
+        phi_values=phi_values,
+        colatitude_values=colatitude_values,
+        r_line_stacked=r_line_stacked,
+        scatter_colors=scatter_colors,
+    )
 
 def compute_colors_with_radius_saturation(
     colatitude_values: np.ndarray,

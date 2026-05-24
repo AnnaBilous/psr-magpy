@@ -1,4 +1,5 @@
 """2D field visualization module."""
+# Not used now, for example purposes. 
 
 from typing import Optional, Tuple, Dict, Any, Union, Literal, TYPE_CHECKING
 import numpy as np
