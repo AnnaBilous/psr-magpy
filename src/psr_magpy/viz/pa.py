@@ -286,6 +286,7 @@ def plot_PA_scatter(
     else:
         fig = ax.figure
     
+    phi_values = phi_values % 360
     phi_values = 360 - phi_values
     phi_sorted = phi_values + 270
     phi_sorted[phi_sorted>360] -= 360

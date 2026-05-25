@@ -129,12 +129,23 @@ def _extract_pa_for_r_lc_batches(
     theta_tolerance: float,
     batch_filename_prefix: Optional[str] = None,
     target_template: Optional[FieldLineTemplate] = None,
+    save_dir: Optional[Path] = None,
+    save_filename_stem: Optional[str] = None,
+    batch_flush_threshold_mb: float = 100.0,
 ) -> FieldLineSet:
-    """Aggregate theta-filtered PA lines over batch FITS under ``batches_dir``."""
+    """Theta-filter PA lines from batch FITS under ``batches_dir``.
+
+    When ``save_dir`` is set, filtered lines are accumulated in memory and
+    flushed to ``{save_filename_stem}_batch_{NNN}.fits`` whenever the buffer
+    exceeds ``batch_flush_threshold_mb`` megabytes (estimated via
+    :meth:`FieldLineSet.estimate_size`).  After the loop, remaining lines
+    (or an empty sentinel) are flushed and all batch files are renamed to
+    ``_batch_NNN_out_of_NNN.fits`` via :class:`BatchFileManager`.
+    """
     reader = BatchDataReader(experiment_config.name)
     enrich_template = target_template or _PA_EXTRACTION_TEMPLATE
 
-    def process_batch(batch_data: FieldLineSet) -> FieldLineSet:
+    def _filter_batch(batch_data: FieldLineSet) -> FieldLineSet:
         prepared = prepare_line_batch_after_load(
             batch_data,
             source=prepare_source,
@@ -151,10 +162,64 @@ def _extract_pa_for_r_lc_batches(
             theta_tolerance=theta_tolerance,
         )
 
+    if save_dir is not None:
+        save_dir = Path(save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        stem = save_filename_stem or f"extract_PA_RLC_{r_lc:05.2f}"
+        base_filepath = save_dir / f"{stem}.fits"
+
+        buffer = FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
+        flush_bytes = batch_flush_threshold_mb * 1024 * 1024
+        batch_idx = 0
+        total_lines = 0
+
+        for batch_data in reader.iter_batch_data(
+            load_template, batches_dir,
+            batch_filename_prefix=batch_filename_prefix,
+        ):
+            filtered = _filter_batch(batch_data)
+            if filtered.n_field_lines > 0:
+                buffer.append(filtered)
+                total_lines += filtered.n_field_lines
+
+            if buffer.estimate_size() >= flush_bytes:
+                batch_idx += 1
+                out_path = save_dir / f"{stem}_batch_{batch_idx:03d}.fits"
+                save_data(buffer, out_path, overwrite=True)
+                logger.debug(
+                    "Flushed batch %03d: %d lines -> %s",
+                    batch_idx, buffer.n_field_lines, out_path.name,
+                )
+                buffer = FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
+
+        # Flush remainder (write even if empty — sentinel for "processed, nothing left")
+        batch_idx += 1
+        out_path = save_dir / f"{stem}_batch_{batch_idx:03d}.fits"
+        save_data(buffer, out_path, overwrite=True)
+        logger.debug(
+            "Flushed final batch %03d: %d lines -> %s",
+            batch_idx, buffer.n_field_lines, out_path.name,
+        )
+
+        # Rename _batch_001 … _batch_N → _batch_001_out_of_N … _batch_N_out_of_N
+        from psr_magpy.io.batch_file_manager import BatchFileManager
+        BatchFileManager(
+            base_filename=str(base_filepath),
+            output_directory=save_dir,
+            organize_files=True,
+            cleanup_batch_files=False,
+        ).organize_batch_files()
+
+        logger.info(
+            "Saved %d filtered field lines in %d batches for R_LC = %.2f",
+            total_lines, batch_idx, r_lc,
+        )
+        return FieldLineSet(_PA_SAVE_TEMPLATE, copy_data=False)
+
     filtered_result = reader.process_batches_incremental(
         template=load_template,
         lines_dir=batches_dir,
-        processor_fn=process_batch,
+        processor_fn=_filter_batch,
         accumulator_fn=_accumulate_pa_field_lines,
         initial_value=None,
         batch_filename_prefix=batch_filename_prefix,
@@ -201,6 +266,7 @@ def make_extract_PA(
     output_filename_pattern: Optional[str] = None,
     load_template: Optional[Union[FieldLineTemplate, FieldLine]] = None,
     target_template: Optional[FieldLineTemplate] = None,
+    batch_flush_threshold_mb: float = 100.0,
 ) -> Union[FieldLineSet, Dict[float, FieldLineSet]]:
     """Extract PA data filtered by theta tolerance from line batches.
 
@@ -281,6 +347,16 @@ def make_extract_PA(
             max_radius,
         )
 
+        save_stem = (
+            pa_pattern.format(
+                experiment_number=experiment_number,
+                experiment_name=experiment_config.name,
+                r_lc=r_lc_f,
+            ).removesuffix(".fits")
+            if save and out is not None
+            else None
+        )
+
         if line_source == "lines":
             batches_dir = str(resolve_lines_directory(parent, series_name))
             result = _extract_pa_for_r_lc_batches(
@@ -296,6 +372,9 @@ def make_extract_PA(
                 grid_theta=grid_theta,
                 theta_tolerance=theta_tolerance,
                 target_template=target_template,
+                save_dir=out,
+                save_filename_stem=save_stem,
+                batch_flush_threshold_mb=batch_flush_threshold_mb,
             )
         else:
             batches_dir = str(
@@ -318,20 +397,12 @@ def make_extract_PA(
                 theta_tolerance=theta_tolerance,
                 batch_filename_prefix=oflr_prefix,
                 target_template=target_template,
+                save_dir=out,
+                save_filename_stem=save_stem,
+                batch_flush_threshold_mb=batch_flush_threshold_mb,
             )
 
         all_results[r_lc_f] = result
-
-        if save and out is not None:
-            filepath = out / pa_pattern.format(
-                experiment_number=experiment_number,
-                experiment_name=experiment_config.name,
-                r_lc=r_lc_f,
-            )
-            _save_extracted_pa_field_line_set(result, filepath)
-            logger.info(
-                "Saved filtered FieldLineSet for R_LC=%.2f to %s", r_lc_f, filepath
-            )
 
     if len(R_LC_values) == 1:
         return all_results[float(R_LC_values[0])]
