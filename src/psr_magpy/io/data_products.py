@@ -271,27 +271,47 @@ def load_extracted_pa_fits(
     *,
     field_line_set_type: Type[FieldLineSet] = FieldLineSet,
 ) -> FieldLineSet:
-    """Load a :class:`~psr_magpy.line.field_line_set.FieldLineSet` from extracted PA FITS."""
+    """Load a :class:`~psr_magpy.line.field_line_set.FieldLineSet` from extracted PA FITS.
+
+    Loads batched files (``{stem}_batch_*.fits``) from the same directory.
+    Falls back to a legacy single file if no batches are found.
+    """
     from psr_magpy.io import load_data
+    from psr_magpy.experiment.services.batch_data_reader import BatchDataReader
+    from psr_magpy.line.field_line import FieldLine
+    from psr_magpy.workflow.extract_PA import _PA_SAVE_TEMPLATE
 
     pa_path = Path(pa_path)
-    if not pa_path.is_file():
-        error_msg = f"PA data file not found: {pa_path}"
-        logger.error(error_msg)
-        raise FileNotFoundError(error_msg)
-
-    field_line_set = load_data(field_line_set_type, str(pa_path))
-    if field_line_set is None:
-        error_msg = f"Failed to load FieldLineSet from {pa_path}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
-    logger.info(
-        "Loaded %d field lines from %s",
-        field_line_set.n_field_lines,
-        pa_path,
+    template = FieldLine.from_template(_PA_SAVE_TEMPLATE)
+    reader = BatchDataReader(experiment_name=pa_path.stem)
+    combined = reader.load_combined_batch_data(
+        template=template,
+        lines_dir=str(pa_path.parent),
+        batch_filename_prefix=pa_path.stem,
     )
-    return field_line_set
+    if combined is not None and combined.n_field_lines > 0:
+        logger.info(
+            "Loaded %d field lines from batched files (%s_batch_*.fits)",
+            combined.n_field_lines,
+            pa_path.stem,
+        )
+        return combined
+
+    # Legacy single-file fallback
+    if pa_path.is_file():
+        logger.info("No batched files found, loading legacy single file: %s", pa_path)
+        field_line_set = load_data(field_line_set_type, str(pa_path))
+        if field_line_set is not None:
+            logger.info(
+                "Loaded %d field lines from %s",
+                field_line_set.n_field_lines,
+                pa_path,
+            )
+            return field_line_set
+
+    error_msg = f"No PA data found (batched or single file): {pa_path}"
+    logger.error(error_msg)
+    raise FileNotFoundError(error_msg)
 
 
 def load_extracted_pa_product(
