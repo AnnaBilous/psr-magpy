@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Optional
 import glob
 
+import numpy as np
+
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.utils.exceptions import PSRMagPyValidationError
@@ -58,14 +60,14 @@ class BatchDataReader:
         logger.info(f"Combined field line set: {combined.n_field_lines} field lines")
 
         if hasattr(combined, "footpoint_id") and combined.footpoint_id is not None:
-            footpoint_ids = combined.footpoint_id
-            unique_ids = set(footpoint_ids)
-            if len(unique_ids) != len(footpoint_ids):
-                duplicates = [id_ for id_ in unique_ids if footpoint_ids.count(id_) > 1]
+            footpoint_ids = np.asarray(combined.footpoint_id)
+            unique_ids, counts = np.unique(footpoint_ids, return_counts=True)
+            if unique_ids.size != footpoint_ids.size:
+                duplicates = unique_ids[counts > 1]
                 raise PSRMagPyValidationError(
-                    f"Duplicate footpoint indices found: {duplicates[:10]}{'...' if len(duplicates) > 10 else ''}"
+                    f"Duplicate footpoint indices found: {duplicates[:10].tolist()}{'...' if duplicates.size > 10 else ''}"
                 )
-            logger.info(f"Verified {len(footpoint_ids)} unique footpoint indices")
+            logger.info(f"Verified {footpoint_ids.size} unique footpoint indices")
 
         return combined
 
