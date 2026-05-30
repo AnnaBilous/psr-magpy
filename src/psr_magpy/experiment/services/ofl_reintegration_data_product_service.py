@@ -132,7 +132,7 @@ class OFLReintegrationDataProductService:
     ) -> OFLEdgeResult:
         """Compute OFL edge/region footpoint IDs only (no extraction/saving)."""
         batch_load_template = None
-        if selection_mode == "region" and reversed_error_threshold is not None:
+        if reversed_error_threshold is not None:
             batch_load_template = FieldLine(
                 save_footpoint_id=True,
                 save_r_cyl_max=True,
@@ -150,7 +150,7 @@ class OFLReintegrationDataProductService:
             # Fallback: allow region selection even when legacy files do not
             # include reversed_error column in batch data.
             if (
-                selection_mode == "region"
+                selection_mode in ("region", "edge")
                 and reversed_error_threshold is not None
                 and "reversed_error" in str(exc)
             ):
@@ -180,7 +180,10 @@ class OFLReintegrationDataProductService:
                     raise PSRMagPyGridError(error_msg)
 
                 calculator = OFLEdgeCalculator(
-                    grid, h_LC_coeff=h_lc_coeff, precise_edges=True
+                    grid,
+                    h_LC_coeff=h_lc_coeff,
+                    precise_edges=True,
+                    reversed_error_threshold=reversed_error_threshold,
                 )
                 return calculator.calculate_edges(
                     ofl_data,
@@ -396,10 +399,13 @@ class OFLReintegrationDataProductService:
         - Outputs are always written to data-products folders.
         - ``n_cores``, if set, overrides each experiment YAML for the integration step.
         - For ``selection_mode="region"``, ``reversed_error_threshold`` keeps lines with
-          ``reversed_error <= threshold`` (and NaNs); requires batches saved with
+          ``reversed_error <= threshold`` (NaNs dropped); requires batches saved with
           ``reversed_error``.
+        - For ``selection_mode="edge"``, ``reversed_error_threshold`` makes a footpoint's
+          neighbour count valid only for neighbours with ``reversed_error <= threshold``
+          (NaN/untraced neighbours dropped); requires batches saved with ``reversed_error``.
         - If ``reversed_error_threshold`` is requested but ``reversed_error`` is
-          unavailable in stored files, the service falls back to unfiltered region
+          unavailable in stored files, the service falls back to unfiltered
           selection with a warning.
         - ``skip_verify_by_reversing=True`` disables reverse verification during
           reintegration to avoid double tracing overhead.
@@ -407,9 +413,13 @@ class OFLReintegrationDataProductService:
         if series_config.output_dir is None:
             raise ValueError("series_config.output_dir must be set")
 
-        if reversed_error_threshold is not None and selection_mode != "region":
+        if reversed_error_threshold is not None and selection_mode not in (
+            "region",
+            "edge",
+        ):
             error_msg = (
-                "reversed_error_threshold is only supported for selection_mode='region'"
+                "reversed_error_threshold is only supported for "
+                "selection_mode='region' or 'edge'"
             )
             logger.error(error_msg)
             raise ValueError(error_msg)

@@ -585,7 +585,7 @@ class FieldLineSet(FieldLine):
         ----------
         reversed_error_threshold : float
             Maximum allowed reversed_error value. Field lines with reversed_error > threshold
-            are excluded. NaN values are kept.
+            are excluded. NaN values are also excluded.
 
         Returns
         -------
@@ -628,8 +628,8 @@ class FieldLineSet(FieldLine):
         reversed_error = np.asarray(reversed_error)
         footpoint_ids = np.asarray(footpoint_ids)
 
-        # Create mask: keep lines with reversed_error <= threshold or NaN
-        keep_mask = (reversed_error <= reversed_error_threshold) | np.isnan(reversed_error)
+        # Create mask: keep lines with reversed_error <= threshold (NaN dropped)
+        keep_mask = reversed_error <= reversed_error_threshold
 
         # Get footpoint IDs of field lines that pass the filter
         filtered_footpoint_ids = footpoint_ids[keep_mask].astype(int).tolist()

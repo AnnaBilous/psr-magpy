@@ -21,7 +21,7 @@ class OFLEdgeResult(NamedTuple):
 class OFLEdgeCalculator:
     """OFL edge detection calculator."""
 
-    def __init__(self, grid: FootpointGrid, h_LC_coeff: float = 3**1.5 / 2.0, precise_edges: bool = False):
+    def __init__(self, grid: FootpointGrid, h_LC_coeff: float = 3**1.5 / 2.0, precise_edges: bool = False, reversed_error_threshold: Optional[float] = None):
         """Initialize calculator.
 
         Parameters
@@ -32,10 +32,15 @@ class OFLEdgeCalculator:
             Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
         precise_edges : bool, optional
             If True, use precise edge calculation method. Default is False.
+        reversed_error_threshold : Optional[float], optional
+            If given (precise method only), a neighbour counts as valid only if
+            its reversed error is ``<= threshold``. Skipped when reversed error
+            was not computed. Default is None.
         """
         self.grid = grid
         self.h_LC_coeff = h_LC_coeff
         self.precise_edges = precise_edges
+        self.reversed_error_threshold = reversed_error_threshold
 
     def calculate_edges(
         self, lines: FieldLineSet, P_ms=None, R_LC=None, R_LC_edge_coefficient: Union[float, List[float]] = 1.02
@@ -59,12 +64,61 @@ class OFLEdgeCalculator:
             OFLEdgeResult with R_LC values and edge footpoint arrays.
         """
         if self.precise_edges:
-            return get_OFL_edges_precise(self.grid, lines, P_ms, R_LC, self.h_LC_coeff)
+            return get_OFL_edges_precise(
+                self.grid, lines, P_ms, R_LC, self.h_LC_coeff,
+                reversed_error_threshold=self.reversed_error_threshold,
+            )
         else:
             return get_OFL_edges_approximate(self.grid, lines, P_ms, R_LC, self.h_LC_coeff, R_LC_edge_coefficient)
 
 
-def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
+def _build_reversed_error_lookup(grid, lines, reversed_error_threshold):
+    """Build a per-pixel reversed-error lookup for the edge constraint.
+
+    Returns an array of size ``npix`` indexed by healpix pixel ID (NaN where
+    untraced), or None when the constraint should be skipped: no threshold, the
+    ``reversed_error`` / ``footpoint_id`` properties are not enabled, or every
+    reversed error is NaN (i.e. it was not computed).
+    """
+    from psr_magpy.line.property_system import PropertyName
+
+    logger = get_logger(__name__, console_format_brief=True)
+
+    if reversed_error_threshold is None:
+        return None
+
+    enabled = lines.property_system.get_enabled_properties()
+    if (
+        PropertyName.REVERSED_ERROR not in enabled
+        or PropertyName.FOOTPOINT_ID not in enabled
+    ):
+        logger.info("reversed_error/footpoint_id not enabled; skipping edge reversed-error constraint")
+        return None
+
+    rev_err = lines.property_system.get_property(PropertyName.REVERSED_ERROR)
+    fp_ids = lines.property_system.get_property(PropertyName.FOOTPOINT_ID)
+    if rev_err is None or fp_ids is None:
+        return None
+
+    rev_err = np.asarray(rev_err, dtype=float)
+    fp_ids = np.asarray(fp_ids).astype(int)
+    if rev_err.size == 0 or np.all(np.isnan(rev_err)):
+        logger.info("reversed_error not computed (all NaN); skipping edge reversed-error constraint")
+        return None
+
+    npix = hp.nside2npix(grid.nside)
+    lookup = np.full(npix, np.nan, dtype=float)
+    lookup[fp_ids] = rev_err
+    return lookup
+
+
+def healpix_get_single_OFL_edge_precise(
+    grid,
+    ftp_ids,
+    ftp_ids_inner=None,
+    reversed_error_lookup=None,
+    reversed_error_threshold=None,
+):
     """Find edge footpoints in OFL region.
 
     Parameters
@@ -75,6 +129,14 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
         Footpoint IDs of OFL region.
     ftp_ids_inner : optional
         Inner region footpoint IDs to exclude. Default is None.
+    reversed_error_lookup : np.ndarray, optional
+        Per-pixel reversed-error values (indexed by healpix pixel ID), NaN where
+        untraced. If None, the reversed-error constraint is skipped (original
+        behaviour). Default is None.
+    reversed_error_threshold : float, optional
+        Maximum allowed reversed error. A neighbour counts as valid only if its
+        reversed error is ``<= threshold`` (NaN fails, so untraced/NaN neighbours
+        are dropped). Ignored when ``reversed_error_lookup`` is None.
 
     Returns
     -------
@@ -90,6 +152,13 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
     else:
         ftp_ids_not_inner = np.copy(ftp_ids)
     n_ftp = len(ftp_ids_not_inner)
+    
+    # To do:
+    # - add reverse error checking
+    # - make nested R_LC optional
+    
+    
+    
     #import matplotlib.pyplot as plt
     #full_grid = HealpixGrid(nside=256)
     #print("Grid nline", len(grid.longitude))
@@ -123,6 +192,17 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
     # Mark valid neighbors (remove -1 values)
     neighbour_footpoints_valid = neighbour_footpoints >= 0
 
+    # Optional reversed-error constraint: a neighbour is valid only if its
+    # reversed error is <= threshold. NaN (untraced) neighbours fail and are
+    # dropped. Skipped entirely when no lookup is provided.
+    if reversed_error_lookup is not None and reversed_error_threshold is not None:
+        neighbour_error = np.full(neighbour_footpoints.shape, np.nan, dtype=float)
+        neighbour_error[neighbour_footpoints_valid] = reversed_error_lookup[
+            neighbour_footpoints[neighbour_footpoints_valid]
+        ]
+        neighbour_error_ok = neighbour_error <= reversed_error_threshold
+        neighbour_footpoints_valid = neighbour_footpoints_valid & neighbour_error_ok
+
     # Count valid neighbors per footpoint
     n_neighbours_per_footpoint = np.sum(neighbour_footpoints_valid, axis=0)
 
@@ -133,7 +213,7 @@ def healpix_get_single_OFL_edge_precise(grid, ftp_ids, ftp_ids_inner=None):
     n_neighbours_in_ftp_ids = np.sum(
         neighbours_in_ftp_ids & neighbour_footpoints_valid, axis=0
     )
-    n_neighbours_in_ftp_ids = np.sum(neighbours_in_ftp_ids, axis=0)
+    #n_neighbours_in_ftp_ids = np.sum(neighbours_in_ftp_ids, axis=0)
     # Edge detection: footpoint is edge if it has fewer neighbors in ftp_ids than expected
     is_edge = n_neighbours_in_ftp_ids < n_neighbours_per_footpoint - 1
  
@@ -152,6 +232,7 @@ def get_OFL_edges_precise(
     P_ms: Optional[Union[float, np.ndarray]] = None,
     R_LC: Optional[Union[float, np.ndarray]] = None,
     h_LC_coeff: float = 3**1.5 / 2.0,
+    reversed_error_threshold: Optional[float] = None,
 ):
     """Calculate OFL edges using precise method.
 
@@ -169,6 +250,12 @@ def get_OFL_edges_precise(
         Light cylinder radii (alternative to P_ms). Default is None.
     h_LC_coeff : float, optional
         Height coefficient for OFL calculation. Default is 3^1.5 / 2.0.
+    reversed_error_threshold : Optional[float], optional
+        If given, a neighbour counts as valid only if its reversed error is
+        ``<= threshold`` (see :func:`healpix_get_single_OFL_edge_precise`). The
+        constraint is skipped when ``lines`` lacks the ``reversed_error`` /
+        ``footpoint_id`` properties or all reversed errors are NaN (not computed).
+        Default is None.
 
     Returns
     -------
@@ -196,6 +283,11 @@ def get_OFL_edges_precise(
         # Sort R_LC in decreasing order
         R_LC = np.sort(R_LC)[::-1]
 
+    # Build per-pixel reversed-error lookup once (None => constraint skipped).
+    reversed_error_lookup = _build_reversed_error_lookup(
+        grid, lines, reversed_error_threshold
+    )
+
     n_values = len(R_LC)
     ftp_ids = []
     edge_ftp_ids = []
@@ -210,7 +302,11 @@ def get_OFL_edges_precise(
     print(len(grid.indices))
     for i in range(n_values):
         cur_edge_ftp_ids = healpix_get_single_OFL_edge_precise(
-            grid, ftp_ids[i], ftp_ids_inner=inner_ftp_ids[i]
+            grid,
+            ftp_ids[i],
+            ftp_ids_inner=inner_ftp_ids[i],
+            reversed_error_lookup=reversed_error_lookup,
+            reversed_error_threshold=reversed_error_threshold,
         )
         edge_ftp_ids.append(cur_edge_ftp_ids)
 
