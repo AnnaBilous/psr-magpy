@@ -2,7 +2,7 @@ import healpy as hp
 import numpy as np
 from typing import NamedTuple, List, Union, Optional, Dict
 from pathlib import Path
-from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.line.field_line_set import FieldLineSet, open_field_line_criterion
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.grid.grid import HealpixGrid, FootpointGrid
 from psr_magpy.utils.physical_conversions import get_R_LC
@@ -21,7 +21,7 @@ class OFLEdgeResult(NamedTuple):
 class OFLEdgeCalculator:
     """OFL edge detection calculator."""
 
-    def __init__(self, grid: FootpointGrid, h_LC_coeff: float = 3**1.5 / 2.0, precise_edges: bool = False, reversed_error_threshold: Optional[float] = None):
+    def __init__(self, grid: FootpointGrid, h_LC_coeff: float = 3**1.5 / 2.0, precise_edges: bool = False, reversed_error_threshold: Optional[float] = None, use_compound_grid: bool = False, iterative_edges: bool = True):
         """Initialize calculator.
 
         Parameters
@@ -36,11 +36,21 @@ class OFLEdgeCalculator:
             If given (precise method only), a neighbour counts as valid only if
             its reversed error is ``<= threshold``. Skipped when reversed error
             was not computed. Default is None.
+        use_compound_grid : bool, optional
+            If True (precise method only), detect edges against a full-sphere grid
+            built from ``grid.nside`` with OFL membership evaluated over a compound
+            zero-filled map. Default is False.
+        iterative_edges : bool, optional
+            If True (precise method only, default), edges are nested shells with
+            each smaller-R_LC edge excluding the previous larger region. If False,
+            each R_LC edge is computed independently.
         """
         self.grid = grid
         self.h_LC_coeff = h_LC_coeff
         self.precise_edges = precise_edges
         self.reversed_error_threshold = reversed_error_threshold
+        self.use_compound_grid = use_compound_grid
+        self.iterative_edges = iterative_edges
 
     def calculate_edges(
         self, lines: FieldLineSet, P_ms=None, R_LC=None, R_LC_edge_coefficient: Union[float, List[float]] = 1.02
@@ -67,9 +77,74 @@ class OFLEdgeCalculator:
             return get_OFL_edges_precise(
                 self.grid, lines, P_ms, R_LC, self.h_LC_coeff,
                 reversed_error_threshold=self.reversed_error_threshold,
+                use_compound_grid=self.use_compound_grid,
+                iterative_edges=self.iterative_edges,
             )
         else:
             return get_OFL_edges_approximate(self.grid, lines, P_ms, R_LC, self.h_LC_coeff, R_LC_edge_coefficient)
+
+
+def downsample_edge_footpoint_vectors(
+    edge_footpoint_ids, nside_full: int, downsample_factor: int = 8
+) -> np.ndarray:
+    """Average edge-footpoint unit vectors within each coarse HEALPix pixel.
+
+    Each full-grid edge footpoint is mapped to its pixel on a coarser grid of
+    ``nside_full // downsample_factor``; the unit vectors of all edge footpoints
+    sharing a coarse pixel are summed and renormalized, giving one representative
+    direction per occupied coarse pixel.
+
+    Parameters
+    ----------
+    edge_footpoint_ids : array-like
+        Edge footpoint IDs (full-grid HEALPix pixel indices, ring ordering).
+    nside_full : int
+        nside of the full grid the IDs index into.
+    downsample_factor : int, optional
+        Coarse grid is ``nside_full // downsample_factor``. Default is 8.
+
+    Returns
+    -------
+    np.ndarray
+        Representative unit vectors, shape ``(M, 3)``, one per occupied coarse pixel.
+    """
+    edge_footpoint_ids = np.asarray(edge_footpoint_ids).astype(int)
+    nside_down = nside_full // downsample_factor
+    if nside_down < 1:
+        error_msg = (
+            f"downsample_factor={downsample_factor} too large for nside_full="
+            f"{nside_full} (coarse nside < 1)"
+        )
+        get_logger(__name__, console_format_brief=True).error(error_msg)
+        raise PSRMagPyValidationError(error_msg)
+
+    vecs = np.asarray(hp.pix2vec(nside_full, edge_footpoint_ids))  # (3, N)
+    coarse_pix = hp.vec2pix(nside_down, vecs[0], vecs[1], vecs[2])
+
+    unique_pix, inverse = np.unique(coarse_pix, return_inverse=True)
+    sums = np.zeros((unique_pix.size, 3))
+    np.add.at(sums, inverse, vecs.T)
+    sums /= np.linalg.norm(sums, axis=1, keepdims=True)
+    return sums
+
+
+def _ofl_footpoints_compound(
+    lines: FieldLineSet, nside: int, r_lc: float, h_LC_coeff: float
+) -> np.ndarray:
+    """Open-field-line footpoint IDs over the full sphere at ``nside``.
+
+    Builds length-``npix`` ``r_cyl_max`` / ``z_abs_max`` arrays (0 outside the
+    traced footpoints), so the OFL criterion is evaluated against the whole
+    sphere rather than only the traced subset. Returns full-sphere pixel IDs.
+    """
+    npix = hp.nside2npix(nside)
+    footpoint_ids = np.asarray(lines.footpoint_id).astype(int)
+    r_cyl_full = np.zeros(npix)
+    z_abs_full = np.zeros(npix)
+    r_cyl_full[footpoint_ids] = np.asarray(lines.r_cyl_max, dtype=float)
+    z_abs_full[footpoint_ids] = np.asarray(lines.z_abs_max, dtype=float)
+    open_fl_crit = open_field_line_criterion(r_cyl_full, z_abs_full, r_lc, h_LC_coeff)
+    return np.nonzero(open_fl_crit)[0].astype(int)
 
 
 def _build_reversed_error_lookup(grid, lines, reversed_error_threshold):
@@ -233,6 +308,8 @@ def get_OFL_edges_precise(
     R_LC: Optional[Union[float, np.ndarray]] = None,
     h_LC_coeff: float = 3**1.5 / 2.0,
     reversed_error_threshold: Optional[float] = None,
+    use_compound_grid: bool = False,
+    iterative_edges: bool = True,
 ):
     """Calculate OFL edges using precise method.
 
@@ -256,6 +333,16 @@ def get_OFL_edges_precise(
         constraint is skipped when ``lines`` lacks the ``reversed_error`` /
         ``footpoint_id`` properties or all reversed errors are NaN (not computed).
         Default is None.
+    use_compound_grid : bool, optional
+        If True, detect edges against a full-sphere grid built from ``grid.nside``,
+        with OFL membership evaluated over a compound (zero-filled outside the
+        traced footpoints) ``r_cyl_max`` / ``z_abs_max`` map. Requires ``grid`` to
+        be a :class:`HealpixGrid`. Default is False (use ``grid`` and
+        :meth:`FieldLineSet.get_OFL_footpoints` as-is).
+    iterative_edges : bool, optional
+        If True (default), edges are computed as nested shells: each smaller-R_LC
+        edge excludes the OFL region of the previous (larger) R_LC. If False, each
+        R_LC edge is computed independently (no inner-region subtraction).
 
     Returns
     -------
@@ -283,9 +370,23 @@ def get_OFL_edges_precise(
         # Sort R_LC in decreasing order
         R_LC = np.sort(R_LC)[::-1]
 
+    # Resolve the grid used for edge detection. With the compound option, edges
+    # are detected against a full sphere built from grid.nside.
+    if use_compound_grid:
+        if not isinstance(grid, HealpixGrid):
+            error_msg = (
+                "use_compound_grid requires a HealpixGrid, got "
+                f"{type(grid).__name__}"
+            )
+            get_logger(__name__, console_format_brief=True).error(error_msg)
+            raise PSRMagPyGridError(error_msg)
+        edge_grid: FootpointGrid = HealpixGrid(nside=grid.nside)
+    else:
+        edge_grid = grid
+
     # Build per-pixel reversed-error lookup once (None => constraint skipped).
     reversed_error_lookup = _build_reversed_error_lookup(
-        grid, lines, reversed_error_threshold
+        edge_grid, lines, reversed_error_threshold
     )
 
     n_values = len(R_LC)
@@ -294,17 +395,21 @@ def get_OFL_edges_precise(
     inner_ftp_ids = [np.array([], dtype=int)]
 
     for i, r_lc in enumerate(R_LC):
-        cur_ftp_ids = lines.get_OFL_footpoints(r_lc, h_LC_coeff=h_LC_coeff)
+        if use_compound_grid:
+            cur_ftp_ids = _ofl_footpoints_compound(
+                lines, edge_grid.nside, float(r_lc), h_LC_coeff
+            )
+        else:
+            cur_ftp_ids = lines.get_OFL_footpoints(r_lc, h_LC_coeff=h_LC_coeff)
         ftp_ids.append(cur_ftp_ids)
         inner_ftp_ids.append(cur_ftp_ids)
-    #print(self.grid.indices)
-    print(grid.indices)
-    print(len(grid.indices))
+    empty_inner = np.array([], dtype=int)
     for i in range(n_values):
+        cur_inner = inner_ftp_ids[i] if iterative_edges else empty_inner
         cur_edge_ftp_ids = healpix_get_single_OFL_edge_precise(
-            grid,
+            edge_grid,
             ftp_ids[i],
-            ftp_ids_inner=inner_ftp_ids[i],
+            ftp_ids_inner=cur_inner,
             reversed_error_lookup=reversed_error_lookup,
             reversed_error_threshold=reversed_error_threshold,
         )

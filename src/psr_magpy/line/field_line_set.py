@@ -16,6 +16,31 @@ from psr_magpy.line.property_system import PropertyName
 logger = get_logger(__name__, console_format_brief=True)
 
 
+def open_field_line_criterion(
+    r_cyl_max: NDArray[Any],
+    z_abs_max: NDArray[Any],
+    R_LC: float,
+    h_LC_coeff: float = 3**1.5 / 2.0,
+) -> NDArray[Any]:
+    """Boolean OFL mask: open if beyond the light cylinder, or within it but
+    reaching above the height threshold ``h_LC_coeff * R_LC``.
+
+    Parameters
+    ----------
+    r_cyl_max, z_abs_max
+        Per-footpoint maximum cylindrical radius and absolute height along the line.
+    R_LC : float
+        Light cylinder radius.
+    h_LC_coeff : float, optional
+        Height coefficient for LC. Default is 3^1.5 / 2.0.
+    """
+    r_cyl_max = np.asarray(r_cyl_max)
+    z_abs_max = np.asarray(z_abs_max)
+    return (r_cyl_max > R_LC) | (
+        (r_cyl_max < R_LC) & (np.abs(z_abs_max) > (h_LC_coeff * R_LC))
+    )
+
+
 @dataclass
 class LightFieldLineSet:
     """Lightweight version of FieldLineSet containing only necessary attributes."""
@@ -465,10 +490,7 @@ class FieldLineSet(FieldLine):
         z_abs_max = self.z_abs_max
         footpoint_ids = self.footpoint_id
 
-        # OFL criteria: either beyond LC or within LC but high enough
-        open_fl_crit = (R_cyl_max > R_LC) | (
-            (R_cyl_max < R_LC) & (np.abs(z_abs_max) > (h_LC_coeff * R_LC))
-        )
+        open_fl_crit = open_field_line_criterion(R_cyl_max, z_abs_max, R_LC, h_LC_coeff)
 
         logger.info(f"R_LC: {R_LC:.2f}")
         logger.info(

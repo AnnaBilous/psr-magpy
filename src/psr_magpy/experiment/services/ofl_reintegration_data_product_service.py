@@ -17,9 +17,11 @@ from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.open_field_line_edges import (
     OFLEdgeCalculator,
     OFLEdgeResult,
+    downsample_edge_footpoint_vectors,
     _load_experiment_setup,
 )
-from psr_magpy.grid.grid import HealpixGrid
+from psr_magpy.grid.grid import CustomGrid, HealpixGrid
+from astropy.coordinates.representation import CartesianRepresentation
 from psr_magpy.utils.exceptions import (
     PSRMagPyExperimentError,
     PSRMagPyGridError,
@@ -129,6 +131,8 @@ class OFLReintegrationDataProductService:
         h_lc_coeff: float,
         selection_mode: SelectionMode,
         reversed_error_threshold: Optional[float] = None,
+        use_compound_grid: bool = False,
+        iterative_edges: bool = True,
     ) -> OFLEdgeResult:
         """Compute OFL edge/region footpoint IDs only (no extraction/saving)."""
         batch_load_template = None
@@ -184,6 +188,8 @@ class OFLReintegrationDataProductService:
                     h_LC_coeff=h_lc_coeff,
                     precise_edges=True,
                     reversed_error_threshold=reversed_error_threshold,
+                    use_compound_grid=use_compound_grid,
+                    iterative_edges=iterative_edges,
                 )
                 return calculator.calculate_edges(
                     ofl_data,
@@ -259,8 +265,16 @@ class OFLReintegrationDataProductService:
         skip_verify_by_reversing: bool = True,
         n_cores: Optional[int] = None,
         dt_reint: Optional[float] = None,
+        downsample_edges: bool = False,
+        downsample_factor: int = 8,
     ) -> None:
-        """Integrate selected footpoints and save line data products."""
+        """Integrate selected footpoints and save line data products.
+
+        When ``downsample_edges`` is True, each R_LC's selected (edge) footpoints
+        are downsampled to one representative direction per coarse HEALPix pixel
+        (``nside // downsample_factor``) and reintegrated from a :class:`CustomGrid`
+        whose footpoint IDs are cardinal numbers (0..M-1).
+        """
         experiment_config = ExperimentConfig.load(experiment_config_path)
         base_grid = experiment_config.grid.create_grid()
         if base_grid is None:
@@ -269,6 +283,14 @@ class OFLReintegrationDataProductService:
             raise PSRMagPyGridError(error_msg)
         if base_grid.indices is None:
             error_msg = f"Grid indices are missing for {experiment_config.name}"
+            logger.error(error_msg)
+            raise PSRMagPyGridError(error_msg)
+
+        if downsample_edges and not isinstance(base_grid, HealpixGrid):
+            error_msg = (
+                "downsample_edges requires a HealpixGrid base grid, got "
+                f"{type(base_grid).__name__} for {experiment_config.name}"
+            )
             logger.error(error_msg)
             raise PSRMagPyGridError(error_msg)
 
@@ -314,22 +336,42 @@ class OFLReintegrationDataProductService:
                 )
                 continue
 
-            subset_positions = np.asarray(
-                [
-                    footpoint_id_to_position[int(footpoint_id)]
-                    for footpoint_id in footpoint_ids
-                    if int(footpoint_id) in footpoint_id_to_position
-                ],
-                dtype=int,
-            )
-            if subset_positions.size == 0:
-                logger.warning(
-                    "Skipping integration for R_LC=%.2f: selected footpoints not in grid",
-                    r_lc,
+            if downsample_edges:
+                vectors = downsample_edge_footpoint_vectors(
+                    np.asarray(footpoint_ids, dtype=int),
+                    base_grid.nside,
+                    downsample_factor=downsample_factor,
                 )
-                continue
+                coordinates = CartesianRepresentation(
+                    vectors[:, 0], vectors[:, 1], vectors[:, 2]
+                )
+                subset_grid = CustomGrid(
+                    nline_ori=int(vectors.shape[0]), coordinates=coordinates
+                )
+                logger.info(
+                    "Reintegration R_LC=%.2f: downsampled %d edge footpoints to %d "
+                    "CustomGrid directions",
+                    r_lc,
+                    len(footpoint_ids),
+                    vectors.shape[0],
+                )
+            else:
+                subset_positions = np.asarray(
+                    [
+                        footpoint_id_to_position[int(footpoint_id)]
+                        for footpoint_id in footpoint_ids
+                        if int(footpoint_id) in footpoint_id_to_position
+                    ],
+                    dtype=int,
+                )
+                if subset_positions.size == 0:
+                    logger.warning(
+                        "Skipping integration for R_LC=%.2f: selected footpoints not in grid",
+                        r_lc,
+                    )
+                    continue
 
-            subset_grid = base_grid.subset_grid(subset_positions)
+                subset_grid = base_grid.subset_grid(subset_positions)
             output_filename = (
                 output_dir
                 / f"{prefix}_{experiment_number:03d}_RLC_{float(r_lc):05.2f}.fits"
@@ -387,6 +429,10 @@ class OFLReintegrationDataProductService:
         template: Optional[FieldLineTemplate] = None,
         h_lc_coeff: float = 3**1.5 / 2.0,
         reversed_error_threshold: Optional[float] = None,
+        use_compound_grid: bool = False,
+        iterative_edges: bool = True,
+        downsample_edges: bool = False,
+        downsample_factor: int = 8,
         skip_verify_by_reversing: bool = True,
         n_cores: Optional[int] = None,
         dt_reint: Optional[float] = None,
@@ -407,6 +453,16 @@ class OFLReintegrationDataProductService:
         - If ``reversed_error_threshold`` is requested but ``reversed_error`` is
           unavailable in stored files, the service falls back to unfiltered
           selection with a warning.
+        - For ``selection_mode="edge"``, ``use_compound_grid=True`` detects edges
+          against a full-sphere grid built from ``grid.nside``, evaluating OFL
+          membership over a compound (zero-filled outside traced) map.
+        - For ``selection_mode="edge"``, ``iterative_edges`` (default True) controls
+          whether edges are nested shells (each smaller R_LC excludes the previous
+          larger region) or computed independently per R_LC.
+        - For ``selection_mode="edge"``, ``downsample_edges=True`` reintegrates not the
+          raw edge pixels but one representative direction per coarse HEALPix pixel
+          (``nside // downsample_factor``), built as a :class:`CustomGrid` with
+          cardinal footpoint IDs. Requires a HEALPix base grid.
         - ``skip_verify_by_reversing=True`` disables reverse verification during
           reintegration to avoid double tracing overhead.
         """
@@ -421,6 +477,11 @@ class OFLReintegrationDataProductService:
                 "reversed_error_threshold is only supported for "
                 "selection_mode='region' or 'edge'"
             )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if downsample_edges and selection_mode != "edge":
+            error_msg = "downsample_edges is only supported for selection_mode='edge'"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -465,6 +526,8 @@ class OFLReintegrationDataProductService:
                 h_lc_coeff=h_lc_coeff,
                 selection_mode=selection_mode,
                 reversed_error_threshold=reversed_error_threshold,
+                use_compound_grid=use_compound_grid,
+                iterative_edges=iterative_edges,
             )
             calc_r_lc = np.asarray(calc_result.R_LC, dtype=float)
             r_max_aligned = self._align_r_max_to_r_lc(calc_r_lc, r_max_lookup)
@@ -479,6 +542,8 @@ class OFLReintegrationDataProductService:
                 skip_verify_by_reversing=skip_verify_by_reversing,
                 n_cores=n_cores,
                 dt_reint=dt_reint,
+                downsample_edges=downsample_edges,
+                downsample_factor=downsample_factor,
             )
 
             counts = [len(x) for x in calc_result.edge_footpoints]

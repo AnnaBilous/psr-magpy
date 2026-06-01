@@ -13,9 +13,11 @@ from psr_magpy.line.open_field_line_edges import (
     get_OFL_edges_precise,
     get_OFL_edges_approximate,
     calculate_and_save_OFL_edges,
+    _ofl_footpoints_compound,
+    downsample_edge_footpoint_vectors,
 )
 from psr_magpy.line.field_line import FieldLine
-from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.line.field_line_set import FieldLineSet, open_field_line_criterion
 from psr_magpy.grid.grid import HealpixGrid, FootpointGrid
 from psr_magpy.line.property_system import PropertyName
 from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyGridError, PSRMagPyExperimentError
@@ -98,7 +100,9 @@ class TestOFLEdgeCalculator:
         result = calculator.calculate_edges(mock_lines, R_LC=r_lc_values)
         
         mock_get_edges.assert_called_once_with(
-            self.mock_grid, mock_lines, None, r_lc_values, calculator.h_LC_coeff
+            self.mock_grid, mock_lines, None, r_lc_values, calculator.h_LC_coeff,
+            reversed_error_threshold=None, use_compound_grid=False,
+            iterative_edges=True,
         )
         assert result == expected_result
     
@@ -651,6 +655,177 @@ class TestCalculateAndSaveOFLEdges:
                 
                 assert 3 not in first_call_footpoints, f"Footpoint 3 (high error) should be filtered out, got {first_call_footpoints}"
                 assert result is not None
+
+
+class TestOpenFieldLineCriterion:
+    """Test the shared OFL criterion helper."""
+
+    def test_beyond_lc_is_open(self):
+        """Footpoints reaching beyond R_LC are open regardless of height."""
+        r_cyl = np.array([12.0, 1.0])
+        z_abs = np.array([0.0, 0.0])
+        mask = open_field_line_criterion(r_cyl, z_abs, R_LC=10.0)
+        assert mask.tolist() == [True, False]
+
+    def test_within_lc_high_enough_is_open(self):
+        """Within R_LC but above the height threshold counts as open."""
+        r_lc = 10.0
+        h_coeff = 3**1.5 / 2.0
+        z_high = h_coeff * r_lc + 1.0
+        z_low = h_coeff * r_lc - 1.0
+        r_cyl = np.array([5.0, 5.0])
+        z_abs = np.array([z_high, z_low])
+        mask = open_field_line_criterion(r_cyl, z_abs, R_LC=r_lc, h_LC_coeff=h_coeff)
+        assert mask.tolist() == [True, False]
+
+    def test_matches_get_OFL_footpoints(self):
+        """Helper agrees with FieldLineSet.get_OFL_footpoints."""
+        template = FieldLine(
+            save_footpoint_id=True, save_r_cyl_max=True, save_z_abs_max=True
+        )
+        lines = FieldLineSet(template, copy_data=False)
+        lines.footpoint_id = np.array([0, 1, 2, 3])
+        lines.r_cyl_max = np.array([12.0, 5.0, 5.0, 1.0])
+        lines.z_abs_max = np.array([0.0, 100.0, 0.0, 0.0])
+        r_lc = 10.0
+        expected = lines.get_OFL_footpoints(r_lc)
+        mask = open_field_line_criterion(
+            lines.r_cyl_max, lines.z_abs_max, R_LC=r_lc
+        )
+        assert np.array_equal(lines.footpoint_id[mask].astype(int), expected)
+
+
+class TestOflFootpointsCompound:
+    """Test the compound full-sphere OFL footpoint helper."""
+
+    def test_scatters_into_full_sphere(self):
+        """Compound footpoints are full-sphere pixel IDs from a zero-filled map."""
+        nside = 1  # npix = 12
+        mock_lines = Mock(spec=FieldLineSet)
+        mock_lines.footpoint_id = np.array([2, 7])
+        mock_lines.r_cyl_max = np.array([12.0, 1.0])  # pix 2 open, pix 7 not
+        mock_lines.z_abs_max = np.array([0.0, 0.0])
+
+        result = _ofl_footpoints_compound(mock_lines, nside, r_lc=10.0, h_LC_coeff=3**1.5 / 2.0)
+
+        # Only pixel 2 satisfies the OFL criterion; untraced pixels are 0 (closed).
+        assert result.tolist() == [2]
+
+
+class TestGetOFLEdgesPreciseCompoundGrid:
+    """Test the use_compound_grid option in get_OFL_edges_precise."""
+
+    def test_compound_grid_requires_healpix(self):
+        """Non-HealpixGrid raises when use_compound_grid is True."""
+        grid = Mock(spec=FootpointGrid)
+        lines = Mock(spec=FieldLineSet)
+        with pytest.raises(PSRMagPyGridError, match="HealpixGrid"):
+            get_OFL_edges_precise(
+                grid, lines, R_LC=np.array([10.0]), use_compound_grid=True
+            )
+
+    @patch("psr_magpy.line.open_field_line_edges.healpix_get_single_OFL_edge_precise")
+    def test_compound_grid_uses_full_sphere(self, mock_single):
+        """Edge detection runs on a full HealpixGrid built from grid.nside."""
+        grid = HealpixGrid(nside=2)
+        lines = Mock(spec=FieldLineSet)
+        lines.footpoint_id = np.array([5, 40])
+        lines.r_cyl_max = np.array([12.0, 1.0])
+        lines.z_abs_max = np.array([0.0, 0.0])
+        mock_single.return_value = np.array([5])
+
+        result = get_OFL_edges_precise(
+            grid, lines, R_LC=np.array([10.0]),
+            reversed_error_threshold=None, use_compound_grid=True,
+        )
+
+        # The edge grid passed in must be a HealpixGrid with the same nside.
+        edge_grid = mock_single.call_args[0][0]
+        assert isinstance(edge_grid, HealpixGrid)
+        assert edge_grid.nside == grid.nside
+        # OFL footpoints passed are the compound full-sphere ids (pixel 5 only).
+        passed_ftp_ids = mock_single.call_args[0][1]
+        assert passed_ftp_ids.tolist() == [5]
+        # get_OFL_footpoints (subset path) must NOT be used in compound mode.
+        assert not lines.get_OFL_footpoints.called
+        assert result.precise_edges is True
+
+
+class TestDownsampleEdgeFootpointVectors:
+    """Test downsample_edge_footpoint_vectors helper."""
+
+    def test_returns_unit_vectors_per_coarse_pixel(self):
+        """Output has one unit vector per occupied coarse pixel."""
+        import healpy as hp
+
+        nside_full = 64
+        # All fine pixels inside a single coarse pixel collapse to one direction.
+        coarse_pix = 0
+        fine_ids = np.where(
+            hp.vec2pix(nside_full // 8, *hp.pix2vec(nside_full, np.arange(hp.nside2npix(nside_full))))
+            == coarse_pix
+        )[0]
+        vecs = downsample_edge_footpoint_vectors(fine_ids, nside_full, downsample_factor=8)
+        assert vecs.shape == (1, 3)
+        np.testing.assert_allclose(np.linalg.norm(vecs, axis=1), 1.0)
+
+    def test_multiple_coarse_pixels(self):
+        """Distinct coarse pixels yield distinct representative vectors."""
+        nside_full = 64
+        # Two well-separated fine pixels fall in different coarse pixels.
+        vecs = downsample_edge_footpoint_vectors(
+            np.array([0, hp_npix(nside_full) - 1]), nside_full, downsample_factor=8
+        )
+        assert vecs.shape[0] == 2
+
+    def test_too_large_factor_raises(self):
+        """Coarse nside < 1 raises a validation error."""
+        from psr_magpy.utils.exceptions import PSRMagPyValidationError
+
+        with pytest.raises(PSRMagPyValidationError):
+            downsample_edge_footpoint_vectors(np.array([0, 1]), nside_full=4, downsample_factor=8)
+
+
+def hp_npix(nside):
+    import healpy as hp
+
+    return hp.nside2npix(nside)
+
+
+class TestGetOFLEdgesPreciseIterative:
+    """Test the iterative_edges option in get_OFL_edges_precise."""
+
+    def setup_method(self):
+        self.grid = Mock(spec=FootpointGrid)
+        self.grid.indices = np.array([0, 1, 2, 3, 4, 5])
+        self.lines = Mock(spec=FieldLineSet)
+        self.lines.get_OFL_footpoints.side_effect = [
+            np.array([1, 2, 3, 4]),  # larger R_LC region
+            np.array([1, 2]),        # smaller R_LC region
+        ]
+
+    @patch("psr_magpy.line.open_field_line_edges.healpix_get_single_OFL_edge_precise")
+    def test_iterative_passes_previous_region_as_inner(self, mock_single):
+        """Default (iterative) passes the previous larger region as inner."""
+        mock_single.side_effect = [np.array([4]), np.array([1])]
+        get_OFL_edges_precise(
+            self.grid, self.lines, R_LC=np.array([10.0, 5.0]), iterative_edges=True
+        )
+        # First call: empty inner; second call: previous region [1,2,3,4].
+        first_inner = mock_single.call_args_list[0].kwargs["ftp_ids_inner"]
+        second_inner = mock_single.call_args_list[1].kwargs["ftp_ids_inner"]
+        assert first_inner.tolist() == []
+        assert second_inner.tolist() == [1, 2, 3, 4]
+
+    @patch("psr_magpy.line.open_field_line_edges.healpix_get_single_OFL_edge_precise")
+    def test_non_iterative_uses_empty_inner(self, mock_single):
+        """iterative_edges=False computes each edge independently (empty inner)."""
+        mock_single.side_effect = [np.array([4]), np.array([1])]
+        get_OFL_edges_precise(
+            self.grid, self.lines, R_LC=np.array([10.0, 5.0]), iterative_edges=False
+        )
+        for call in mock_single.call_args_list:
+            assert call.kwargs["ftp_ids_inner"].tolist() == []
 
 
 class TestIntegration:
