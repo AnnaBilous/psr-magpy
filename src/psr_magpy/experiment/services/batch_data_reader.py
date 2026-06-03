@@ -16,6 +16,19 @@ from psr_magpy.utils.logging_config import get_logger
 logger = get_logger(__name__, console_format_brief=True)
 
 
+def _field_lines_row_count(batch_file: Path) -> int:
+    """Return the number of rows in the FIELD_LINES HDU, or 0 if absent/empty."""
+    from astropy.io import fits
+
+    with fits.open(batch_file) as hdul:
+        if "FIELD_LINES" not in [h.name for h in hdul]:
+            return 0
+        data = hdul["FIELD_LINES"].data
+        if data is None:
+            return 0
+        return len(data)
+
+
 class BatchDataReader:
     """Read and process batch FITS outputs for one experiment."""
 
@@ -53,6 +66,10 @@ class BatchDataReader:
         logger.info(f"Found {len(batch_files)} batch files for {prefix}")
         combined = FieldLineSet(template, copy_data=False)
         for batch_file in batch_files:
+            batch_path = Path(batch_file)
+            if _field_lines_row_count(batch_path) == 0:
+                logger.debug(f"Skipping empty batch: {batch_path.name}")
+                continue
             logger.debug(f"Loading {batch_file}")
             field_line_set = load_data(FieldLineSet, batch_file, template=template)
             combined.append(field_line_set)
@@ -117,12 +134,13 @@ class BatchDataReader:
         for batch_file in self.iter_batch_files(
             lines_dir, batch_filename_prefix=batch_filename_prefix
         ):
+            if _field_lines_row_count(batch_file) == 0:
+                logger.debug(f"Skipping empty batch: {batch_file.name}")
+                continue
             logger.debug(f"Loading batch: {batch_file.name}")
             batch_data = load_data(FieldLineSet, batch_file, template=template)
             if batch_data is not None and batch_data.n_field_lines > 0:
                 yield batch_data
-            else:
-                logger.debug(f"Skipping empty batch: {batch_file.name}")
 
     def process_batches_incremental(
         self,
