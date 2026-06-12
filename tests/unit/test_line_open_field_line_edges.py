@@ -15,6 +15,7 @@ from psr_magpy.line.open_field_line_edges import (
     calculate_and_save_OFL_edges,
     _ofl_footpoints_compound,
     downsample_edge_footpoint_vectors,
+    jitter_footpoint_vectors,
 )
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_set import FieldLineSet, open_field_line_criterion
@@ -790,6 +791,32 @@ def hp_npix(nside):
     import healpy as hp
 
     return hp.nside2npix(nside)
+
+
+class TestJitterFootpointVectors:
+    """Test jitter_footpoint_vectors helper."""
+
+    def test_returns_unit_vectors(self):
+        """Jittered directions remain on the unit sphere."""
+        vectors = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+        rng = np.random.default_rng(0)
+        jittered = jitter_footpoint_vectors(
+            vectors, jitter_fraction=1e-2, rng=rng
+        )
+        np.testing.assert_allclose(np.linalg.norm(jittered, axis=1), 1.0)
+
+    def test_single_vector_unchanged(self):
+        """Fewer than two vectors are returned unchanged."""
+        vectors = np.array([[1.0, 0.0, 0.0]])
+        jittered = jitter_footpoint_vectors(vectors, jitter_fraction=1e-2)
+        np.testing.assert_array_equal(jittered, vectors)
+
+    def test_invalid_shape_raises(self):
+        """Non-(N, 3) input raises validation error."""
+        from psr_magpy.utils.exceptions import PSRMagPyValidationError
+
+        with pytest.raises(PSRMagPyValidationError):
+            jitter_footpoint_vectors(np.array([1.0, 0.0, 0.0]))
 
 
 class TestGetOFLEdgesPreciseIterative:

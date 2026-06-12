@@ -128,6 +128,60 @@ def downsample_edge_footpoint_vectors(
     return sums
 
 
+def jitter_footpoint_vectors(
+    vectors: np.ndarray,
+    jitter_fraction: float = 1e-3,
+    rng: Optional[np.random.Generator] = None,
+) -> np.ndarray:
+    """Apply small random offsets to unit footpoint directions.
+
+    Consecutive-vector spacing sets the jitter scale: Cartesian distances
+    between neighbours in ``vectors`` are computed, their median is taken,
+    and each component receives a uniform offset in
+    ``[-jitter_fraction * median, +jitter_fraction * median]``.  Resulting
+    directions are renormalized to the unit sphere.
+
+    Parameters
+    ----------
+    vectors : np.ndarray
+        Unit vectors, shape ``(N, 3)``.
+    jitter_fraction : float, optional
+        Scale factor applied to the median consecutive spacing. Default is
+        ``1e-3``.
+    rng : np.random.Generator, optional
+        Random generator.  Uses ``np.random.default_rng()`` when omitted.
+
+    Returns
+    -------
+    np.ndarray
+        Jittered unit vectors, shape ``(N, 3)``.
+    """
+    vectors = np.asarray(vectors, dtype=float)
+    if vectors.ndim != 2 or vectors.shape[1] != 3:
+        error_msg = (
+            f"vectors must have shape (N, 3); got {vectors.shape}"
+        )
+        get_logger(__name__, console_format_brief=True).error(error_msg)
+        raise PSRMagPyValidationError(error_msg)
+    if vectors.shape[0] < 2:
+        return vectors
+
+    distances = np.linalg.norm(vectors[1:] - vectors[:-1], axis=1)
+    median_spacing = float(np.median(distances))
+    lim = jitter_fraction * median_spacing
+    if lim == 0.0:
+        return vectors
+
+    generator = rng if rng is not None else np.random.default_rng()
+    jittered = vectors + generator.uniform(-lim, lim, size=vectors.shape)
+    norms = np.linalg.norm(jittered, axis=1, keepdims=True)
+    if np.any(norms == 0.0):
+        error_msg = "jitter produced a zero vector; cannot normalize"
+        get_logger(__name__, console_format_brief=True).error(error_msg)
+        raise PSRMagPyValidationError(error_msg)
+    return jittered / norms
+
+
 def _ofl_footpoints_compound(
     lines: FieldLineSet, nside: int, r_lc: float, h_LC_coeff: float
 ) -> np.ndarray:

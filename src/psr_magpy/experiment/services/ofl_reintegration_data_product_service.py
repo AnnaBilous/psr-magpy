@@ -18,6 +18,7 @@ from psr_magpy.line.open_field_line_edges import (
     OFLEdgeCalculator,
     OFLEdgeResult,
     downsample_edge_footpoint_vectors,
+    jitter_footpoint_vectors as apply_footpoint_vector_jitter,
     _load_experiment_setup,
 )
 from psr_magpy.grid.grid import CustomGrid, HealpixGrid
@@ -267,13 +268,16 @@ class OFLReintegrationDataProductService:
         dt_reint: Optional[float] = None,
         downsample_edges: bool = False,
         downsample_factor: int = 8,
+        jitter_footpoint_vectors: bool = False,
+        jitter_fraction: float = 1e-3,
     ) -> None:
         """Integrate selected footpoints and save line data products.
 
         When ``downsample_edges`` is True, each R_LC's selected (edge) footpoints
         are downsampled to one representative direction per coarse HEALPix pixel
         (``nside // downsample_factor``) and reintegrated from a :class:`CustomGrid`
-        whose footpoint IDs are cardinal numbers (0..M-1).
+        whose footpoint IDs are cardinal numbers (0..M-1).  Optional jitter may be
+        applied after downsampling.
         """
         experiment_config = ExperimentConfig.load(experiment_config_path)
         base_grid = experiment_config.grid.create_grid()
@@ -342,6 +346,17 @@ class OFLReintegrationDataProductService:
                     base_grid.nside,
                     downsample_factor=downsample_factor,
                 )
+                if jitter_footpoint_vectors:
+                    vectors = apply_footpoint_vector_jitter(
+                        vectors, jitter_fraction=jitter_fraction
+                    )
+                    logger.info(
+                        "Reintegration R_LC=%.2f: jittered %d downsampled directions "
+                        "(jitter_fraction=%.3e)",
+                        r_lc,
+                        vectors.shape[0],
+                        jitter_fraction,
+                    )
                 coordinates = CartesianRepresentation(
                     vectors[:, 0], vectors[:, 1], vectors[:, 2]
                 )
@@ -433,6 +448,8 @@ class OFLReintegrationDataProductService:
         iterative_edges: bool = True,
         downsample_edges: bool = False,
         downsample_factor: int = 8,
+        jitter_footpoint_vectors: bool = False,
+        jitter_fraction: float = 1e-3,
         skip_verify_by_reversing: bool = True,
         n_cores: Optional[int] = None,
         dt_reint: Optional[float] = None,
@@ -463,6 +480,10 @@ class OFLReintegrationDataProductService:
           raw edge pixels but one representative direction per coarse HEALPix pixel
           (``nside // downsample_factor``), built as a :class:`CustomGrid` with
           cardinal footpoint IDs. Requires a HEALPix base grid.
+        - For ``selection_mode="edge"`` with ``downsample_edges=True``,
+          ``jitter_footpoint_vectors`` may apply small random offsets to downsampled
+          directions. ``jitter_fraction`` scales the jitter limit relative to the
+          median consecutive-vector spacing (default ``1e-3``).
         - ``skip_verify_by_reversing=True`` disables reverse verification during
           reintegration to avoid double tracing overhead.
         """
@@ -482,6 +503,13 @@ class OFLReintegrationDataProductService:
 
         if downsample_edges and selection_mode != "edge":
             error_msg = "downsample_edges is only supported for selection_mode='edge'"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if jitter_footpoint_vectors and not downsample_edges:
+            error_msg = (
+                "jitter_footpoint_vectors requires downsample_edges=True"
+            )
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -544,6 +572,8 @@ class OFLReintegrationDataProductService:
                 dt_reint=dt_reint,
                 downsample_edges=downsample_edges,
                 downsample_factor=downsample_factor,
+                jitter_footpoint_vectors=jitter_footpoint_vectors,
+                jitter_fraction=jitter_fraction,
             )
 
             counts = [len(x) for x in calc_result.edge_footpoints]

@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import numpy as np
+import pytest
 
 from psr_magpy.experiment.services.ofl_reintegration_data_product_service import (
     OFLReintegrationDataProductService,
@@ -55,6 +56,22 @@ def test_calculate_footpoints_passes_use_compound_grid(mock_setup, mock_calc):
     )
 
     assert mock_calc.call_args.kwargs["use_compound_grid"] is True
+
+
+def test_jitter_requires_downsample_edges():
+    """jitter_footpoint_vectors is rejected without downsample_edges."""
+    from psr_magpy.experiment.experiment_series import ExperimentSeriesConfig
+
+    service = OFLReintegrationDataProductService()
+    series = Mock(spec=ExperimentSeriesConfig)
+    series.output_dir = "out"
+    with pytest.raises(ValueError, match="jitter_footpoint_vectors"):
+        service.run(
+            series_config=series,
+            experiment_numbers=[0],
+            r_lc_values=[10.0],
+            jitter_footpoint_vectors=True,
+        )
 
 
 def test_downsample_edges_requires_edge_mode():
