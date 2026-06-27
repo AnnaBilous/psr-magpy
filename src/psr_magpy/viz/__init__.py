@@ -55,6 +55,7 @@ from .pseudo3d import (
 from .skymap import plot_skymap
 from .oflr import plot_OFLR_em_map, plot_OFLR_map, plot_healpix_scatter
 from .pa import (
+    PHI_ROLL,
     PreparedPAScatter,
     calculate_RVM_curve,
     compute_colors_with_radius_saturation,
@@ -117,6 +118,7 @@ __all__ = [
     "plot_OFLR_map",
     "plot_OFLR_em_map",
     "plot_healpix_scatter",
+    "PHI_ROLL",
     "calculate_RVM_curve",
     "compute_colors_with_radius_saturation",
     "plot_RVM_curve",

@@ -13,7 +13,7 @@ import pytest
 from psr_magpy.viz.healpix import equirectangular_coords
 from psr_magpy.viz.los import overlay_observer_los
 from psr_magpy.viz.oflr import plot_OFLR_em_map, plot_OFLR_map, plot_healpix_scatter
-from psr_magpy.viz.pa import plot_PA_vs_phi
+from psr_magpy.viz.pa import plot_PA_vs_phi, _phi_tick_labels, _transform_scatter_phi
 from psr_magpy.viz.skymap import plot_skymap
 
 
@@ -62,6 +62,29 @@ def test_plot_pa_vs_phi_smoke():
     fig, ax = plot_PA_vs_phi(pa, phi, target_theta=45.0, alpha_angle=20.0, s=4)
     assert len(ax.collections) >= 1
     assert len(ax.lines) >= 1
+
+
+def test_phi_roll_deg_transforms():
+    phi = np.array([0.0, 90.0, 180.0])
+    rolled = _transform_scatter_phi(phi, phi_roll_deg=270)
+    np.testing.assert_allclose(rolled, [270.0, 180.0, 90.0])
+
+    ticks = np.arange(0, 360, 45)
+    np.testing.assert_array_equal(
+        _phi_tick_labels(ticks, 270),
+        np.array([270, 315, 0, 45, 90, 135, 180, 225]),
+    )
+    np.testing.assert_array_equal(_phi_tick_labels(ticks, 0), ticks)
+
+
+def test_plot_pa_vs_phi_phi_roll_deg_kwarg():
+    phi = np.linspace(0, 300, 20)
+    pa = np.zeros_like(phi)
+    _, ax = plot_PA_vs_phi(
+        pa, phi, target_theta=45.0, alpha_angle=20.0, phi_roll_deg=0, s=4
+    )
+    label_vals = [int(t.get_text().replace("$\\degree$", "")) for t in ax.get_xticklabels()]
+    assert label_vals[:8] == [0, 45, 90, 135, 180, 225, 270, 315]
 
 
 def test_overlay_observer_los():

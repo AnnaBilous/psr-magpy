@@ -18,7 +18,7 @@ from psr_magpy.line.pa_theta_filter import FilteredPAData, filter_fieldline_poin
 from psr_magpy.viz.field_line_style import FieldLinePlotConfig
 from psr_magpy.viz.healpix import project_array_to_equirectangular
 from psr_magpy.viz.oflr import plot_OFLR_em_map, plot_OFLR_map
-from psr_magpy.viz.pa import PreparedPAScatter, plot_PA_vs_phi, prepare_pa_scatter_data
+from psr_magpy.viz.pa import PHI_ROLL, PreparedPAScatter, plot_PA_vs_phi, prepare_pa_scatter_data
 from psr_magpy.viz.pseudo3d import ProjectionConfig, plot_field_lines_on_axes
 from psr_magpy.viz.skymap import plot_skymap
 from psr_magpy.viz.snapshot import SnapshotData
@@ -144,6 +144,7 @@ def plot_snapshot_pa_panel(
     scatter_alpha: float = 1.0,
     scatter_marker: str = ".",
     scatter_edgecolors: Optional[str] = "none",
+    phi_roll_deg: float = PHI_ROLL,
 ) -> Tuple[Figure, Axes]:
     """Draw PA vs φ panel (RVM curve + scatter)."""
     fig = ax.figure
@@ -163,6 +164,7 @@ def plot_snapshot_pa_panel(
         alpha=scatter_alpha,
         marker=scatter_marker,
         theta_tolerance=theta_tolerance,
+        phi_roll_deg=phi_roll_deg,
     )
     if scatter_edgecolors is not None:
         plot_kwargs["edgecolors"] = scatter_edgecolors

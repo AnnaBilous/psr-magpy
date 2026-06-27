@@ -15,6 +15,8 @@ from psr_magpy.utils.physical_conversions import PA_RVM
 
 logger = get_logger(__name__, console_format_brief=True)
 
+PHI_ROLL = 270.0  # default φ-axis roll for PA panels (degrees)
+
 
 @dataclass
 class PreparedPAScatter:
@@ -149,9 +151,33 @@ def compute_colors_with_radius_saturation(
     return np.array(colors_shifted)
 
 
+def _transform_scatter_phi(phi_values: np.ndarray, phi_roll_deg: float) -> np.ndarray:
+    """Map tangent φ to panel x-coordinates (flip, then roll)."""
+    phi = phi_values % 360
+    phi = 360 - phi
+    phi = phi + phi_roll_deg
+    phi[phi > 360] -= 360
+    phi[phi < 0] += 360
+    return phi
+
+
+def _phi_tick_labels(x_ticks: np.ndarray, phi_roll_deg: float) -> np.ndarray:
+    """Roll tick labels so displayed φ matches ``phi_roll_deg`` unwrapping."""
+    if len(x_ticks) < 2:
+        return x_ticks.copy()
+    tick_step = float(x_ticks[1] - x_ticks[0])
+    roll_steps = int(round(phi_roll_deg / tick_step)) % len(x_ticks)
+    xtick_labels = np.roll(x_ticks, roll_steps)
+    # Add 90 at the right end (position 360)
+    x_ticks = np.append(x_ticks, 360)
+    xtick_labels = np.append(xtick_labels, 2*xtick_labels[-1] - xtick_labels[-2])
+    return x_ticks, xtick_labels
+
+
 def calculate_RVM_curve(
     target_theta: float,
     alpha_angle: float,
+    phi_roll_deg: float = PHI_ROLL,
     n_points: int = 1000,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Calculate RVM curve with discontinuities broken.
@@ -162,6 +188,8 @@ def calculate_RVM_curve(
         Target theta value (observer angle) for RVM curve.
     alpha_angle : float
         Magnetic inclination angle in degrees.
+    phi_roll_deg : float, optional
+        Additive roll applied to φ after RVM evaluation. Default is :data:`PHI_ROLL`.
     n_points : int, optional
         Number of points in the curve. Default is 1000.
     
@@ -179,7 +207,7 @@ def calculate_RVM_curve(
     break_mask = pa_diff > 30  # True PA discontinuities
     
     # Transform phi after break detection
-    phi_grid = phi_grid_orig + 270
+    phi_grid = phi_grid_orig + phi_roll_deg
     phi_grid[phi_grid>360] -= 360
     phi_grid[phi_grid<0] += 360
     
@@ -208,6 +236,7 @@ def plot_RVM_curve(
     alpha_angle: float,
     ax=None,
     theta_tolerance: Optional[float] = None,
+    phi_roll_deg: float = PHI_ROLL,
     zorder: int = 1000,
 ) -> Tuple:
     """Plot RVM curve.
@@ -223,6 +252,8 @@ def plot_RVM_curve(
     theta_tolerance : Optional[float], optional
         Tolerance for theta. If provided, plots additional curves for 
         target_theta ± theta_tolerance. Default is None.
+    phi_roll_deg : float, optional
+        Additive roll applied to φ (must match scatter transform). Default is :data:`PHI_ROLL`.
     zorder : int, optional
         Z-order for the RVM curve. Default is 1000 (on top).
     
@@ -237,7 +268,9 @@ def plot_RVM_curve(
         fig = ax.figure
     
     # Calculate RVM curve
-    phi_grid, pa_grid = calculate_RVM_curve(target_theta, alpha_angle)
+    phi_grid, pa_grid = calculate_RVM_curve(
+        target_theta, alpha_angle, phi_roll_deg=phi_roll_deg
+    )
     
     # Plot RVM curve
     ax.plot(phi_grid, pa_grid, color='k', lw=0.8, linestyle='--', zorder=zorder)
@@ -256,6 +289,8 @@ def plot_RVM_curve(
 def plot_PA_scatter(
     pa_values: np.ndarray,
     phi_values: np.ndarray,
+    *,
+    phi_roll_deg: float = PHI_ROLL,
     ax=None,
     colors: Optional[np.ndarray] = None,
     **scatter_kwargs
@@ -268,6 +303,8 @@ def plot_PA_scatter(
         PA values in degrees.
     phi_values : np.ndarray
         Tangent phi values in degrees.
+    phi_roll_deg : float, optional
+        Additive roll applied after φ flip (``360 - φ``). Default is :data:`PHI_ROLL`.
     ax : matplotlib.axes.Axes, optional
         Axes to plot on. If None, creates new figure.
     colors : Optional[np.ndarray], optional
@@ -286,11 +323,7 @@ def plot_PA_scatter(
     else:
         fig = ax.figure
     
-    phi_values = phi_values % 360
-    phi_values = 360 - phi_values
-    phi_sorted = phi_values + 270
-    phi_sorted[phi_sorted>360] -= 360
-    phi_sorted[phi_sorted<0] += 360
+    phi_sorted = _transform_scatter_phi(phi_values, phi_roll_deg)
     pa_sorted = pa_values
     
     # Use provided colors if available
@@ -314,6 +347,8 @@ def plot_PA_vs_phi(
     ax=None,
     colors: Optional[np.ndarray] = None,
     theta_tolerance: Optional[float] = None,
+    phi_roll_deg: float = PHI_ROLL,
+    phi_tick_step: float = 45.0,
     **plot_kwargs
 ) -> Tuple:
     """Plot PA vs phi for filtered data (combines RVM curve and scatter).
@@ -336,6 +371,10 @@ def plot_PA_vs_phi(
     theta_tolerance : Optional[float], optional
         Tolerance for theta. If provided, fills region between RVM curves for 
         target_theta ± theta_tolerance. Default is None.
+    phi_roll_deg : float, optional
+        Additive roll applied to φ for RVM curve and scatter. Default is :data:`PHI_ROLL`.
+    phi_tick_step : float, optional
+        Spacing of φ axis tick marks in degrees. Default is 45.
     **plot_kwargs
         Additional keyword arguments passed to scatter and plot.
     
@@ -356,10 +395,24 @@ def plot_PA_vs_phi(
     rvm_zorder = plot_kwargs.get('zorder', 1000)
     
     # Plot RVM curve
-    plot_RVM_curve(target_theta, alpha_angle, ax=ax, theta_tolerance=theta_tolerance, zorder=rvm_zorder)
-    
+    plot_RVM_curve(
+        target_theta,
+        alpha_angle,
+        ax=ax,
+        theta_tolerance=theta_tolerance,
+        phi_roll_deg=phi_roll_deg,
+        zorder=rvm_zorder,
+    )
+
     # Plot scatter
-    plot_PA_scatter(pa_values, phi_values, ax=ax, colors=colors, **scatter_kwargs)
+    plot_PA_scatter(
+        pa_values,
+        phi_values,
+        ax=ax,
+        phi_roll_deg=phi_roll_deg,
+        colors=colors,
+        **scatter_kwargs,
+    )
     
     # Set axis labels and formatting
     ax.set_xlabel(r'$\phi$')
@@ -368,12 +421,10 @@ def plot_PA_vs_phi(
     ax.yaxis.tick_right()
     ax.set_ylim(-90, 90)
     ax.set_xlim(0, 360)
-    x_ticks = np.arange(0,360,45)
-    x_tick_labels = np.roll(x_ticks, int(0.75*len(x_ticks)))
-    # Add 90 at the right end (position 360)
-    x_ticks = np.append(x_ticks, 360)
-    x_tick_labels = np.append(x_tick_labels, 90)
-    ax.set_xticks(x_ticks, [f"{label}$\degree$" for label in x_tick_labels])
+    x_ticks_seed = np.arange(0, 360, phi_tick_step)
+    x_ticks, x_tick_labels = _phi_tick_labels(x_ticks_seed, phi_roll_deg)
+ 
+    ax.set_xticks(x_ticks, [f"{int(round(label))}$\degree$" for label in x_tick_labels])
     # Set y-axis ticks with 15-degree spacing and add degree symbols
     y_ticks = np.arange(-90, 91, 30)
     ax.set_yticks(y_ticks, [f"{tick}$\degree$" for tick in y_ticks])
