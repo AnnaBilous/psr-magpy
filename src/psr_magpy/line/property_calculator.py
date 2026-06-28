@@ -5,16 +5,30 @@ Calculates various properties of field lines including maximum distances,
 magnetic field properties, and geometric characteristics.
 """
 
-from typing import Optional, Any, Dict, cast
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, cast
 import numpy as np
 
 from psr_magpy.line.field_line import FieldLine
+from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.property_system import PropertyName
 from psr_magpy.utils.logging_config import get_logger
 
 logger = get_logger(__name__, console_format_brief=True)
 
 _MIN_ARC_SEGMENT = 1.0e-15
+_UNSTABLE_THRESHOLD = 1.1e-10
+_ROTATION_AXIS = np.array([[0.0], [0.0], [1.0]], dtype=np.float64)
+
+
+@dataclass(frozen=True)
+class FrenetPAFrame:
+    """PA and Frenet basis along one field line (arc-length gradients)."""
+
+    pa_deg: np.ndarray
+    omega_p: np.ndarray
+    b_norm: np.ndarray
+    n_norm: np.ndarray
 
 
 def _arc_length_samples(r: np.ndarray) -> np.ndarray:
@@ -28,6 +42,121 @@ def _arc_length_samples(r: np.ndarray) -> np.ndarray:
     ds_seg = np.linalg.norm(dr, axis=0)
     ds_seg = np.maximum(ds_seg, _MIN_ARC_SEGMENT)
     return np.concatenate(([0.0], np.cumsum(ds_seg)))
+
+
+def calculate_frenet_pa_frame(r: np.ndarray) -> FrenetPAFrame:
+    """Compute PA and Frenet frame along ``r`` with shape ``(3, N)``.
+
+    Returns
+    -------
+    FrenetPAFrame
+        ``pa_deg`` shape ``(N,)``; ``omega_p``, ``b_norm``, ``n_norm`` shape ``(3, N)``.
+        ``omega_p`` is the unnormalized projection of rotation axis onto the normal plane.
+    """
+    r64 = np.asarray(r, dtype=np.float64)
+    if r64.ndim != 2 or r64.shape[0] != 3:
+        error_msg = f"r must have shape (3, N), got {r64.shape}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    n_pts = int(r64.shape[1])
+    if n_pts == 0:
+        return FrenetPAFrame(
+            pa_deg=np.array([], dtype=np.float32),
+            omega_p=np.empty((3, 0), dtype=np.float64),
+            b_norm=np.empty((3, 0), dtype=np.float64),
+            n_norm=np.empty((3, 0), dtype=np.float64),
+        )
+
+    s = _arc_length_samples(r64)
+    r1 = np.gradient(r64, s, axis=1)
+    r2 = np.gradient(r1, s, axis=1)
+
+    t_abs = np.linalg.norm(r1, axis=0, keepdims=True)
+    t_unstable = t_abs <= _UNSTABLE_THRESHOLD
+    t_norm = r1 / t_abs
+
+    proj = np.sum(r2 * t_norm, axis=0, keepdims=True) * t_norm
+    n = r2 - proj
+    n_abs = np.linalg.norm(n, axis=0, keepdims=True)
+    n_unstable = n_abs <= _UNSTABLE_THRESHOLD
+    n_norm = n / n_abs
+
+    omega_dot_t = np.sum(_ROTATION_AXIS * t_norm, axis=0, keepdims=True)
+    omega_p = _ROTATION_AXIS - omega_dot_t * t_norm
+
+    b = np.cross(t_norm.T, n_norm.T).T
+    b_abs = np.linalg.norm(b, axis=0, keepdims=True)
+    b_unstable = b_abs <= _UNSTABLE_THRESHOLD
+    b_norm = b / b_abs
+
+    nom = np.sum(omega_p * b_norm, axis=0)
+    denom = np.sum(omega_p * n_norm, axis=0)
+    pa = np.arctan2(nom, denom)
+    pa = np.rad2deg(pa) % 180
+    pa[pa >= 90] -= 180
+    pa[pa < -90] += 180
+
+    unstable_points = n_unstable[0, :] | t_unstable[0, :] | b_unstable[0, :]
+    pa[unstable_points] = np.nan
+
+    return FrenetPAFrame(
+        pa_deg=pa.astype(np.float32),
+        omega_p=omega_p,
+        b_norm=b_norm,
+        n_norm=n_norm,
+    )
+
+
+def compute_frenet_frames_field_line_set(
+    field_line_set: FieldLineSet,
+    *,
+    update_pa_line: bool = True,
+) -> Tuple[FieldLineSet, List[Any], List[Any], List[Any]]:
+    """Compute Frenet frames and PA for each line in ``field_line_set``.
+
+    Parameters
+    ----------
+    field_line_set
+        Must expose ``r_line`` with per-line arrays of shape ``(N, 3)``.
+    update_pa_line
+        If True, write computed PA arrays back onto ``field_line_set``.
+
+    Returns
+    -------
+    tuple
+        ``(field_line_set, omega_p_list, b_norm_list, n_norm_list)`` where each
+        list entry is ``(3, N)`` arrays or ``None`` for empty lines.
+    """
+    r_lines = field_line_set.get_property("r_line")
+    if r_lines is None or len(r_lines) == 0:
+        error_msg = "No field line data found in field_line_set"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    omega_p_list: List[Any] = []
+    b_norm_list: List[Any] = []
+    n_norm_list: List[Any] = []
+    pa_calculated: List[np.ndarray] = []
+
+    for r_line in r_lines:
+        if r_line is None or len(r_line) == 0:
+            omega_p_list.append(None)
+            b_norm_list.append(None)
+            n_norm_list.append(None)
+            pa_calculated.append(np.array([], dtype=np.float32))
+            continue
+
+        frame = calculate_frenet_pa_frame(np.asarray(r_line, dtype=np.float64).T)
+        omega_p_list.append(frame.omega_p)
+        b_norm_list.append(frame.b_norm)
+        n_norm_list.append(frame.n_norm)
+        pa_calculated.append(frame.pa_deg)
+
+    if update_pa_line:
+        field_line_set.set_property(pa_line=pa_calculated)
+
+    return field_line_set, omega_p_list, b_norm_list, n_norm_list
 
 
 def calculate_pa_line(
@@ -60,55 +189,9 @@ def calculate_pa_line(
     """
     if getattr(template.save_flags, PropertyName.PA_LINE.flag_name):
         if line_R_max >= threshold_line_distance:
-            
-            r64 = r.astype(np.float64)  # Shape: (3, n_points)
-            s = _arc_length_samples(r64)
-            r1 = np.gradient(r64, s, axis=1)
-            r2 = np.gradient(r1, s, axis=1)
-            
-            unstable_threshold = 1.1e-10
-            
-            # Tangent vector along whole line
-            t_abs = np.linalg.norm(r1, axis=0, keepdims=True)
-            t_unstable = t_abs <= unstable_threshold
-            t_norm = r1 / t_abs
-            
-            # Curvature normal along whole line
-            proj = np.sum(r2 * t_norm, axis=0, keepdims=True) * t_norm
-            n = r2 - proj
-            n_abs = np.linalg.norm(n, axis=0, keepdims=True)
-            n_unstable = n_abs <= unstable_threshold
-            n_norm = n / n_abs
-            
-            
-            Omega = np.array([[0.0], [0.0], [1.0]]) 
-            # Project Ω onto plane perpendicular to t
-            Omega_dot_t = np.sum(Omega * t_norm, axis=0, keepdims=True)
-            Omega_p = Omega - Omega_dot_t * t_norm
-
-    
-            # Binormal vector
-            b = np.cross(t_norm.T, n_norm.T).T
-            b_abs = np.linalg.norm(b, axis=0, keepdims=True)
-            b_unstable = b_abs <= unstable_threshold
-            b_norm = b / b_abs
-
-            # Project curvature normal onto this basis
-            nom = np.sum(Omega_p * b_norm, axis=0)
-            denom = np.sum(Omega_p * n_norm, axis=0)
-            
-            PA = np.arctan2(nom, denom)
-            PA = np.rad2deg(PA) % 180
-            PA[PA >= 90] -= 180
-            PA[PA < -90] += 180
-                                  
-            unstable_points = n_unstable[0, :] | t_unstable[0, :] | b_unstable[0, :]
-            PA[unstable_points] = np.nan
-            
-            
+            frame = calculate_frenet_pa_frame(r.astype(np.float64))
+            PA = frame.pa_deg
             logger.debug(f"Calculated PA line with {len(PA)} points")
-
-           
         else:
             PA = np.array([], dtype=np.float32)
             logger.debug(

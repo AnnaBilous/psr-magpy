@@ -33,7 +33,13 @@ from .tracing_parameters import (
     PerformanceParameters,
     OutputParameters,
 )
-from .property_calculator import PropertyCalculator, calculate_pa_line
+from .property_calculator import (
+    FrenetPAFrame,
+    PropertyCalculator,
+    calculate_frenet_pa_frame,
+    calculate_pa_line,
+    compute_frenet_frames_field_line_set,
+)
 from .progress_tracker import ProgressTracker, ProgressReporter
 from .memory_manager import MemoryManager
 from .calculation_context import CalculationContext
@@ -66,7 +72,10 @@ __all__ = [
     "PropertyName",
     "SaveFlags",
     "PropertyCalculator",
+    "FrenetPAFrame",
+    "calculate_frenet_pa_frame",
     "calculate_pa_line",
+    "compute_frenet_frames_field_line_set",
     "MemoryManager",
     "ProgressTracker",
     "ProgressReporter",
