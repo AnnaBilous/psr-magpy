@@ -23,6 +23,30 @@ def get_P_ms(R_LC: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     return R_LC / 4.77
 
 
+def tangent_phi_to_observer_phi(
+    tangent_phi_deg: Union[float, np.ndarray],
+) -> Union[float, np.ndarray]:
+    """Map pipeline tangent azimuth to observer-frame spin phase for :func:`PA_RVM`.
+
+    Field-line ``tangent_phi`` uses the tracing spherical convention
+    (``arctan2(y, x)`` in degrees). RVM expects the observer-frame azimuth,
+    related by a reflection about the meridian: ``360° − φ`` (wrapped to
+    ``[0, 360)``).
+
+    Parameters
+    ----------
+    tangent_phi_deg
+        Tangent azimuth in degrees (any range).
+
+    Returns
+    -------
+    Union[float, np.ndarray]
+        Observer-frame azimuth in degrees, in ``[0, 360)``.
+    """
+    phi = np.mod(np.asarray(tangent_phi_deg, dtype=np.float64), 360.0)
+    return np.mod(360.0 - phi, 360.0)
+
+
 def PA_RVM(alpha: Union[float, np.ndarray], observer_angle: Union[float, np.ndarray], phi: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     """Calculate the Rotating Vector Model (RVM) polarization angle.
     

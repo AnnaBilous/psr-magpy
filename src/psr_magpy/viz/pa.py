@@ -11,7 +11,7 @@ import numpy as np
 
 from psr_magpy.line.pa_theta_filter import FilteredPAData
 from psr_magpy.utils.logging_config import get_logger
-from psr_magpy.utils.physical_conversions import PA_RVM
+from psr_magpy.utils.physical_conversions import PA_RVM, tangent_phi_to_observer_phi
 
 logger = get_logger(__name__, console_format_brief=True)
 
@@ -152,13 +152,10 @@ def compute_colors_with_radius_saturation(
 
 
 def _transform_scatter_phi(phi_values: np.ndarray, phi_roll_deg: float) -> np.ndarray:
-    """Map tangent φ to panel x-coordinates (flip, then roll)."""
-    phi = phi_values % 360
-    phi = 360 - phi
+    """Map tangent φ to panel x-coordinates (observer frame, then roll)."""
+    phi = tangent_phi_to_observer_phi(phi_values)
     phi = phi + phi_roll_deg
-    phi[phi > 360] -= 360
-    phi[phi < 0] += 360
-    return phi
+    return np.mod(phi, 360.0)
 
 
 def _phi_tick_labels(x_ticks: np.ndarray, phi_roll_deg: float) -> np.ndarray:

@@ -18,7 +18,7 @@ from .line.open_field_line_edges import calculate_and_save_OFL_edges, calculate_
 
 # Utils
 from .utils.logging_config import get_logger
-from .utils.physical_conversions import get_R_LC, get_P_ms, PA_RVM
+from .utils.physical_conversions import get_R_LC, get_P_ms, PA_RVM, tangent_phi_to_observer_phi
 
 # Experiment system
 from .experiment import (
@@ -76,6 +76,7 @@ __all__ = [
     "get_R_LC",
     "get_P_ms",
     "PA_RVM",
+    "tangent_phi_to_observer_phi",
     # Experiment system
     "ExperimentConfig",
     "ExperimentSeriesConfig",
