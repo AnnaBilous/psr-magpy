@@ -63,6 +63,7 @@ from .pa import (
     plot_PA_vs_phi,
     plot_RVM_curve,
     prepare_pa_scatter_data,
+    rolled_phi_ticks,
 )
 from .pa_panels import (
     filter_snapshot_for_theta,
@@ -126,6 +127,7 @@ __all__ = [
     "plot_PA_vs_phi",
     "PreparedPAScatter",
     "prepare_pa_scatter_data",
+    "rolled_phi_ticks",
     "filter_snapshot_for_theta",
     "plot_snapshot_skymap_panel",
     "plot_snapshot_oflr_panel",

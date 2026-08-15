@@ -158,17 +158,35 @@ def _transform_scatter_phi(phi_values: np.ndarray, phi_roll_deg: float) -> np.nd
     return np.mod(phi, 360.0)
 
 
-def _phi_tick_labels(x_ticks: np.ndarray, phi_roll_deg: float) -> np.ndarray:
-    """Roll tick labels so displayed φ matches ``phi_roll_deg`` unwrapping."""
+def rolled_phi_ticks(
+    phi_roll_deg: float = PHI_ROLL,
+    tick_step: float = 90.0,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Axis positions and rolled φ labels for PA / skymap / OFLR panels.
+
+    Returns
+    -------
+    positions, labels
+        ``positions`` include a closing ``360``; corresponding label is ``90``.
+    """
+    seed = np.arange(0.0, 360.0, float(tick_step))
+    if seed.size == 0:
+        return np.asarray([0.0, 360.0]), np.asarray([0.0, 90.0])
+    if seed.size == 1:
+        return np.append(seed, 360.0), np.append(seed.copy(), 90.0)
+    roll_steps = int(round(float(phi_roll_deg) / float(tick_step))) % int(seed.size)
+    labels = np.roll(seed, roll_steps)
+    positions = np.append(seed, 360.0)
+    labels = np.append(labels, 90.0)
+    return positions, labels
+
+
+def _phi_tick_labels(x_ticks: np.ndarray, phi_roll_deg: float) -> Tuple[np.ndarray, np.ndarray]:
+    """Backward-compatible wrapper around :func:`rolled_phi_ticks`."""
     if len(x_ticks) < 2:
-        return x_ticks.copy()
+        return np.asarray(x_ticks, dtype=float).copy(), np.asarray(x_ticks, dtype=float).copy()
     tick_step = float(x_ticks[1] - x_ticks[0])
-    roll_steps = int(round(phi_roll_deg / tick_step)) % len(x_ticks)
-    xtick_labels = np.roll(x_ticks, roll_steps)
-    # Add 90 at the right end (position 360)
-    x_ticks = np.append(x_ticks, 360)
-    xtick_labels = np.append(xtick_labels, 90)
-    return x_ticks, xtick_labels
+    return rolled_phi_ticks(phi_roll_deg=float(phi_roll_deg), tick_step=tick_step)
 
 
 def calculate_RVM_curve(
@@ -418,9 +436,9 @@ def plot_PA_vs_phi(
     ax.yaxis.tick_right()
     ax.set_ylim(-90, 90)
     ax.set_xlim(0, 360)
-    x_ticks_seed = np.arange(0, 360, phi_tick_step)
-    x_ticks, x_tick_labels = _phi_tick_labels(x_ticks_seed, phi_roll_deg)
- 
+    x_ticks, x_tick_labels = rolled_phi_ticks(
+        phi_roll_deg=phi_roll_deg, tick_step=float(phi_tick_step)
+    )
     ax.set_xticks(x_ticks, [f"{int(round(label))}$\degree$" for label in x_tick_labels])
     # Set y-axis ticks with 15-degree spacing and add degree symbols
     y_ticks = np.arange(-90, 91, 30)
