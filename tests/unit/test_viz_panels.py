@@ -70,11 +70,16 @@ def test_phi_roll_deg_transforms():
     np.testing.assert_allclose(rolled, [270.0, 180.0, 90.0])
 
     ticks = np.arange(0, 360, 45)
+    _, x_labels = _phi_tick_labels(ticks, 270)
     np.testing.assert_array_equal(
-        _phi_tick_labels(ticks, 270),
-        np.array([270, 315, 0, 45, 90, 135, 180, 225]),
+        x_labels,
+        np.array([270, 315, 0, 45, 90, 135, 180, 225, 90]),
     )
-    np.testing.assert_array_equal(_phi_tick_labels(ticks, 0), ticks)
+    _, x_labels_zero = _phi_tick_labels(ticks, 0)
+    np.testing.assert_array_equal(
+        x_labels_zero,
+        np.append(ticks, [90]),
+    )
 
 
 def test_plot_pa_vs_phi_phi_roll_deg_kwarg():

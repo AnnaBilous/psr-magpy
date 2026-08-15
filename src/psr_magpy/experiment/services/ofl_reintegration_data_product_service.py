@@ -453,6 +453,7 @@ class OFLReintegrationDataProductService:
         skip_verify_by_reversing: bool = True,
         n_cores: Optional[int] = None,
         dt_reint: Optional[float] = None,
+        output_subdir: Optional[str] = None,
     ) -> Dict[int, ReintegrationDataProductResult]:
         """Build OFL data products for selected experiments.
 
@@ -460,6 +461,8 @@ class OFLReintegrationDataProductService:
         -----
         - This service does not persist any target experiment config.
         - Outputs are always written to data-products folders.
+        - ``output_subdir``, if set, overrides the default under ``data_products``
+          (``OFLR_edges`` for edge mode, ``OFLR`` for region mode).
         - ``n_cores``, if set, overrides each experiment YAML for the integration step.
         - For ``selection_mode="region"``, ``reversed_error_threshold`` keeps lines with
           ``reversed_error <= threshold`` (NaNs dropped); requires batches saved with
@@ -543,8 +546,11 @@ class OFLReintegrationDataProductService:
                 / series_config.name
                 / "data_products"
             )
-            output_subdir = "OFLR_edges" if selection_mode == "edge" else "OFLR"
-            output_dir = data_products_dir / output_subdir
+            if output_subdir is None:
+                resolved_subdir = "OFLR_edges" if selection_mode == "edge" else "OFLR"
+            else:
+                resolved_subdir = str(output_subdir)
+            output_dir = data_products_dir / resolved_subdir
             output_dir.mkdir(parents=True, exist_ok=True)
 
             calc_result = self._calculate_footpoints_only(

@@ -167,7 +167,7 @@ def _phi_tick_labels(x_ticks: np.ndarray, phi_roll_deg: float) -> np.ndarray:
     xtick_labels = np.roll(x_ticks, roll_steps)
     # Add 90 at the right end (position 360)
     x_ticks = np.append(x_ticks, 360)
-    xtick_labels = np.append(xtick_labels, 2*xtick_labels[-1] - xtick_labels[-2])
+    xtick_labels = np.append(xtick_labels, 90)
     return x_ticks, xtick_labels
 
 

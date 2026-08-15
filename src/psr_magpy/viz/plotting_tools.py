@@ -236,7 +236,8 @@ def fill_lines(
     for k in zorder_layer:
         mask = zorder_all == k
         lines[k].set_segments(segments_all[mask])
-        lines[k].set_edgecolor(colors[mask])
+        segment_colors = colors[mask]
+        lines[k].set_color(segment_colors)
 
     return lines
 
