@@ -185,13 +185,16 @@ def plot_scattered_points(
     for k in zorder_layer:
         mask = zorder_all == k
         if np.any(mask):
+            # Slightly below co-depth LineCollections so same-bin ties
+            # do not paint scatter over field lines (matplotlib draws
+            # later artists on top when zorder is equal).
             ax.scatter(
                 xproj[mask],
                 zproj[mask],
                 c=point_colors[mask],
                 s=s,
                 alpha=alpha,
-                zorder=zorder_layer[k],
+                zorder=float(zorder_layer[k]) - 0.1,
                 edgecolors="none",
             )
 
