@@ -20,7 +20,7 @@ def plot_skymap(
     ax=None,
     theta_obs: Optional[float] = None,
     cl_LOS: str = 'b',
-    lw_LOS: float = 1.0,
+    lw_LOS: float = 0.5,
     **imshow_kwargs
 ) -> Tuple:
     """Plot skymap using imshow.

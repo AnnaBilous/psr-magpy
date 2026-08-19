@@ -24,7 +24,7 @@ def plot_OFLR_map(
     NScl: str = 'LightCyan',
     theta_obs: Optional[float] = None,
     cl_LOS: str = 'b',
-    lw_LOS: float = 1.0,
+    lw_LOS: float = 0.5,
     plot_contour: bool = False,
     **imshow_kwargs
 ) -> Tuple:
@@ -147,7 +147,7 @@ def plot_OFLR_em_map(
     NScl: str = 'LightCyan',
     theta_obs: Optional[float] = None,
     cl_LOS: str = 'b',
-    lw_LOS: float = 1.0,
+    lw_LOS: float = 0.5,
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
     **imshow_kwargs
@@ -227,9 +227,8 @@ def plot_OFLR_em_map(
     )
     
     ax.set_ylim(180, 0)
-    phi_grid = [0, 90, 270, 360]
-    #phi_grid_labels = np.roll(phi_grid, int(len(phi_grid)*0.75))
-    phi_grid_labels = [90, 180, 0, 90]
+    phi_grid = [0, 90, 180, 270, 360]
+    phi_grid_labels = [90, 180, 270, 0, 90]
     # Add 90 at the right end (position 360)
     ax.set_xticks(phi_grid, [f"{label}$\degree$" for label in phi_grid_labels])
     ax.set_yticks(np.arange(0, 181, 30), [f"{tick}$\degree$" for tick in np.arange(0, 181, 30)])

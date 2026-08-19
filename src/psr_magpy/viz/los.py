@@ -12,8 +12,8 @@ def overlay_observer_los(
     theta_obs: Optional[float],
     *,
     color: str = "b",
-    linewidth: float = 1.0,
-    zorder: int = 15,
+    linewidth: float = 0.5,
+    zorder: int = 3,
 ) -> None:
     """Draw horizontal LOS at observer colatitude ``theta_obs`` (degrees).
 

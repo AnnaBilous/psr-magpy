@@ -440,8 +440,7 @@ def plot_PA_vs_phi(
         phi_roll_deg=phi_roll_deg, tick_step=float(phi_tick_step)
     )
     ax.set_xticks(x_ticks, [f"{int(round(label))}$\degree$" for label in x_tick_labels])
-    # Set y-axis ticks with 15-degree spacing and add degree symbols
-    y_ticks = np.arange(-90, 91, 30)
+    y_ticks = np.arange(-90, 91, 45)
     ax.set_yticks(y_ticks, [f"{tick}$\degree$" for tick in y_ticks])
     ax.grid(True, alpha=0.3)
     
