@@ -218,6 +218,56 @@ class PowerLawWidthGenerator(FieldLineWidthGenerator):
         return lw_func
 
 
+class LinearWidthGenerator(FieldLineWidthGenerator):
+    """Piecewise-linear width vs depth layer.
+
+    Assigns ``lw_min`` to the lowest z-order layer, ``lw_med`` to the median
+    layer, and ``lw_max`` to the highest z-order layer; interpolates linearly
+    between those anchors.
+    """
+
+    def __init__(self, lw_min: float, lw_max: float, lw_med: float):
+        """Initialize linear width generator.
+
+        Parameters
+        ----------
+        lw_min : float
+            Line width at smallest z-order (far).
+        lw_max : float
+            Line width at largest z-order (near).
+        lw_med : float
+            Line width at the median layer.
+        """
+        self.lw_min = float(np.asarray(lw_min).reshape(-1)[0])
+        self.lw_max = float(np.asarray(lw_max).reshape(-1)[0])
+        self.lw_med = float(np.asarray(lw_med).reshape(-1)[0])
+
+    def generate_widths(self) -> Callable:
+        """Generate piecewise-linear width function.
+
+        Returns
+        -------
+        Callable
+            Function that takes (layer_no, Nlayers) and returns line width.
+        """
+
+        def lw_func(layer_no: int, Nlayers: int) -> float:
+            n = int(Nlayers)
+            if n <= 1:
+                return self.lw_med
+            layer_max = n - 1
+            mid = 0.5 * layer_max
+            return float(
+                np.interp(
+                    float(layer_no),
+                    [0.0, mid, float(layer_max)],
+                    [self.lw_min, self.lw_med, self.lw_max],
+                )
+            )
+
+        return lw_func
+
+
 class ConstantWidthGenerator(FieldLineWidthGenerator):
     """Line width generator with constant width."""
 

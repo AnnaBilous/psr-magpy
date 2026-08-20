@@ -14,6 +14,7 @@ from .field_line_style import (
     FadingColorGenerator,
     FieldLineWidthGenerator,
     PowerLawWidthGenerator,
+    LinearWidthGenerator,
     ConstantWidthGenerator,
     FieldLinePlotConfig,
 )
@@ -86,6 +87,7 @@ __all__ = [
     "FadingColorGenerator",
     "FieldLineWidthGenerator",
     "PowerLawWidthGenerator",
+    "LinearWidthGenerator",
     "ConstantWidthGenerator",
     "FieldLinePlotConfig",
     "get_Nlayers",
