@@ -7,7 +7,7 @@ see ``analysis/00_miscellaneous/PA_snapshot/REORG_ARCHITECTURE.md``.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, Sequence, Tuple, Union
+from typing import Any, Literal, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from matplotlib.axes import Axes
@@ -17,7 +17,11 @@ from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.pa_theta_filter import FilteredPAData, filter_fieldline_points_by_theta
 from psr_magpy.viz.field_line_style import FieldLinePlotConfig
 from psr_magpy.viz.healpix import project_array_to_equirectangular
-from psr_magpy.viz.oflr import plot_OFLR_em_map, plot_OFLR_map
+from psr_magpy.viz.oflr import (
+    overlay_oflr_emission_scatter,
+    plot_OFLR_em_map,
+    plot_OFLR_map,
+)
 from psr_magpy.viz.pa import PHI_ROLL, PreparedPAScatter, plot_PA_vs_phi, prepare_pa_scatter_data
 from psr_magpy.viz.pseudo3d import ProjectionConfig, plot_field_lines_on_axes
 from psr_magpy.viz.skymap import plot_skymap
@@ -66,7 +70,7 @@ def plot_snapshot_skymap_panel(
     vmax: Optional[float] = None,
     vmax_percentile: float = 99.0,
     cl_los: str = "b",
-    lw_los: float = 1.0,
+    lw_los: float = 0.7,
     hide_x_labels: bool = True,
     **imshow_kwargs: Any,
 ) -> Tuple[Figure, Axes, Any]:
@@ -99,10 +103,16 @@ def plot_snapshot_oflr_panel(
     *,
     color_NS: str = "cyan",
     cl_los: str = "b",
-    lw_los: float = 1.0,
+    lw_los: float = 0.7,
+    em_overlay: Literal["imshow", "scatter"] = "scatter",
     **imshow_kwargs: Any,
 ) -> Tuple[Figure, Axes, Any]:
     """Draw OFLR surface map and emission overlay on ``ax``."""
+    # Never forward panel-only kwargs to ``plot_OFLR_map`` / ``imshow``.
+    em_overlay = imshow_kwargs.pop("em_overlay", em_overlay)  # type: ignore[assignment]
+    for key in ("s", "alpha", "edgecolors", "zorder", "cmap", "vmin", "vmax"):
+        imshow_kwargs.pop(key, None)
+
     fig, ax, im = plot_OFLR_map(
         snapshot.oflr_image,
         snapshot.oflr_longitude_deg,
@@ -114,22 +124,30 @@ def plot_snapshot_oflr_panel(
         lw_LOS=lw_los,
         **imshow_kwargs,
     )
-    oflr_em_values, oflr_em_lon, oflr_em_lat = project_array_to_equirectangular(
-        filtered.oflr_em_map,
-        snapshot.grid_indices,
-        snapshot.nside_oflr,
-        image_size=snapshot.image_size,
-    )
-    plot_OFLR_em_map(
-        oflr_em_values,
-        oflr_em_lon,
-        oflr_em_lat,
-        ax=ax,
-        NScl=color_NS,
-        theta_obs=theta_obs,
-        cl_LOS=cl_los,
-        lw_LOS=lw_los,
-    )
+    if em_overlay == "scatter":
+        if filtered.oflr_em_map is not None:
+            overlay_oflr_emission_scatter(
+                ax,
+                filtered.oflr_em_map,
+                int(snapshot.nside_oflr),
+            )
+    else:
+        oflr_em_values, oflr_em_lon, oflr_em_lat = project_array_to_equirectangular(
+            filtered.oflr_em_map,
+            snapshot.grid_indices,
+            snapshot.nside_oflr,
+            image_size=snapshot.image_size,
+        )
+        plot_OFLR_em_map(
+            oflr_em_values,
+            oflr_em_lon,
+            oflr_em_lat,
+            ax=ax,
+            NScl=color_NS,
+            theta_obs=theta_obs,
+            cl_LOS=cl_los,
+            lw_LOS=lw_los,
+        )
     return fig, ax, im
 
 

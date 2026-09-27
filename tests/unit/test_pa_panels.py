@@ -151,6 +151,19 @@ def test_plot_snapshot_oflr_panel(mock_proj, mock_map, mock_em):
     mock_em.assert_called_once()
 
 
+@patch("psr_magpy.viz.pa_panels.overlay_oflr_emission_scatter")
+@patch("psr_magpy.viz.pa_panels.plot_OFLR_map")
+def test_plot_snapshot_oflr_panel_scatter_overlay(mock_map, mock_scatter):
+    snap = _minimal_snapshot()
+    filtered = filter_snapshot_for_theta(snap, 45.0, 0.5)
+    mock_map.return_value = (snap.skymap, plt.subplots()[1], None)
+
+    fig, ax = plt.subplots()
+    plot_snapshot_oflr_panel(snap, ax, 45.0, filtered, em_overlay="scatter")
+    mock_map.assert_called_once()
+    mock_scatter.assert_called_once()
+
+
 def test_plot_snapshot_pa_panel_empty_message():
     snap = _minimal_snapshot()
     filtered = filter_fieldline_points_by_theta(

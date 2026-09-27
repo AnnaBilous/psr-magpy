@@ -24,7 +24,7 @@ def plot_OFLR_map(
     NScl: str = 'LightCyan',
     theta_obs: Optional[float] = None,
     cl_LOS: str = 'b',
-    lw_LOS: float = 0.5,
+    lw_LOS: float = 0.7,
     plot_contour: bool = False,
     **imshow_kwargs
 ) -> Tuple:
@@ -92,6 +92,9 @@ def plot_OFLR_map(
     lon_mesh = lon_mesh_orig.copy() 
     lat_mesh = 90 - lat_mesh_orig.copy() 
     
+    # Panel-level kwargs must not reach AxesImage.
+    imshow_kwargs.pop("em_overlay", None)
+
     # Plot with imshow
     im = ax.imshow(
         oflr_data,
@@ -147,7 +150,7 @@ def plot_OFLR_em_map(
     NScl: str = 'LightCyan',
     theta_obs: Optional[float] = None,
     cl_LOS: str = 'b',
-    lw_LOS: float = 0.5,
+    lw_LOS: float = 0.7,
     vmin: Optional[float] = None,
     vmax: Optional[float] = None,
     **imshow_kwargs
@@ -238,6 +241,45 @@ def plot_OFLR_em_map(
     overlay_observer_los(ax, theta_obs, color=cl_LOS, linewidth=lw_LOS)
 
     return fig, ax, im
+
+
+def overlay_oflr_emission_scatter(
+    ax,
+    oflr_em_map: np.ndarray,
+    nside: int,
+    *,
+    phi_roll_deg: float = 270.0,
+    cycle_period: float = 10.0,
+    s: float = 0.8,
+    alpha: float = 0.95,
+    zorder: int = 6,
+):
+    """Rainbow scatter overlay for active OFLR footpoints (HSV, 10° hue cycles)."""
+    em_map = np.asarray(oflr_em_map, dtype=np.float64)
+    if em_map.size == 0 or not np.any(np.isfinite(em_map)):
+        return None
+
+    valid = np.flatnonzero(np.isfinite(em_map))
+    if valid.size == 0:
+        return None
+
+    theta, phi = hp.pix2ang(int(nside), valid)
+    lon_deg = np.mod(np.rad2deg(phi) + float(phi_roll_deg), 360.0)
+    lat_deg = np.rad2deg(theta)
+    vals = em_map[valid]
+    cvals = np.mod(vals, float(cycle_period)) / float(cycle_period)
+    return ax.scatter(
+        lon_deg,
+        lat_deg,
+        c=cvals,
+        cmap="hsv",
+        vmin=0.0,
+        vmax=1.0,
+        s=float(s),
+        alpha=float(alpha),
+        edgecolors="none",
+        zorder=int(zorder),
+    )
 
 
 def plot_healpix_scatter(
