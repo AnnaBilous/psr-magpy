@@ -5,11 +5,14 @@ from pathlib import Path
 from unittest.mock import patch
 import pytest
 
+from psr_magpy.experiment.experiment_metadata import (
+    create_experiment_metadata,
+    generate_experiment_name,
+)
 from psr_magpy.experiment.experiment_series import (
     ExperimentSeriesConfig,
     FieldConfig, GridConfig, TracingConfig,
     SphericalGridConfig,
-    create_experiment_metadata, generate_experiment_name
 )
 from psr_magpy.experiment.experiment_series_runner import ExperimentSeriesRunner
 from psr_magpy.experiment.parameter_expansion import get_parameter_combinations

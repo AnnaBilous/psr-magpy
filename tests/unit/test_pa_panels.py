@@ -145,7 +145,7 @@ def test_plot_snapshot_oflr_panel(mock_proj, mock_map, mock_em):
     mock_proj.return_value = (np.zeros(snap.image_size), snap.skymap_longitude_deg, snap.skymap_latitude_deg)
 
     fig, ax = plt.subplots()
-    plot_snapshot_oflr_panel(snap, ax, 45.0, filtered)
+    plot_snapshot_oflr_panel(snap, ax, 45.0, filtered, em_overlay="imshow")
     mock_map.assert_called_once()
     mock_proj.assert_called_once()
     mock_em.assert_called_once()

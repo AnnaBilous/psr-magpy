@@ -419,7 +419,7 @@ def plot_field_lines_2d(
     field_values = np.zeros((n_points, n_points, 3))
     for i in range(n_points):
         for j in range(n_points):
-            field_values[i, j] = field.get_field(
+            field_values[i, j] = field.get_total_field(
                 [coords[0][i, j], coords[1][i, j], coords[2][i, j]]
             )
 

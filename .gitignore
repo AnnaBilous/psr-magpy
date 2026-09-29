@@ -10,6 +10,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
 
 .venv/
 venv/
@@ -23,6 +24,7 @@ docs/api/
 .mcp.json
 *.code-workspace
 .vscode/
+.cursorrules
 
 demo/**/pipeline_walkthrough_data/
 examples/**/output/

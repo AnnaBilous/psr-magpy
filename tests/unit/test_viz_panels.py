@@ -73,7 +73,7 @@ def test_phi_roll_deg_transforms():
     _, x_labels = _phi_tick_labels(ticks, 270)
     np.testing.assert_array_equal(
         x_labels,
-        np.array([270, 315, 0, 45, 90, 135, 180, 225, 90]),
+        np.array([90, 135, 180, 225, 270, 315, 0, 45, 90]),
     )
     _, x_labels_zero = _phi_tick_labels(ticks, 0)
     np.testing.assert_array_equal(

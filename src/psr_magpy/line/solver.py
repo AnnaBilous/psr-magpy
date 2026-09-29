@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, Tuple, Union
 from dataclasses import dataclass
 import numpy as np
-from scipy.integrate import solve_ivp, OdeSolution
+from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 
 from psr_magpy.utils.logging_config import get_logger

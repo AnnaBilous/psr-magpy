@@ -10,7 +10,6 @@ from numpy.typing import NDArray
 from numpy import ndarray, integer, floating
 
 import astropy.io.fits as pf
-from astropy.table import Table
 
 from psr_magpy.utils.logging_config import get_logger
 

@@ -1185,7 +1185,6 @@ def load_OFLR_line_data(
     R_LC_values: np.ndarray,
     lines_dir: Optional[Union[str, Path]] = None,
     template: Optional[FieldLine] = None,
-    file_pattern: Optional[str] = None,
     data_type: str = "edge",
 ) -> Dict[float, FieldLineSet]:
     """Load OFL line data (edges or regions) from FITS files.
@@ -1200,8 +1199,6 @@ def load_OFLR_line_data(
         Directory containing OFL line files. Default is None.
     template : Optional[FieldLine], optional
         FieldLine template for loading. If None, uses template_all(). Default is None.
-    file_pattern : Optional[str], optional
-        Custom file pattern (currently unused, files are auto-detected). Default is None.
     data_type : str, optional
         Type of data to load: "edge" or "region". Default is "edge".
     
