@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+title: psr-magpy
+message: Please cite this software.
+type: software
+authors:
+  - family-names: Bilous
+    given-names: Anna
+version: 0.1.0
+license: GPL-3.0-or-later
+repository-code: https://github.com/AnnaBilous/psr-magpy

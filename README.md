@@ -40,6 +40,10 @@ pytest --cov=src/psr_magpy/experiment --cov=src/psr_magpy/workflow --cov=src/psr
 
 Narrative docs are in `docs/`. `make docs` writes HTML under `docs/_build/html`.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 GPL-3.0-or-later. See `LICENSE`.
