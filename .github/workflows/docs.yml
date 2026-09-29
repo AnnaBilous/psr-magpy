@@ -1,0 +1,32 @@
+name: Build Documentation
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[docs]"
+      - name: Generate API documentation
+        run: |
+          sphinx-apidoc -f -e --separate -o docs/api src/psr_magpy
+      - name: Build documentation
+        run: |
+          sphinx-build -b html -d docs/_build/doctrees docs docs/_build/html -W --keep-going
+      - name: Upload documentation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: docs/_build/html
