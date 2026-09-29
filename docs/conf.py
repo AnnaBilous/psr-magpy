@@ -3,6 +3,7 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import inspect
 import os
 import sys
 from datetime import datetime
@@ -26,9 +27,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.autosummary',
     'sphinx_rtd_theme',
-    'nbsphinx',
     'matplotlib.sphinxext.plot_directive',
-    # 'sphinx_autodoc_typehints',  # Disabled due to type hint compatibility issues
 ]
 
 # Napoleon settings for NumPy docstrings
@@ -88,7 +87,6 @@ if os.path.exists(os.path.join(html_static_path[0], 'favicon.ico')):
     html_favicon = '_static/favicon.ico'
 html_theme_options = {
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': True,
     'navigation_depth': 4,
@@ -105,14 +103,46 @@ latex_elements = {
 }
 
 # Exclude patterns
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
+exclude_patterns = [
+    '_build',
+    'Thumbs.db',
+    '.DS_Store',
+    '**.ipynb_checkpoints',
+    'docstring_style_guide.md',
+]
 
 # Default role
 default_role = 'py:obj'
 
-# Add any paths that contain templates here, relative to this directory
-templates_path = ['_templates']
-
 # Enable markdown support
 extensions.append('myst_parser')
-source_suffix = ['.rst', '.md'] 
+source_suffix = ['.rst', '.md']
+
+
+def skip_reexported_member(app, what, name, obj, skip, options):
+    """Document a class on the module that defines it.
+
+    Package pages re-export the same object. Sphinx then warns about a
+    duplicate description and an ambiguous cross-reference.
+    """
+    if skip:
+        return skip
+    defined_in = getattr(obj, "__module__", None)
+    if not defined_in:
+        return skip
+    frame = inspect.currentframe()
+    parent = None
+    while frame is not None:
+        documenter = frame.f_locals.get("self")
+        modname = getattr(documenter, "modname", None)
+        if modname:
+            parent = modname
+            break
+        frame = frame.f_back
+    if parent and defined_in != parent and defined_in.startswith(parent + "."):
+        return True
+    return skip
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", skip_reexported_member) 

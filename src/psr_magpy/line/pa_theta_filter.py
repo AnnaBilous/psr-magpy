@@ -27,8 +27,8 @@ ReferenceTheta = Union[float, npt.ArrayLike]
 class FilteredPAData:
     """Flat PA samples after θ filtering (snapshot / overlay panels).
 
-    Attributes
-    ----------
+    Notes
+    -----
     pa_values, phi_values
         Stacked samples from all lines passing the θ band.
     colatitude_values, longitude_values

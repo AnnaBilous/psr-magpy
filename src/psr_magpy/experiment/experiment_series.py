@@ -577,7 +577,7 @@ class ExperimentSeriesConfig(BaseModel):
         """Load experiment configurations from saved config files.
 
         If series metadata indicates subset grids (has_subset_grids=True),
-        prioritizes loading subset config files (*_subset.yaml).
+        prioritizes loading subset config files (``*_subset.yaml``).
 
         Returns
         -------

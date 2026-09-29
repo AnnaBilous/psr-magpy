@@ -18,7 +18,7 @@ Developer install, including tests:
 pip install -e ".[dev]"
 ```
 
-`pip install -e ".[docs]"` installs Sphinx. Building the docs is not part of the install check yet.
+`pip install -e ".[docs]"` installs Sphinx. Build the HTML with `make docs`.
 
 `psr-magpy-setup` creates `fits/`, `plots/`, `logs/`, and `configs/` under a chosen output directory and configures logging. It is not required for `import psr_magpy`.
 
@@ -38,7 +38,7 @@ pytest --cov=src/psr_magpy/experiment --cov=src/psr_magpy/workflow --cov=src/psr
 
 ## Documentation
 
-Narrative docs are in `docs/`. The docs build is not part of the install check yet.
+Narrative docs are in `docs/`. `make docs` writes HTML under `docs/_build/html`.
 
 ## License
 

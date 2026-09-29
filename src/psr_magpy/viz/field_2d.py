@@ -956,7 +956,7 @@ class MultipoleFieldVisualizer:
         arrowsize : float, optional
             Size of arrows along streamlines. Range: 0.5 to 3.0
         arrowstyle : str, optional
-            Style of arrows. Options: '->', '-|>', '->>', '->|', etc.
+            Style of arrows. Options: ``->``, ``-|>``, ``->>``, ``->|``.
         start_points : NDArray[np.float32], optional
             Custom starting points for streamlines (Nx2 array)
         maxlength : float, optional

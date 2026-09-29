@@ -52,9 +52,9 @@ class SolverError(PSRMagPyTracingError):
 @dataclass
 class Solution:
     """Unified solution interface for ODE solvers.
-    
-    Attributes
-    ----------
+
+    Notes
+    -----
     t : np.ndarray
         Time points (1D array).
     y : np.ndarray
@@ -105,14 +105,14 @@ class ODESolver(ABC):
         Parameters
         ----------
         fun : Callable
-            Right-hand side function: fun(t, y, *args) -> dy/dt
+            Right-hand side function: fun(t, y, ``*args``) -> dy/dt
         t_span : Tuple[float, float]
             Integration time span (t_start, t_end).
         y0 : np.ndarray
             Initial condition (1D array).
         events : Optional[Tuple[Callable, ...]]
             Tuple of event functions. Each event function should be:
-            event(t, y, *args) -> float, with optional .terminal and .direction attributes.
+            event(t, y, ``*args``) -> float, with optional .terminal and .direction attributes.
         method : str
             Integration method (solver-specific).
         rtol : float
@@ -155,7 +155,7 @@ class SciPySolver(ODESolver):
         Parameters
         ----------
         fun : Callable
-            Right-hand side function: fun(t, y, *args) -> dy/dt
+            Right-hand side function: fun(t, y, ``*args``) -> dy/dt
         t_span : Tuple[float, float]
             Integration time span (t_start, t_end).
         y0 : np.ndarray
@@ -250,7 +250,7 @@ class CyRKSolver(ODESolver):
         Parameters
         ----------
         fun : Callable
-            Right-hand side function: fun(t, y, *args) -> dy/dt
+            Right-hand side function: fun(t, y, ``*args``) -> dy/dt
         t_span : Tuple[float, float]
             Integration time span (t_start, t_end).
         y0 : np.ndarray

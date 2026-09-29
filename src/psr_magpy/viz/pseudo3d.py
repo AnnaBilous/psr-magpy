@@ -31,8 +31,8 @@ logger = get_logger(__name__, console_format_brief=True)
 class ProjectionConfig:
     """Oblique projection parameters for edge field-line pseudo-3D panels.
 
-    Attributes
-    ----------
+    Notes
+    -----
     XZview
         Half-extent of the line-tracing volume in the plane of the main view
         (typically scaled with ``R_LC``).

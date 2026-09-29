@@ -5,7 +5,7 @@ parameter inputs for creating multiple experiment variations.
 """
 
 from typing import List, Union, Dict, Any, Optional, Tuple
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from .field_config import FieldComponentConfig, FieldConfig
 from .grid_config import (
@@ -97,6 +97,64 @@ class CustomGridFactoryConfig(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
+def _restore_dumped_grids(obj):
+    """Turn dumped ``{"spherical": ...}`` entries back into grid objects."""
+    if not isinstance(obj, dict) or "grids" not in obj:
+        return obj
+    grids_data = []
+    for grid_dict in obj["grids"]:
+        if isinstance(grid_dict, dict):
+            if "spherical" in grid_dict:
+                grids_data.append(
+                    _grid_from_dump(
+                        grid_dict["spherical"],
+                        SphericalGridFactoryConfig,
+                        SphericalGridConfig,
+                        ("nlon", "nlat", "pole_lat"),
+                    )
+                )
+            elif "random" in grid_dict:
+                grids_data.append(
+                    _grid_from_dump(
+                        grid_dict["random"],
+                        RandomGridFactoryConfig,
+                        RandomGridConfig,
+                        ("nline_ori", "grid_file_path"),
+                    )
+                )
+            elif "healpix" in grid_dict:
+                grids_data.append(
+                    _grid_from_dump(
+                        grid_dict["healpix"],
+                        HealpixGridFactoryConfig,
+                        HealpixGridConfig,
+                        ("nside",),
+                    )
+                )
+            elif "custom" in grid_dict:
+                grids_data.append(
+                    _grid_from_dump(
+                        grid_dict["custom"],
+                        CustomGridFactoryConfig,
+                        CustomGridConfig,
+                        ("nline_ori",),
+                    )
+                )
+            else:
+                grids_data.append(grid_dict)
+        else:
+            grids_data.append(grid_dict)
+    obj["grids"] = grids_data
+    return obj
+
+
+def _grid_from_dump(payload, factory_cls, config_cls, list_keys):
+    """Rebuild a factory when a dumped parameter is still a list."""
+    if any(isinstance(payload.get(key), list) for key in list_keys):
+        return factory_cls(**payload)
+    return config_cls(**payload)
+
+
 class GridFactoryConfig(BaseModel):
     """Factory configuration for grids with flexible parameter inputs."""
 
@@ -114,6 +172,12 @@ class GridFactoryConfig(BaseModel):
     ]
 
     model_config = {"arbitrary_types_allowed": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _restore_factories_before_validate(cls, obj):
+        """Pydantic validates nested models without calling ``model_validate``."""
+        return _restore_dumped_grids(obj)
 
     def model_dump(self, **kwargs):
         """Dump model to dictionary, preserving grid type information."""
@@ -150,28 +214,7 @@ class GridFactoryConfig(BaseModel):
     @classmethod
     def model_validate(cls, obj):
         """Validate model, handling grid type information in YAML."""
-        if isinstance(obj, dict) and "grids" in obj:
-            # Convert grid type dictionaries back to config objects
-            grids_data = []
-            for grid_dict in obj["grids"]:
-                if isinstance(grid_dict, dict):
-                    if "spherical" in grid_dict:
-                        grids_data.append(SphericalGridConfig(**grid_dict["spherical"]))
-                    elif "random" in grid_dict:
-                        grids_data.append(RandomGridConfig(**grid_dict["random"]))
-                    elif "healpix" in grid_dict:
-                        grids_data.append(HealpixGridConfig(**grid_dict["healpix"]))
-                    elif "custom" in grid_dict:
-                        grids_data.append(CustomGridConfig(**grid_dict["custom"]))
-                    else:
-                        # Fallback to original validation
-                        grids_data.append(grid_dict)
-                else:
-                    grids_data.append(grid_dict)
-
-            obj["grids"] = grids_data
-
-        return super().model_validate(obj)
+        return super().model_validate(_restore_dumped_grids(obj))
 
 
 class TracingFactoryConfig(BaseModel):
@@ -354,10 +397,22 @@ def expand_field_configs(
                 # Mixed types - treat as regular list
                 expanded_components.append(component_group)
         elif isinstance(component_group, dict):
-            # Dictionary input with flexible parameters
-            param_combinations = get_parameter_combinations(component_group)
+            # Dictionary input with flexible parameters.
+            # A single [x, y, z] offset is one vector, not three experiments.
+            factory_params = dict(component_group)
+            offset_value = factory_params.get("offset_r_ns")
+            if (
+                isinstance(offset_value, list)
+                and len(offset_value) > 0
+                and not isinstance(offset_value[0], list)
+            ):
+                factory_params.pop("offset_r_ns")
+            param_combinations = get_parameter_combinations(factory_params)
             group_components = []
             for params in param_combinations:
+                if "offset_r_ns" not in params and isinstance(offset_value, list):
+                    if len(offset_value) > 0 and not isinstance(offset_value[0], list):
+                        params["offset_r_ns"] = offset_value
                 config = FieldComponentConfig(**params)
                 group_components.append(config)
             expanded_components.append(group_components)

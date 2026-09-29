@@ -8,13 +8,13 @@ PSR-MagPy Documentation
    :caption: Contents:
 
    installation
+   concepts
    quickstart
-   pa_snapshot
    tutorials/index
    api/modules
 
 Indices and tables
-=================
+==================
 
 * :ref:`genindex`
 * :ref:`modindex`
