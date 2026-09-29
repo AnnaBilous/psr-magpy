@@ -1,65 +1,45 @@
 # psr-magpy
-Playground for pulsar magnetic field line calculations
+
+psr-magpy traces magnetic field lines in a pulsar magnetosphere. It runs that tracing as named experiments and series, including the batch products: an open-field-line map, a skymap, and PA.
 
 ## Installation
 
-## Demo Outputs
+Python 3.9 or newer. Clone the repository and install from that checkout:
 
-When running demos, outputs are saved to:
-- Linux/Mac: `~/.psr_magpy/demo_outputs/`
-- Windows: `C:\Users\<username>\.psr_magpy\demo_outputs\`
+```bash
+git clone https://github.com/AnnaBilous/psr-magpy.git
+cd psr-magpy
+pip install .
+```
 
-You can specify a custom output location with the `--output-dir` parameter.
+Developer install, including tests:
 
-## Code Style
+```bash
+pip install -e ".[dev]"
+```
 
-### Docstrings
+`pip install -e ".[docs]"` installs Sphinx. Building the docs is not part of the install check yet.
 
-All code must use **NumPy-style** docstrings. See `docs/docstring_style_guide.md` for details.
+`psr-magpy-setup` creates `fits/`, `plots/`, `logs/`, and `configs/` under a chosen output directory and configures logging. It is not required for `import psr_magpy`.
 
-**Key requirements:**
-- Use `Parameters:` not `Args:`
-- Include type information: `name : type`
-- Add section underlines: `-----`
-- Keep docstrings concise and focused on usage
+## Tests
 
-**Example:**
-```python
-def calculate_field(r: np.ndarray) -> np.ndarray:
-    """Calculate magnetic field at position.
-    
-    Parameters
-    ----------
-    r : np.ndarray
-        Position vector (3-element array).
-    
-    Returns
-    -------
-    np.ndarray
-        Magnetic field vector.
-    """
+From the repository root, after the developer install:
+
+```bash
+pytest
+```
+
+Coverage for `experiment/`, `workflow/`, `io/`, and `viz/` uses source paths:
+
+```bash
+pytest --cov=src/psr_magpy/experiment --cov=src/psr_magpy/workflow --cov=src/psr_magpy/io --cov=src/psr_magpy/viz
 ```
 
 ## Documentation
 
-Documentation is built automatically from docstrings using Sphinx.
+Narrative docs are in `docs/`. The docs build is not part of the install check yet.
 
-**Build documentation:**
-```bash
-# Install documentation dependencies
-pip install -e .[docs]
+## License
 
-# Build HTML documentation
-make docs
-
-# Or use the build script
-python tools/build_docs.py
-
-# Generate API docs only
-make docs-api
-
-# Clean and rebuild
-make docs-clean docs
-```
-
-The documentation will be generated in `docs/_build/html/`. Open `docs/_build/html/index.html` in your browser to view it.
+GPL-3.0-or-later. See `LICENSE`.
