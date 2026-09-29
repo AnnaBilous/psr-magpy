@@ -539,7 +539,15 @@ def _expand_custom_grid_factory_config(
     if grid.coordinates is None:
         coordinates_values = [None] * len(nline_ori_values)
     elif isinstance(grid.coordinates, list):
-        coordinates_values = grid.coordinates
+        one_cloud = (
+            not isinstance(grid.nline_ori, list)
+            and len(grid.coordinates) == grid.nline_ori
+            and len(grid.coordinates) > 0
+            and isinstance(grid.coordinates[0], (list, tuple))
+            and len(grid.coordinates[0]) == 3
+            and not isinstance(grid.coordinates[0][0], (list, tuple))
+        )
+        coordinates_values = [grid.coordinates] if one_cloud else grid.coordinates
         if len(coordinates_values) != len(nline_ori_values):
             raise PSRMagPyValidationError(
                 f"Number of coordinates ({len(coordinates_values)}) must match number of nline_ori values ({len(nline_ori_values)})"
