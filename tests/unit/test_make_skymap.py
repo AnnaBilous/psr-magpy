@@ -1,10 +1,13 @@
 """Tests for skymap workflow helpers."""
 
 import numpy as np
+import pytest
 
 from psr_magpy.experiment.grid_config import HealpixGridConfig
 from psr_magpy.line.field_line_set import FieldLineSet
 from psr_magpy.line.property_system import PropertyName
+from psr_magpy.line.tracing_parameters import TracingDefaults
+from psr_magpy.utils.exceptions import PSRMagPyPropertyError
 from psr_magpy.workflow.line_batch_workflow_prep import (
     enrich_field_line_set_from_r_line,
     get_workflow_batch_load_template,
@@ -12,6 +15,7 @@ from psr_magpy.workflow.line_batch_workflow_prep import (
 from psr_magpy.workflow.make_skymap import (
     DEFAULT_SKYMAP_OUTPUT_FILENAME_PATTERN,
     format_skymap_output_filename,
+    make_skymap,
     skymap_pixel_counts_from_prepared_batch,
 )
 from psr_magpy.workflow.workflow_utils import create_healpix_grid
@@ -47,6 +51,43 @@ def test_format_skymap_output_filename_default_pattern():
         r_lc=23.85,
     )
     assert name == "skymap_009_RLC_23.85.fits"
+
+
+def test_make_skymap_threshold_matches_tracing_default():
+    import inspect
+
+    default = inspect.signature(make_skymap).parameters["threshold_line_distance"].default
+    assert default == TracingDefaults.THRESHOLD_LINE_DISTANCE
+
+
+def test_make_skymap_uses_full_sphere_for_subset_config(tmp_path):
+    from types import SimpleNamespace
+
+    cfg = HealpixGridConfig(
+        nside=1,
+        subset=True,
+        grid_file_path="/nonexistent/subset_grid.fits",
+    )
+    skymap = make_skymap(
+        SimpleNamespace(name="exp_000", metadata=None),
+        tmp_path,
+        "series",
+        "lines",
+        cfg,
+        np.array([2.0]),
+        save=False,
+    )
+    assert skymap.shape == (12,)
+    assert np.all(skymap == 0)
+
+
+def test_skymap_pixel_counts_raises_when_properties_missing():
+    template = get_workflow_batch_load_template()
+    batch = FieldLineSet(template, copy_data=False)
+    batch.n_field_lines = 1
+    grid = create_healpix_grid(HealpixGridConfig(nside=1))
+    with pytest.raises(PSRMagPyPropertyError, match="tangent_theta"):
+        skymap_pixel_counts_from_prepared_batch(batch, grid)
 
 
 def test_skymap_pixel_counts_from_none():

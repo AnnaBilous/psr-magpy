@@ -461,6 +461,9 @@ class OFLReintegrationDataProductService:
         -----
         - This service does not persist any target experiment config.
         - Outputs are always written to data-products folders.
+        - ``selection_mode="edge"`` keeps the neighbour edge (``precise_edges=True``).
+          ``selection_mode="region"`` keeps the open footpoints from
+          ``get_OFL_footpoints``. Those are not the same set.
         - ``output_subdir``, if set, overrides the default under ``data_products``
           (``OFLR_edges`` for edge mode, ``OFLR`` for region mode).
         - ``n_cores``, if set, overrides each experiment YAML for the integration step.

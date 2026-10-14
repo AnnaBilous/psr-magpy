@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.abspath('../src'))
 
 # Project information
 project = 'psr-magpy'
-copyright = f'{datetime.now().year}, PSR-MagPy Team'
-author = 'PSR-MagPy Team'
+copyright = f'{datetime.now().year}, Anna Bilous'
+author = 'Anna Bilous'
 version = '0.1.0'
 release = '0.1.0'
 

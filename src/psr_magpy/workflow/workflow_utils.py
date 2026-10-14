@@ -218,6 +218,12 @@ def create_radius_mask(
     -------
     np.ndarray
         Boolean mask (True for points within range).
+
+    Examples
+    --------
+    >>> radii = np.array([0.5, 1.2, 3.0])
+    >>> create_radius_mask(radii, min_radius=1.0, max_radius=2.5)
+    array([False,  True, False])
     """
     if min_radius is not None and max_radius is not None:
         return (point_radii >= min_radius) & (point_radii < max_radius)

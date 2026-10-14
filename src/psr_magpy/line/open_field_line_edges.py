@@ -285,24 +285,9 @@ def healpix_get_single_OFL_edge_precise(
     # To do:
     # - add reverse error checking
     # - make nested R_LC optional
-    
-    
-    
-    #import matplotlib.pyplot as plt
-    #full_grid = HealpixGrid(nside=256)
-    #print("Grid nline", len(grid.longitude))
-    #print(grid.indices)
-    #print("Full grid nline", len(full_grid.longitude))
 
-    #full_grid_ftp_ids_not_inner = grid.indices[ftp_ids_not_inner]
-    #full_grid_ftp_ids = grid.indices[ftp_ids]
-    
     full_grid_ftp_ids_not_inner = ftp_ids_not_inner
     full_grid_ftp_ids = ftp_ids
-
-    #plt.plot(full_grid.longitude, full_grid.colatitude, '.')
-    #plt.plot(full_grid.longitude[full_grid_ftp_ids_not_inner], full_grid.colatitude[full_grid_ftp_ids_not_inner], 'k.')
-    #plt.show()
 
     # Handle empty input
     if n_ftp == 0:
@@ -312,11 +297,6 @@ def healpix_get_single_OFL_edge_precise(
     neighbour_footpoints = hp.pixelfunc.get_all_neighbours(
         grid.nside, full_grid_ftp_ids_not_inner, nest=False
     )
-    #l = grid.longitude
-    #c = grid.colatitude
-    #print(ftp_ids_not_inner[:5])
-    #print(neighbour_footpoints[:5,:])
-    #exit(1)
     # Vectorized neighbor checking
     # Mark valid neighbors (remove -1 values)
     neighbour_footpoints_valid = neighbour_footpoints >= 0
@@ -347,11 +327,6 @@ def healpix_get_single_OFL_edge_precise(
     is_edge = n_neighbours_in_ftp_ids < n_neighbours_per_footpoint - 1
  
     ftp_ids_edge = ftp_ids_not_inner[is_edge]
-
-    #plt.plot(grid.longitude, grid.colatitude, 'k.')
-    #plt.plot(grid.longitude[ftp_ids_edge], grid.colatitude[ftp_ids_edge], 'r.')
-    #plt.show()
-    #exit(1)
     return ftp_ids_edge
 
 

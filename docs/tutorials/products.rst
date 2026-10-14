@@ -11,6 +11,8 @@ Edges, a fine subset, and a snapshot
 
 ``load_snapshot_data`` reads the map, the skymap, and the PA extract back. The experiment must contain a dipole and a quadrupole, and its grid must be HEALPix.
 
+``calculate_and_save_OFL_edges`` returns the boundary between open and closed footpoints. The default boundary is approximate. ``precise_edges=True`` uses the neighbour edge and needs a HEALPix grid. ``calculate_and_save_OFL_regions`` returns every open footpoint, not that boundary.
+
 .. literalinclude:: ../../demo/pipeline/products.py
    :language: python
 

@@ -395,7 +395,7 @@ class PropertySystem:
                 "r_cyl_max": "positive number",
                 "z_abs_max": "positive number",
                 "b_ini": "number",
-                "b_r_ini_angle": "number",
+                "b_r_ini_angle": "angle between B and r, radians",
                 "reversed_error": "non-negative number",
                 "b_line": "array-like object",
                 "curvature_line": "array-like object",

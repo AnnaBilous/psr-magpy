@@ -438,7 +438,7 @@ class ExperimentSeriesConfig(BaseModel):
     def print_experiment_summary(
         self, show_changing_only: bool = True, max_experiments: int = 20
     ):
-        """Print a summary of experiments with changing parameters highlighted.
+        """Log a summary of experiments with changing parameters highlighted.
 
         Parameters
         ----------
@@ -450,15 +450,15 @@ class ExperimentSeriesConfig(BaseModel):
         experiments = self.create_experiment_series()
 
         if len(experiments) == 0:
-            print("No experiments created.")
+            logger.info("No experiments created.")
             return
 
-        print(f"\n=== Experiment Series Summary: {self.name} ===")
-        print(f"Total experiments: {len(experiments)}")
-        print(f"Description: {self.description or 'No description'}")
+        logger.info(f"\n=== Experiment Series Summary: {self.name} ===")
+        logger.info(f"Total experiments: {len(experiments)}")
+        logger.info(f"Description: {self.description or 'No description'}")
 
         if len(experiments) > max_experiments:
-            print(
+            logger.info(
                 f"\nShowing first {max_experiments} experiments (use max_experiments parameter to see more):"
             )
             experiments = experiments[:max_experiments]
@@ -466,20 +466,20 @@ class ExperimentSeriesConfig(BaseModel):
         # Find changing parameters
         changing_params = self._identify_changing_parameters(experiments)
 
-        print(
+        logger.info(
             f"\nChanging parameters: {', '.join(changing_params) if changing_params else 'None'}"
         )
-        print("\nExperiments:")
+        logger.info("\nExperiments:")
 
         for i, exp in enumerate(experiments, 1):
-            print(f"\n  Experiment {i}: {exp.name}")
+            logger.info(f"\n  Experiment {i}: {exp.name}")
 
             if show_changing_only and changing_params:
                 # Show only changing parameters
                 for param in changing_params:
                     value = self._get_parameter_value(exp, param)
                     if value is not None:
-                        print(f"    {param}: {value}")
+                        logger.info(f"    {param}: {value}")
             else:
                 # Show all key parameters
                 self._print_experiment_parameters(exp)
@@ -547,29 +547,29 @@ class ExperimentSeriesConfig(BaseModel):
         return params.get(param)
 
     def _print_experiment_parameters(self, exp: ExperimentConfig):
-        """Print all key parameters for an experiment."""
+        """Log all key parameters for an experiment."""
         # Field components
-        print(f"    Field components: {len(exp.field.components)}")
+        logger.info(f"    Field components: {len(exp.field.components)}")
         for i, comp in enumerate(exp.field.components):
-            print(f"      Component {i+1}: {comp.moment_type}")
-            print(f"        B_magnitude: {comp.B_magnitude}")
-            print(f"        lat: {comp.moment_orientation_latitude_degree}°")
-            print(f"        lon: {comp.moment_orientation_longitude_degree}°")
+            logger.info(f"      Component {i+1}: {comp.moment_type}")
+            logger.info(f"        B_magnitude: {comp.B_magnitude}")
+            logger.info(f"        lat: {comp.moment_orientation_latitude_degree}°")
+            logger.info(f"        lon: {comp.moment_orientation_longitude_degree}°")
 
         # Grid
         if exp.grid.spherical:
-            print(
+            logger.info(
                 f"    Grid: Spherical (nlon={exp.grid.spherical.nlon}, nlat={exp.grid.spherical.nlat})"
             )
         elif exp.grid.random:
-            print(f"    Grid: Random (nline_ori={exp.grid.random.nline_ori})")
+            logger.info(f"    Grid: Random (nline_ori={exp.grid.random.nline_ori})")
         elif exp.grid.healpix:
-            print(f"    Grid: HEALPix (nside={exp.grid.healpix.nside})")
+            logger.info(f"    Grid: HEALPix (nside={exp.grid.healpix.nside})")
         elif exp.grid.custom:
-            print(f"    Grid: Custom (nline_ori={exp.grid.custom.nline_ori})")
+            logger.info(f"    Grid: Custom (nline_ori={exp.grid.custom.nline_ori})")
 
         # Tracing
-        print(
+        logger.info(
             f"    Tracing: max_radius={exp.tracing.max_integration_radius}, memory={exp.tracing.max_memory_mb}MB"
         )
 
@@ -829,11 +829,11 @@ def create_simple_series(
 
     Examples
     --------
-        >>> field = FieldConfig(components=[...])
-        >>> grid = GridConfig(healpix=HealpixGridConfig(nside=128))
-        >>> tracing = TracingConfig()
-        >>> template = FieldLineTemplate.template_all()
-        >>> series = create_simple_series("my_series", field, grid, tracing, template)
+    >>> field = FieldConfig(components=[FieldComponentConfig(moment_type="dipole")])
+    >>> grid = GridConfig(healpix=HealpixGridConfig(nside=1))
+    >>> tracing = TracingConfig()
+    >>> template = FieldLineTemplate.template_OFL_calc()
+    >>> series = create_simple_series("dipole_series", field, grid, tracing, template)
     """
     return ExperimentSeriesConfig(
         name=name,

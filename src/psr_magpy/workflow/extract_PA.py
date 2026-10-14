@@ -12,6 +12,7 @@ from psr_magpy.experiment.services.batch_data_reader import BatchDataReader
 from psr_magpy.line.field_line import FieldLine
 from psr_magpy.line.field_line_template import FieldLineTemplate
 from psr_magpy.line.field_line_set import FieldLineSet
+from psr_magpy.line.tracing_parameters import TracingDefaults
 from psr_magpy.io import save_data
 from psr_magpy.utils.exceptions import PSRMagPyIOError, PSRMagPyPropertyError
 from psr_magpy.utils.logging_config import get_logger
@@ -155,6 +156,7 @@ def _extract_pa_for_r_lc_batches(
             r_min=r_min,
             reversed_error_threshold=reversed_error_threshold,
             target_template=enrich_template,
+            threshold_line_distance=TracingDefaults.THRESHOLD_LINE_DISTANCE,
         )
         return _extract_pa_from_prepared_batch(
             prepared,
@@ -427,6 +429,17 @@ def extract_PA_processor(
 
     Prefer :func:`make_extract_PA` with ``parent_dir``, ``series_name``, and
     ``line_source``.
+
+    Examples
+    --------
+    >>> filtered = extract_PA_processor(
+    ...     experiment_config,
+    ...     r_lc=10.0,
+    ...     lines_dir="dipole_series/lines",
+    ...     theta_tolerance=0.5,
+    ...     grid_theta=np.array([45.0]),
+    ...     save=False,
+    ... )
     """
     min_radius = radius_range[0] if radius_range is not None else None
     max_radius = radius_range[1] if radius_range is not None else None

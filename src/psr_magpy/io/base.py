@@ -305,10 +305,10 @@ class ConfigIO(ABC):
         pass
 
     def print_config(self, config: Any) -> None:
-        """Print configuration to screen."""
-        print("=== Configuration ===")
-        print(f"Type: {type(config).__name__}")
-        print(f"Config: {config}")
+        """Log configuration to the package logger."""
+        logger.info("=== Configuration ===")
+        logger.info("Type: %s", type(config).__name__)
+        logger.info("Config: %s", config)
 
     def validate_with_recovery(
         self, config: Any, path: Union[str, Path], operation: str = "save", **kwargs

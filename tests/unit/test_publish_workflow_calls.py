@@ -76,7 +76,7 @@ def test_format_duration_units():
     assert format_duration(86400) == "1.0d"
 
 
-def test_series_result_summary_names_the_series(capsys):
+def test_series_result_summary_names_the_series(caplog):
     result = SeriesResult(
         series_name="pub_series",
         total_experiments=1,
@@ -89,11 +89,11 @@ def test_series_result_summary_names_the_series(capsys):
         ],
         output_directory=Path("/tmp/pub_series"),
     )
-    result.print_summary(include_details=True)
-    out = capsys.readouterr().out
-    assert "pub_series" in out
-    assert "pub_000" in out
-    assert "10.0s" in out
+    with caplog.at_level("INFO"):
+        result.print_summary(include_details=True)
+    assert "pub_series" in caplog.text
+    assert "pub_000" in caplog.text
+    assert "10.0s" in caplog.text
 
 
 def test_plot_field_lines_2d_labels_the_plane():
@@ -168,6 +168,40 @@ def test_make_extract_pa_requires_a_batch_location():
             theta_tolerance=0.5,
             grid_theta=np.array([45.0]),
         )
+
+
+def test_extract_pa_uses_tracing_distance_cut(monkeypatch, tmp_path):
+    from psr_magpy.line.field_line_set import FieldLineSet
+    from psr_magpy.line.tracing_parameters import TracingDefaults
+    from psr_magpy.workflow import extract_PA as extract_pa_mod
+
+    captured = {}
+    empty = FieldLineSet(extract_pa_mod._PA_SAVE_TEMPLATE, copy_data=False)
+
+    def _yield_one(self, template, lines_dir, **kwargs):
+        yield empty
+
+    def _prepare(batch, **kwargs):
+        captured.update(kwargs)
+        return batch
+
+    monkeypatch.setattr(
+        "psr_magpy.experiment.services.batch_data_reader.BatchDataReader.iter_batch_data",
+        _yield_one,
+    )
+    monkeypatch.setattr(extract_pa_mod, "prepare_line_batch_after_load", _prepare)
+
+    lines = tmp_path / "lines"
+    lines.mkdir()
+    extract_PA_processor(
+        _experiment(),
+        r_lc=10.0,
+        lines_dir=str(lines),
+        theta_tolerance=0.5,
+        grid_theta=np.array([45.0]),
+        save=False,
+    )
+    assert captured["threshold_line_distance"] == TracingDefaults.THRESHOLD_LINE_DISTANCE
 
 
 def test_extract_pa_processor_empty_dir_returns_no_lines(tmp_path):

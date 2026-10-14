@@ -931,6 +931,11 @@ def create_subset_grid_config(
     -------
     GridConfig
         Configuration for the subset grid.
+
+    Examples
+    --------
+    >>> indices = np.array([0, 1, 4])
+    >>> config = create_subset_grid_config(grid, indices, "dipole_000", "healpix")
     """
     from psr_magpy.experiment.grid_config import (
         GridConfig,

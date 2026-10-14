@@ -82,11 +82,14 @@ class FieldLineTracer:
         solver_backend = params.integration.solver_backend
         if solver_backend == "scipy":
             self.solver: ODESolver = SciPySolver()
-        elif solver_backend == "numba":
-            # TODO: Implement NumbaSolver
-            raise NotImplementedError("Numba solver backend not yet implemented")
         elif solver_backend == "cyrk":
             self.solver = CyRKSolver()
+        else:
+            error_msg = (
+                f"solver_backend must be 'scipy' or 'cyrk', got {solver_backend}"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         # Initialize event detector
         self.event_detector = self._EventDetector(
@@ -224,7 +227,6 @@ class FieldLineTracer:
         )
 
         dt = self.params.integration.dt
-        #print(field_line.t[0], field_line.t[-1])
         if isinstance(dt, int) or dt > 1:
             t = np.linspace(field_line.t[0], field_line.t[-1], int(dt))
         else:

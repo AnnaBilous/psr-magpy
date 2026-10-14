@@ -362,6 +362,11 @@ def shift_color_by_saturation_value(colors, saturation_shift, value_shift, hex=F
     -------
     list
         List of shifted colors as RGBA tuples.
+
+    Examples
+    --------
+    >>> colors = ["#590f54", "#32cd32"]
+    >>> shifted = shift_color_by_saturation_value(colors, 0.4, 0.1, hex=True)
     """
     import colorsys
     import matplotlib.colors as mcolors

@@ -4,7 +4,7 @@ psr-magpy traces magnetic field lines in a pulsar magnetosphere. It runs that tr
 
 ## Installation
 
-Python 3.9 or newer. Clone the repository and install from that checkout:
+Python 3.9 or 3.10. Clone the repository and install from that checkout:
 
 ```bash
 git clone https://github.com/AnnaBilous/psr-magpy.git

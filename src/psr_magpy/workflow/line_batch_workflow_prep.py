@@ -81,6 +81,11 @@ def recommend_load_template_for_target(
     Use this (or :func:`merge_field_line_templates`) when choosing a FITS load
     template so :func:`enrich_field_line_set_from_r_line` can ``set_property``
     for all along-line quantities requested by ``target_template``.
+
+    Examples
+    --------
+    >>> target = FieldLineTemplate.template_properties_along_line()
+    >>> load_template = recommend_load_template_for_target(target)
     """
     return merge_field_line_templates(get_workflow_batch_load_template(), target_template)
 
@@ -115,7 +120,13 @@ def resolve_data_products_oflr_directory(
 
 
 def iter_batch_paths_lines(lines_dir: Union[str, Path], experiment_name: str) -> Iterator[Path]:
-    """Yield sorted batch FITS paths under ``lines_dir`` for one experiment."""
+    """Yield sorted batch FITS paths under ``lines_dir`` for one experiment.
+
+    Examples
+    --------
+    >>> for path in iter_batch_paths_lines("dipole_series/lines", "dipole_series_000"):
+    ...     print(path.name)
+    """
     reader = BatchDataReader(experiment_name)
     yield from reader.iter_batch_files(str(lines_dir))
 

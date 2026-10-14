@@ -294,7 +294,7 @@ class PropertyCalculator:
 
                     # Clip dotprod to [-1, 1] to avoid numerical precision issues
                     clipped_dotprod = np.clip(dotprod, -1.0, 1.0)
-                    props[prop.key_name] = np.arccos(clipped_dotprod)
+                    props[prop.key_name] = np.arccos(clipped_dotprod)  # radians
                 else:
                     props[prop.key_name] = None
             elif prop.key_name == "pa_line":
@@ -451,7 +451,7 @@ class PropertyCalculator:
     ) -> Optional[np.ndarray]:
         """Calculate theta (colatitude) of tangent vector along the field line.
 
-        Returns theta angle in radians for each point along the field line.
+        Returns theta angle in degrees for each point along the field line.
         """
         if getattr(template.save_flags, PropertyName.TANGENT_THETA.flag_name):
             if line_R_max >= self.threshold_line_distance:
@@ -489,7 +489,7 @@ class PropertyCalculator:
     ) -> Optional[np.ndarray]:
         """Calculate phi (azimuth) of tangent vector along the field line.
 
-        Returns phi angle in radians for each point along the field line.
+        Returns phi angle in degrees for each point along the field line.
         """
         if getattr(template.save_flags, PropertyName.TANGENT_PHI.flag_name):
             if line_R_max >= self.threshold_line_distance:

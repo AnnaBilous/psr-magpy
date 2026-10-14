@@ -1,4 +1,4 @@
-"""Field module for magnetic field calculations and visualization."""
+"""Field module for magnetic field calculations."""
 
 from .components import (
     FieldComponent,
@@ -8,7 +8,6 @@ from .components import (
     FieldComponentParams,
 )
 from .multipole import MultipoleField, MultipoleFieldParams
-from .visualization import FieldVisualizer
 
 __all__ = [
     "FieldComponent",
@@ -18,7 +17,6 @@ __all__ = [
     "FieldComponentParams",
     "MultipoleField",
     "MultipoleFieldParams",
-    "FieldVisualizer",
 ]
 
 """Magnetic field components and calculations."""

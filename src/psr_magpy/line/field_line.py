@@ -289,7 +289,7 @@ class FieldLine:
         Returns
         -------
         FieldLineTemplate
-            Template with b_ini and b_r_ini_angle enabled.
+            Template with b_ini and b_r_ini_angle (radians) enabled.
         """
         from psr_magpy.line.field_line_template import FieldLineTemplate
 

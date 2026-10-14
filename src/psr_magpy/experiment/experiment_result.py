@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Any, List
+
 from psr_magpy.experiment.services.formatting import format_duration
+from psr_magpy.utils.logging_config import get_logger
+
+logger = get_logger(__name__, console_format_brief=True)
 
 
 @dataclass
@@ -52,7 +56,7 @@ class SeriesResult:
         max_experiments: int = 5,
         format_duration: bool = True,
     ) -> None:
-        """Print formatted series result summary.
+        """Log a formatted series result summary.
 
         Parameters
         ----------
@@ -63,33 +67,33 @@ class SeriesResult:
         format_duration : bool, optional
             If True, format duration in human-readable units. Default is True.
         """
-        print("✓ Experiment series completed!")
-        print(f"\nSeries Results Summary:")
-        print(f"  Series name: {self.series_name}")
-        print(f"  Total experiments: {self.total_experiments}")
-        print(f"  Successful: {self.successful_experiments}")
-        print(f"  Failed: {self.failed_experiments}")
+        logger.info("✓ Experiment series completed!")
+        logger.info(f"\nSeries Results Summary:")
+        logger.info(f"  Series name: {self.series_name}")
+        logger.info(f"  Total experiments: {self.total_experiments}")
+        logger.info(f"  Successful: {self.successful_experiments}")
+        logger.info(f"  Failed: {self.failed_experiments}")
 
         # Calculate success rate safely
         if self.total_experiments > 0:
             success_rate = (
                 self.successful_experiments / self.total_experiments * 100
             )
-            print(f"  Success rate: {success_rate:.1f}%")
+            logger.info(f"  Success rate: {success_rate:.1f}%")
         else:
-            print(f"  Success rate: N/A (no experiments)")
+            logger.info(f"  Success rate: N/A (no experiments)")
 
         # Format duration
         if format_duration:
             duration_str = self._format_duration(self.total_duration)
         else:
             duration_str = f"{self.total_duration:.2f}s"
-        print(f"  Total duration: {duration_str}")
-        print(f"  Output directory: {self.output_directory}")
+        logger.info(f"  Total duration: {duration_str}")
+        logger.info(f"  Output directory: {self.output_directory}")
 
         # Include details if requested
         if include_details and self.experiment_results:
-            print(f"\nIndividual Experiment Results:")
+            logger.info(f"\nIndividual Experiment Results:")
             shown_count = min(len(self.experiment_results), max_experiments)
             for i, exp_result in enumerate(self.experiment_results[:shown_count], 1):
                 status = "✓" if exp_result.success else "✗"
@@ -97,15 +101,15 @@ class SeriesResult:
                     exp_duration = self._format_duration(exp_result.duration)
                 else:
                     exp_duration = f"{exp_result.duration:.2f}s"
-                print(
+                logger.info(
                     f"  {i}. {status} {exp_result.experiment_name} ({exp_duration})"
                 )
                 if not exp_result.success and exp_result.error_message:
-                    print(f"     Error: {exp_result.error_message}")
+                    logger.info(f"     Error: {exp_result.error_message}")
 
             if len(self.experiment_results) > shown_count:
                 remaining = len(self.experiment_results) - shown_count
-                print(f"  ... and {remaining} more experiment(s)")
+                logger.info(f"  ... and {remaining} more experiment(s)")
 
             # Duration statistics for successful experiments
             successful_durations = [
@@ -115,15 +119,15 @@ class SeriesResult:
                 avg_duration = sum(successful_durations) / len(successful_durations)
                 min_duration = min(successful_durations)
                 max_duration = max(successful_durations)
-                print(f"\n  Duration statistics (successful experiments):")
+                logger.info(f"\n  Duration statistics (successful experiments):")
                 if format_duration:
-                    print(f"    Average: {self._format_duration(avg_duration)}")
-                    print(f"    Min: {self._format_duration(min_duration)}")
-                    print(f"    Max: {self._format_duration(max_duration)}")
+                    logger.info(f"    Average: {self._format_duration(avg_duration)}")
+                    logger.info(f"    Min: {self._format_duration(min_duration)}")
+                    logger.info(f"    Max: {self._format_duration(max_duration)}")
                 else:
-                    print(f"    Average: {avg_duration:.2f}s")
-                    print(f"    Min: {min_duration:.2f}s")
-                    print(f"    Max: {max_duration:.2f}s")
+                    logger.info(f"    Average: {avg_duration:.2f}s")
+                    logger.info(f"    Min: {min_duration:.2f}s")
+                    logger.info(f"    Max: {max_duration:.2f}s")
 
     def __str__(self) -> str:
         """Return concise string representation."""

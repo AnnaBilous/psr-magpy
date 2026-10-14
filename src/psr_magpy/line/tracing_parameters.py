@@ -38,7 +38,7 @@ class TracingDefaults:
     MAX_STEP = 0.01
     METHOD = "RK45"  # Integration method for ODE solver
     FIELD_BACKEND = "python"  # Field calculation backend: "python" or "numba"
-    SOLVER_BACKEND = "scipy"  # ODE solver backend: "scipy", "numba", or "cyrk"
+    SOLVER_BACKEND = "scipy"  # ODE solver backend: "scipy" or "cyrk"
     TRACE_OPEN_LINES_BACKWARDS = False
     VERIFY_BY_REVERSING = False
     REVERSED_ERROR_THRESHOLD = 1.0e-3  # Maximum allowed reversed error
@@ -120,7 +120,7 @@ class IntegrationParameters(BaseModel):
     )
     solver_backend: str = Field(
         default=TracingDefaults.SOLVER_BACKEND,
-        description="ODE solver backend: 'scipy' (SciPy solve_ivp), 'numba' (Numba-compiled RK45), or 'cyrk' (CyRK)",
+        description="ODE solver backend: 'scipy' (SciPy solve_ivp) or 'cyrk' (CyRK)",
     )
     trace_open_lines_backwards: bool = Field(
         default=TracingDefaults.TRACE_OPEN_LINES_BACKWARDS,
@@ -182,9 +182,9 @@ class IntegrationParameters(BaseModel):
     @model_validator(mode="after")
     def validate_solver_backend(self):
         """Validate solver backend parameter."""
-        if self.solver_backend not in ["scipy", "numba", "cyrk"]:
+        if self.solver_backend not in ["scipy", "cyrk"]:
             raise ValueError(
-                f"solver_backend must be 'scipy', 'numba', or 'cyrk', got {self.solver_backend}"
+                f"solver_backend must be 'scipy' or 'cyrk', got {self.solver_backend}"
             )
         return self
 

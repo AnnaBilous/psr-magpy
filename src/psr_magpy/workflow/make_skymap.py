@@ -9,7 +9,8 @@ import healpy as hp
 import numpy as np
 
 from psr_magpy.experiment.experiment_config import ExperimentConfig
-from psr_magpy.experiment.grid_config import HealpixGridConfig
+from psr_magpy.experiment.grid_config import HealpixGridConfig, create_full_healpix_grid
+from psr_magpy.line.tracing_parameters import TracingDefaults
 from psr_magpy.experiment.services.batch_data_reader import BatchDataReader
 from psr_magpy.grid.grid import FootpointGrid, HealpixGrid
 from psr_magpy.line.field_line import FieldLine
@@ -27,7 +28,6 @@ from psr_magpy.workflow.line_batch_workflow_prep import (
     resolve_lines_directory,
 )
 from psr_magpy.workflow.workflow_utils import (
-    create_healpix_grid,
     extract_line_properties,
     normalize_line_arrays,
 )
@@ -148,9 +148,10 @@ def skymap_pixel_counts_from_prepared_batch(
             pixel_counts[valid_pixels] += valid_counts
 
         return pixel_counts
-    except Exception as e:
-        logger.warning("Error counting skymap pixels from batch: %s", e)
-        return np.zeros(grid_size, dtype=np.int64)
+    except Exception as exc:
+        error_msg = f"Error counting skymap pixels from batch: {exc}"
+        logger.error(error_msg)
+        raise
 
 
 def _accumulate_counts(acc: Optional[np.ndarray], new: np.ndarray) -> np.ndarray:
@@ -236,7 +237,7 @@ def make_skymap(
     trim_type: str = "cylinder",
     reversed_error_threshold: float = 0.01,
     target_template: Optional[FieldLineTemplate] = None,
-    threshold_line_distance: float = 0.0,
+    threshold_line_distance: float = TracingDefaults.THRESHOLD_LINE_DISTANCE,
     field: Any = None,
     skymap_output_filename_pattern: Optional[str] = None,
     oflr_batch_stem_pattern: Optional[str] = None,
@@ -261,8 +262,11 @@ def make_skymap(
         ``OFLR_lines_…_RLC_….fits`` if no chunks exist. FITS are loaded with
         :func:`~psr_magpy.workflow.line_batch_workflow_prep.get_oflr_data_product_load_template`
         (``r_line`` on disk); :func:`prepare_line_batch_after_load` enriches to the workflow template.
-    healpix_grid_config, R_LC_values
-        Grid config and light-cylinder radii to iterate (one skymap per value).
+    healpix_grid_config
+        HEALPix settings. Only ``nside`` is used. ``subset`` and ``grid_file_path``
+        are ignored, so the map is a full sphere (``12 * nside**2`` pixels).
+    R_LC_values
+        Light-cylinder radii to iterate (one skymap per value).
     save
         Write one FITS per ``R_LC`` under ``output_dir`` (or default skymaps folder).
     output_dir
@@ -276,8 +280,14 @@ def make_skymap(
         ``\"cylinder\"`` or ``\"sphere\"`` for outer :meth:`FieldLineSet.trim_to_light_cylinder`.
     reversed_error_threshold
         Passed to :func:`prepare_line_batch_after_load` (reversed-error filter when present).
-    target_template, threshold_line_distance, field
-        Forwarded to :func:`prepare_line_batch_after_load` / enrichment.
+    target_template
+        Forwarded to :func:`prepare_line_batch_after_load`.
+    threshold_line_distance
+        Minimum ``line_R_max`` before missing tangents are recomputed. Default is
+        the tracing default, ``1`` stellar radius. Pass ``0`` to recompute for any
+        non-empty line.
+    field
+        Forwarded to :func:`prepare_line_batch_after_load` when ``b_line`` must be filled.
     skymap_output_filename_pattern
         :meth:`str.format` pattern for each saved FITS basename under ``output_dir``.
         Fields: ``experiment_number``, ``experiment_name``, ``series_name``, ``r_lc``,
@@ -291,7 +301,7 @@ def make_skymap(
     np.ndarray or dict
         Single array if ``len(R_LC_values)==1``, else ``{float(r_lc): array}``.
     """
-    grid = create_healpix_grid(healpix_grid_config)
+    grid = create_full_healpix_grid(healpix_grid_config)
     grid_size = grid.nline
     if grid_size is None:
         raise PSRMagPyIOError("Skymap grid nline is None")

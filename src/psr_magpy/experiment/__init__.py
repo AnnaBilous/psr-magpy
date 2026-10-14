@@ -34,11 +34,6 @@ from .factory_configs import (
 )
 from .services.batch_data_reader import BatchDataReader
 from .services.experiment_executor import ExperimentExecutor
-from .services.experiment_lookup_service import (
-    experiment_matches_thD_fQ as experiment_matches_thD_fQ_service,
-    infer_experiment_count as infer_experiment_count_service,
-    find_experiment_numbers_by_thD_fQ as find_experiment_numbers_by_thD_fQ_service,
-)
 from .services.series_builder import SeriesBuilder
 from .services.series_executor import SeriesExecutor
 from .services.subset_workflow_service import SubsetWorkflowService
@@ -78,7 +73,4 @@ __all__ = [
     "SeriesExecutor",
     "SubsetWorkflowService",
     "OFLReintegrationDataProductService",
-    "experiment_matches_thD_fQ_service",
-    "infer_experiment_count_service",
-    "find_experiment_numbers_by_thD_fQ_service",
 ]

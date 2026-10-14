@@ -9,7 +9,11 @@ This script runs the same series as :doc:`series_disk`, then three calls, in thi
 
 The series directory is ``<output>/dipole_series``. Line batches are in ``lines/``. ``R_LC`` is ``2`` stellar radii, inside the traced radius of this grid. The open-field-line maps go to ``data_products/OFLR_maps``. The skymap goes to ``data_products/skymaps``. The PA extract goes to ``data_products/extracted_PA``.
 
-``make_extract_PA(..., save=True)`` writes that FITS file and returns an empty set. The file is the result.
+The open-field-line map stores ``R_LC`` at footpoint indices. The skymap counts samples by tangent colatitude and azimuth. Both can be HEALPix arrays of the same length. They are not the same map.
+
+A footpoint is open when its maximum cylindrical radius is greater than ``R_LC``, or when it stays inside the cylinder and climbs above ``h_LC_coeff * R_LC``. Equality with ``R_LC`` is closed.
+
+``make_extract_PA(..., save=True)`` writes the FITS file and returns an empty ``FieldLineSet``. Several ``R_LC`` values return a dict of those sets. The file is the result.
 
 .. literalinclude:: ../../demo/pipeline/postprocess.py
    :language: python

@@ -214,6 +214,11 @@ def run_experiment(
 
 
 def run_experiment_from_file(config_path: str) -> Optional[object]:
-    """Load and run experiment from config file."""
+    """Load and run experiment from config file.
+
+    Examples
+    --------
+    >>> run_experiment_from_file("configs/dipole_series_000.yaml")
+    """
     config = ExperimentConfig.load(config_path)
     return run_experiment(config)

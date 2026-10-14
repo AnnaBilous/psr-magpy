@@ -51,15 +51,15 @@ class YamlIO(ConfigIO):
         return True  # Override in subclasses
 
     def print_config(self, config: Any) -> None:
-        """Print configuration in a readable format."""
+        """Log configuration in a readable format."""
         try:
             config_dict = self._prepare_for_save(config)
             yaml_string = yaml.safe_dump(
                 config_dict, default_flow_style=False, indent=2, sort_keys=False
             )
-            print("=== Configuration ===")
-            print(yaml_string)
-            print("=====================")
+            logger.info("=== Configuration ===")
+            logger.info("%s", yaml_string)
+            logger.info("=====================")
         except Exception as e:
             raise PSRMagPyIOError(f"Failed to print configuration: {e}") from e
 

@@ -202,7 +202,7 @@ class FieldLineTemplate:
 
     @classmethod
     def template_surface_field_properties(cls) -> "FieldLineTemplate":
-        """Create configuration template with surface properties (b_ini, b_r_ini_angle).
+        """Create configuration template with surface properties (b_ini, b_r_ini_angle in radians).
 
         This template defines which properties to save during field line tracing.
         Used as configuration, not for storing actual field line data.

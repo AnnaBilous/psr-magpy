@@ -21,7 +21,7 @@ docs-clean:
 
 docs-api:
 	@echo "Generating API documentation..."
-	.venv/bin/python -m sphinx.ext.apidoc \
+	python -m sphinx.ext.apidoc \
 		-f \
 		-e \
 		--separate \
@@ -31,7 +31,7 @@ docs-api:
 
 docs-build:
 	@echo "Building HTML documentation..."
-	.venv/bin/python -m sphinx \
+	python -m sphinx \
 		-b html \
 		-d docs/_build/doctrees \
 		docs \
@@ -44,7 +44,7 @@ docs-build:
 
 docs-serve:
 	@echo "Serving documentation at http://localhost:8000"
-	@.venv/bin/sphinx-autobuild \
+	@sphinx-autobuild \
 		--host 0.0.0.0 \
 		--port 8000 \
 		--open-browser \

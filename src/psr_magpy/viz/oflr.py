@@ -254,7 +254,11 @@ def overlay_oflr_emission_scatter(
     alpha: float = 0.95,
     zorder: int = 6,
 ):
-    """Rainbow scatter overlay for active OFLR footpoints (HSV, 10° hue cycles)."""
+    """Rainbow scatter overlay for active OFLR footpoints (HSV, 10° hue cycles).
+
+    The vertical coordinate is HEALPix colatitude in degrees, the same axis as
+    ``overlay_observer_los``. It is not astronomical latitude.
+    """
     em_map = np.asarray(oflr_em_map, dtype=np.float64)
     if em_map.size == 0 or not np.any(np.isfinite(em_map)):
         return None
@@ -265,12 +269,12 @@ def overlay_oflr_emission_scatter(
 
     theta, phi = hp.pix2ang(int(nside), valid)
     lon_deg = np.mod(np.rad2deg(phi) + float(phi_roll_deg), 360.0)
-    lat_deg = np.rad2deg(theta)
+    colatitude_deg = np.rad2deg(theta)
     vals = em_map[valid]
     cvals = np.mod(vals, float(cycle_period)) / float(cycle_period)
     return ax.scatter(
         lon_deg,
-        lat_deg,
+        colatitude_deg,
         c=cvals,
         cmap="hsv",
         vmin=0.0,

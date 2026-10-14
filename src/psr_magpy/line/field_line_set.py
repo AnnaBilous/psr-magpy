@@ -25,6 +25,8 @@ def open_field_line_criterion(
     """Boolean OFL mask: open if beyond the light cylinder, or within it but
     reaching above the height threshold ``h_LC_coeff * R_LC``.
 
+    ``r_cyl_max == R_LC`` is closed. The radius test is strict.
+
     Parameters
     ----------
     r_cyl_max, z_abs_max
@@ -363,25 +365,25 @@ class FieldLineSet(FieldLine):
         return float(total_bytes)
 
     def print_summary(self) -> None:
-        """Print summary statistics for all enabled properties."""
-        print(f"FieldLineSet Summary:")
-        print(f"  Number of field lines: {self.n_field_lines}")
-        print(f"  Memory usage: {self.estimate_size()/1024/1024:.2f} MB")
-        print(
+        """Log summary statistics for all enabled properties."""
+        logger.info(f"FieldLineSet Summary:")
+        logger.info(f"  Number of field lines: {self.n_field_lines}")
+        logger.info(f"  Memory usage: {self.estimate_size()/1024/1024:.2f} MB")
+        logger.info(
             f"  Enabled properties: {len(self.property_system.get_enabled_properties())}"
         )
-        print()
+        logger.info()
 
         for prop in self.property_system.get_enabled_properties():
             values = self.property_system.get_property(prop)
             if values is None:
-                print(f"  {prop.key_name}: None")
+                logger.info(f"  {prop.key_name}: None")
                 continue
 
             # Handle properties that are lists of arrays
             if prop in self.ARRAY_LIST_PROPERTIES:
                 if not values:
-                    print(f"  {prop.key_name}: Empty list")
+                    logger.info(f"  {prop.key_name}: Empty list")
                     continue
 
                 # Calculate statistics across all arrays
@@ -392,27 +394,27 @@ class FieldLineSet(FieldLine):
 
                 if all_values_list:
                     all_values = np.array(all_values_list)
-                    print(
+                    logger.info(
                         f"  {prop.key_name}:\tArrays: {len(values)} Total points: {len(all_values)}\t Min: {all_values.min():.3e}\t Max: {all_values.max():.3e}"
                     )
                 else:
-                    print(f"  {prop.key_name}: No valid data")
+                    logger.info(f"  {prop.key_name}: No valid data")
                 continue
 
             # Handle numpy arrays
             if isinstance(values, np.ndarray):
                 if values.size == 0:
-                    print(f"  {prop.key_name}: Empty array")
+                    logger.info(f"  {prop.key_name}: Empty array")
                     continue
 
-                print(
+                logger.info(
                     f"  {prop.key_name}:\t Min: {values.min():.2e}\t Max: {values.max():.2e}"
                 )
             else:
                 # Handle scalar values
-                print(f"  {prop.key_name}: {values}")
+                logger.info(f"  {prop.key_name}: {values}")
 
-        print()
+        logger.info()
 
     def get_property(
         self, property_name: Union[str, PropertyName]
