@@ -1,5 +1,8 @@
 # psr-magpy
 
+[![Tests](https://github.com/AnnaBilous/psr-magpy/actions/workflows/tests.yml/badge.svg)](https://github.com/AnnaBilous/psr-magpy/actions/workflows/tests.yml)
+[![Docs](https://github.com/AnnaBilous/psr-magpy/actions/workflows/docs.yml/badge.svg)](https://github.com/AnnaBilous/psr-magpy/actions/workflows/docs.yml)
+
 psr-magpy traces magnetic field lines in a pulsar magnetosphere. It runs that tracing as named experiments and series, including the batch products: an open-field-line map, a skymap, and PA.
 
 ## Installation
