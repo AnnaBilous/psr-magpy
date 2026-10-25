@@ -30,7 +30,7 @@ from psr_magpy.line.pa_theta_filter import filter_field_line_set_by_theta
 logger = get_logger(__name__, console_format_brief=True)
 
 DEFAULT_EXTRACT_PA_OUTPUT_FILENAME_PATTERN = (
-    "extract_PA_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits"
+    "extract_PA_{experiment_number:06d}_RLC_{r_lc:05.2f}.fits"
 )
 
 
@@ -287,7 +287,7 @@ def make_extract_PA(
     save, output_dir
         When ``save`` is True, write one FITS per ``R_LC`` immediately after that
         radius is processed (not deferred until all radii finish). Paths:
-        ``extract_PA_{experiment_number:03d}_RLC_{r:.2f}.fits`` under
+        ``extract_PA_{experiment_number:06d}_RLC_{r:.2f}.fits`` under
         ``<parent>/<series>/data_products/extracted_PA`` when ``output_dir`` is None.
     output_filename_pattern
         :meth:`str.format` pattern for saved FITS; default uses ``experiment_number``
@@ -383,7 +383,7 @@ def make_extract_PA(
                 resolve_data_products_oflr_directory(parent, series_name)
             )
             oflr_prefix = (
-                f"OFLR_lines_{experiment_number:03d}_RLC_{r_lc_f:05.2f}"
+                f"OFLR_lines_{experiment_number:06d}_RLC_{r_lc_f:05.2f}"
             )
             result = _extract_pa_for_r_lc_batches(
                 experiment_config,

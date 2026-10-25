@@ -35,9 +35,9 @@ def _make_series_config(output_dir: str = ".") -> ExperimentSeriesConfig:
 
 def test_filename_contracts_are_stable():
     assert series_config_filename("demo") == "demo_config.yaml"
-    assert experiment_config_filename("demo", 0) == "demo_000.yaml"
-    assert experiment_config_filename("demo", 12) == "demo_012.yaml"
-    assert subset_experiment_config_filename("demo", 12) == "demo_012_subset.yaml"
+    assert experiment_config_filename("demo", 0) == "demo_000000.yaml"
+    assert experiment_config_filename("demo", 12) == "demo_000012.yaml"
+    assert subset_experiment_config_filename("demo", 12) == "demo_000012_subset.yaml"
     assert results_summary_filename("demo") == "demo_results_summary.yaml"
 
 

@@ -61,7 +61,7 @@ def format_data_product_filename(
     Parameters
     ----------
     pattern
-        Format string with at least ``experiment_number`` (often ``{experiment_number:03d}``).
+        Format string with at least ``experiment_number`` (often ``{experiment_number:06d}``).
         Include ``r_lc`` in the pattern when ``r_lc`` is passed.
     experiment_number
         0-based experiment index.

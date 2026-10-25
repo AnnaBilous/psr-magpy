@@ -65,8 +65,8 @@ class TestExperimentLookupOnDisk:
             configs.mkdir(parents=True)
 
             for i, (th, fq) in enumerate([(10.0, 0.0), (20.0, 1.0)]):
-                exp = _minimal_experiment(f"{series_name}_{i:03d}", th, fq, 32)
-                exp.save(configs / f"{series_name}_{i:03d}.yaml", overwrite=True)
+                exp = _minimal_experiment(f"{series_name}_{i:06d}", th, fq, 32)
+                exp.save(configs / f"{series_name}_{i:06d}.yaml", overwrite=True)
 
             summary_path = root / series_name / f"{series_name}_results_summary.yaml"
             summary_path.write_text("total_experiments: 2\n", encoding="utf-8")
@@ -95,8 +95,8 @@ class TestExperimentLookupOnDisk:
             configs.mkdir(parents=True)
 
             for i, (th, fq) in enumerate([(10.0, 0.0), (20.0, 1.0), (30.0, 2.0)]):
-                exp = _minimal_experiment(f"{series_name}_{i:03d}", th, fq, 16)
-                exp.save(configs / f"{series_name}_{i:03d}.yaml", overwrite=True)
+                exp = _minimal_experiment(f"{series_name}_{i:06d}", th, fq, 16)
+                exp.save(configs / f"{series_name}_{i:06d}.yaml", overwrite=True)
 
             series = ExperimentSeriesConfig(
                 name=series_name,

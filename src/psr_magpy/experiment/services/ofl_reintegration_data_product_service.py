@@ -389,7 +389,7 @@ class OFLReintegrationDataProductService:
                 subset_grid = base_grid.subset_grid(subset_positions)
             output_filename = (
                 output_dir
-                / f"{prefix}_{experiment_number:03d}_RLC_{float(r_lc):05.2f}.fits"
+                / f"{prefix}_{experiment_number:06d}_RLC_{float(r_lc):05.2f}.fits"
             )
             tracing_params = base_params
             if r_max_cur is not None:
@@ -538,7 +538,7 @@ class OFLReintegrationDataProductService:
             exp_config_path = series_config.get_experiment_config_path(experiment_number)
             if not exp_config_path.exists():
                 logger.warning(
-                    "Skipping missing experiment config %03d: %s",
+                    "Skipping missing experiment config %06d: %s",
                     experiment_number,
                     exp_config_path,
                 )

@@ -159,7 +159,7 @@ def load_snapshot_data(
     image_size = (int(image_size[0]), int(image_size[1]))
 
     logger.info(
-        "Loading snapshot data for experiment %03d, R_LC=%.2f",
+        "Loading snapshot data for experiment %06d, R_LC=%.2f",
         experiment_number,
         r_lc,
     )

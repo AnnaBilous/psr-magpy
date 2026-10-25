@@ -15,7 +15,7 @@ from psr_magpy.workflow.line_batch_workflow_prep import experiment_number_from_c
 logger = get_logger(__name__, console_format_brief=True)
 
 DEFAULT_OFLR_MAP_OUTPUT_FILENAME_PATTERN = (
-    "OFLR_map_{experiment_number:03d}.fits"
+    "OFLR_map_{experiment_number:06d}.fits"
 )
 
 

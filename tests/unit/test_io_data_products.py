@@ -15,7 +15,7 @@ from psr_magpy.io.data_products import (
 )
 
 _PRODUCTS = {
-    "skymap": DataProductSpec("skymaps", "skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}", requires_r_lc=True),
+    "skymap": DataProductSpec("skymaps", "skymap_{experiment_number:06d}_RLC_{r_lc:05.2f}", requires_r_lc=True),
     "edges": DataProductSpec("OFLR_edges", is_directory=True),
 }
 
@@ -27,19 +27,19 @@ def test_resolve_data_products_directory(tmp_path):
 
 def test_format_data_product_filename_appends_fits():
     name = format_data_product_filename(
-        "skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}",
+        "skymap_{experiment_number:06d}_RLC_{r_lc:05.2f}",
         experiment_number=3,
         r_lc=4.77,
     )
-    assert name == "skymap_003_RLC_04.77.fits"
+    assert name == "skymap_000003_RLC_04.77.fits"
 
 
 def test_format_data_product_filename_keeps_existing_extension():
     name = format_data_product_filename(
-        "OFLR_map_{experiment_number:03d}.fits",
+        "OFLR_map_{experiment_number:06d}.fits",
         experiment_number=0,
     )
-    assert name == "OFLR_map_000.fits"
+    assert name == "OFLR_map_000000.fits"
 
 
 def test_resolve_data_product_path(tmp_path):
@@ -47,7 +47,7 @@ def test_resolve_data_product_path(tmp_path):
         tmp_path,
         "series_a",
         "extracted_PA",
-        "extract_PA_{experiment_number:03d}_RLC_{r_lc:05.2f}",
+        "extract_PA_{experiment_number:06d}_RLC_{r_lc:05.2f}",
         12,
         r_lc=23.8,
     )
@@ -56,7 +56,7 @@ def test_resolve_data_product_path(tmp_path):
         / "series_a"
         / "data_products"
         / "extracted_PA"
-        / "extract_PA_012_RLC_23.80.fits"
+        / "extract_PA_000012_RLC_23.80.fits"
     )
     assert isinstance(path, Path)
 
@@ -65,7 +65,7 @@ def test_get_data_path_file_and_directory(tmp_path):
     skymap = get_data_path(
         tmp_path, "series_a", "skymap", 0, _PRODUCTS, r_lc=4.77
     )
-    assert skymap.name == "skymap_000_RLC_04.77.fits"
+    assert skymap.name == "skymap_000000_RLC_04.77.fits"
     edges = get_data_path(tmp_path, "series_a", "edges", 0, _PRODUCTS)
     assert edges == tmp_path / "series_a" / "data_products" / "OFLR_edges"
 

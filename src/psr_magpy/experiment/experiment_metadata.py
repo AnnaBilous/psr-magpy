@@ -47,6 +47,6 @@ def generate_experiment_name(series_name: str, experiment_count: int) -> str:
     Returns
     -------
     str
-        Unique experiment name in format: {series_name}_{experiment_count:03d}.
+        Unique experiment name in format: {series_name}_{experiment_count:06d}.
     """
-    return f"{series_name}_{experiment_count:03d}"
+    return f"{series_name}_{experiment_count:06d}"

@@ -67,7 +67,7 @@ def infer_experiment_count(series: ExperimentSeriesConfig) -> int:
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
-    pattern = re.compile(rf"^{re.escape(series.name)}_(\d{{3}})(?:_subset)?\.yaml$")
+    pattern = re.compile(rf"^{re.escape(series.name)}_(\d{{6}})(?:_subset)?\.yaml$")
     indices: List[int] = []
     for path in configs_dir.glob("*.yaml"):
         if path.name.endswith("_config.yaml"):

@@ -55,7 +55,7 @@ class SeriesBuilder:
                             template_config,
                         )
                         experiment = ExperimentConfig(
-                            name=f"{series_name}_{experiment_count:03d}",
+                            name=f"{series_name}_{experiment_count:06d}",
                             field=field_config,
                             grid=grid_config,
                             tracing=tracing_config,

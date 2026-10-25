@@ -34,7 +34,7 @@ def main() -> None:
     r_lc = np.array([2.0])
     maps = extract_ofl_map(series, r_lc, save=True)
     experiment = ExperimentConfig.load(
-        out / SERIES_NAME / "configs" / f"{SERIES_NAME}_000.yaml"
+        out / SERIES_NAME / "configs" / f"{SERIES_NAME}_000000.yaml"
     )
     skymap = make_skymap(
         experiment_config=experiment,

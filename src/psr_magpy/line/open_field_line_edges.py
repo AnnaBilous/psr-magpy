@@ -701,7 +701,7 @@ def _extract_and_save_OFL_data(
     if experiment_config.metadata is not None and isinstance(experiment_config.metadata, dict) and "experiment_number" in experiment_config.metadata:
         experiment_number = experiment_config.metadata["experiment_number"]
     else:
-        # Try to parse from experiment name (format: {series_name}_{number:03d})
+        # Try to parse from experiment name (format: {series_name}_{number:06d})
         try:
             name_parts = experiment_config.name.rsplit("_", 1)
             if len(name_parts) == 2:
@@ -822,7 +822,7 @@ def _extract_and_save_OFL_data(
                                 f"Saving chunk to disk."
                             )
                             
-                            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:03d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits"
+                            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:06d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits"
                             chunk_io = FieldLineSetIO(combined_data)
                             chunk_io.add_header_keyword(
                                 "R_LC", r_lc, "Light cylinder radius for this subset"
@@ -847,7 +847,7 @@ def _extract_and_save_OFL_data(
 
         # Save final chunk
         if combined_data is not None and combined_data.n_field_lines > 0:
-            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:03d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits"
+            chunk_filename = output_dir / f"{stem_prefix}_{experiment_number:06d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits"
 
             logger.info(
                 f"  Saving final chunk {chunk_counter} ({combined_data.n_field_lines} lines) "
@@ -1216,8 +1216,8 @@ def load_OFLR_line_data(
         raise ValueError(error_msg)
     
     # Find all candidate files matching the new pattern
-    # Pattern: OFLR_{edge_}lines_{experiment_number:03d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits
-    pattern = f"{stem_prefix}_{experiment_number:03d}_RLC_*.fits"
+    # Pattern: OFLR_{edge_}lines_{experiment_number:06d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits
+    pattern = f"{stem_prefix}_{experiment_number:06d}_RLC_*.fits"
     candidate_files = sorted(glob.glob(str(lines_dir / pattern)))
 
     if not candidate_files:
@@ -1228,7 +1228,7 @@ def load_OFLR_line_data(
     logger.info(f"Found {len(candidate_files)} candidate FITS files")
     
     # Map R_LC values to files by parsing filenames
-    # Pattern: OFLR_{edge_}lines_{experiment_number:03d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits
+    # Pattern: OFLR_{edge_}lines_{experiment_number:06d}_RLC_{r_lc:05.2f}_{chunk_counter:03d}.fits
     R_LC_to_files = {}
     
     for filepath in candidate_files:

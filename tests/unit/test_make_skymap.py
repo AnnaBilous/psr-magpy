@@ -28,14 +28,14 @@ def test_format_skymap_output_filename_custom_pattern():
     ec.name = "healpix_nside_1024_grid_study_OFL_calc_main_009"
     grid = create_healpix_grid(HealpixGridConfig(nside=16))
     name = format_skymap_output_filename(
-        "skymap_{experiment_number:03d}_RLC_{r_lc:.2f}_nside_{nside}.fits",
+        "skymap_{experiment_number:06d}_RLC_{r_lc:.2f}_nside_{nside}.fits",
         experiment_config=ec,
         series_name="series",
         experiment_number=9,
         grid=grid,
         r_lc=23.85,
     )
-    assert name == "skymap_009_RLC_23.85_nside_16.fits"
+    assert name == "skymap_000009_RLC_23.85_nside_16.fits"
 
 
 def test_format_skymap_output_filename_default_pattern():
@@ -50,7 +50,7 @@ def test_format_skymap_output_filename_default_pattern():
         experiment_number=9,
         r_lc=23.85,
     )
-    assert name == "skymap_009_RLC_23.85.fits"
+    assert name == "skymap_000009_RLC_23.85.fits"
 
 
 def test_make_skymap_threshold_matches_tracing_default():

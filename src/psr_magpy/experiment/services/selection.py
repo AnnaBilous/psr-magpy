@@ -9,7 +9,7 @@ logger = get_logger(__name__, console_format_brief=True)
 
 
 def parse_experiment_number(experiment_name: str) -> Optional[int]:
-    """Parse trailing experiment index from ``{series}_{idx:03d}`` names."""
+    """Parse trailing experiment index from ``{series}_{idx:06d}`` names."""
     try:
         name_parts = experiment_name.rsplit("_", 1)
         if len(name_parts) == 2:

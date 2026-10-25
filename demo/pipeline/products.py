@@ -74,7 +74,7 @@ def main() -> None:
     run_experiment_series(series, overwrite_strategy=OverwriteStrategy.ALL, save_grids=False)
     r_lc = np.array([2.0])
     experiment = ExperimentConfig.load(
-        out / SERIES_NAME / "configs" / f"{SERIES_NAME}_000.yaml"
+        out / SERIES_NAME / "configs" / f"{SERIES_NAME}_000000.yaml"
     )
     lines = out / SERIES_NAME / "lines"
     regions = find_OFL_regions_from_batch_files(
@@ -82,14 +82,14 @@ def main() -> None:
     )
     template = FieldLine.from_template(get_workflow_batch_load_template())
     edges = calculate_and_save_OFL_edges(
-        out / SERIES_NAME / "configs" / f"{SERIES_NAME}_000.yaml",
+        out / SERIES_NAME / "configs" / f"{SERIES_NAME}_000000.yaml",
         lines,
         template,
         r_lc,
         output_dir=out / SERIES_NAME / "data_products" / "OFLR_edges",
     )
     ofl_regions = calculate_and_save_OFL_regions(
-        out / SERIES_NAME / "configs" / f"{SERIES_NAME}_000.yaml",
+        out / SERIES_NAME / "configs" / f"{SERIES_NAME}_000000.yaml",
         lines,
         template,
         r_lc,
@@ -123,11 +123,11 @@ def main() -> None:
     products = {
         "OFLR_map": DataProductSpec(
             subdir="OFLR_maps",
-            filename_pattern="OFLR_map_{experiment_number:03d}.fits",
+            filename_pattern="OFLR_map_{experiment_number:06d}.fits",
         ),
         "PA": DataProductSpec(
             subdir="extracted_PA",
-            filename_pattern="extract_PA_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits",
+            filename_pattern="extract_PA_{experiment_number:06d}_RLC_{r_lc:05.2f}.fits",
             requires_r_lc=True,
         ),
     }
@@ -140,7 +140,7 @@ def main() -> None:
         nside_skymap=1,
         nside_oflr=1,
         image_size=(8, 4),
-        skymap_filename_pattern="skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits",
+        skymap_filename_pattern="skymap_{experiment_number:06d}_RLC_{r_lc:05.2f}.fits",
     )
     print(f"output={out}")
     print(f"regions_finite={int(np.sum(~np.isnan(regions)))}")

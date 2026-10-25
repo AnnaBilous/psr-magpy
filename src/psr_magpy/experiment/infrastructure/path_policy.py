@@ -43,12 +43,12 @@ def series_config_filename(series_name: str) -> str:
 
 def experiment_config_filename(series_name: str, experiment_number: int) -> str:
     """Return canonical per-experiment config filename."""
-    return f"{series_name}_{experiment_number:03d}.yaml"
+    return f"{series_name}_{experiment_number:06d}.yaml"
 
 
 def subset_experiment_config_filename(series_name: str, experiment_number: int) -> str:
     """Return canonical subset experiment config filename."""
-    return f"{series_name}_{experiment_number:03d}_subset.yaml"
+    return f"{series_name}_{experiment_number:06d}_subset.yaml"
 
 
 def results_summary_filename(series_name: str) -> str:

@@ -128,7 +128,7 @@ def max_p_for_experiment(
     values = max_open_period(lines.r_cyl_max, lines.z_abs_max)
     period[footpoint_ids] = values
 
-    path = output_dir / f"max_P_{experiment_number:03d}.fits"
+    path = output_dir / f"max_P_{experiment_number:06d}.fits"
     write_max_p(path, period)
     logger.info(
         "Experiment %d: wrote %s (%d open footpoints)",

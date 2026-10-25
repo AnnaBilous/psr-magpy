@@ -35,11 +35,11 @@ from psr_magpy.workflow.workflow_utils import (
 logger = get_logger(__name__, console_format_brief=True)
 
 DEFAULT_SKYMAP_OUTPUT_FILENAME_PATTERN = (
-    "skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits"
+    "skymap_{experiment_number:06d}_RLC_{r_lc:05.2f}.fits"
 )
 
 DEFAULT_OFLR_LINES_BATCH_STEM_PATTERN = (
-    "OFLR_lines_{experiment_number:03d}_RLC_{r_lc:05.2f}"
+    "OFLR_lines_{experiment_number:06d}_RLC_{r_lc:05.2f}"
 )
 
 
@@ -257,7 +257,7 @@ def make_skymap(
         ``\"lines\"``: many ``{experiment}_batch_*.fits`` under ``<parent>/<series>/lines``
         (typically ``*_batch_*_out_of_*.fits``).
         ``\"data_products_oflr\"``: reintegration spill files under ``data_products/OFLR``,
-        stem ``OFLR_lines_{experiment_number:03d}_RLC_{r:.2f}_batch_*.fits`` (same stem as
+        stem ``OFLR_lines_{experiment_number:06d}_RLC_{r:.2f}_batch_*.fits`` (same stem as
         trace ``filename`` before ``BatchFileManager`` adds ``_out_of_``); falls back to
         ``OFLR_lines_…_RLC_….fits`` if no chunks exist. FITS are loaded with
         :func:`~psr_magpy.workflow.line_batch_workflow_prep.get_oflr_data_product_load_template`
@@ -292,7 +292,7 @@ def make_skymap(
         :meth:`str.format` pattern for each saved FITS basename under ``output_dir``.
         Fields: ``experiment_number``, ``experiment_name``, ``series_name``, ``r_lc``,
         ``nside``. Default matches historical names
-        (``skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits`` by default).
+        (``skymap_{experiment_number:06d}_RLC_{r_lc:05.2f}.fits`` by default).
     oflr_batch_stem_pattern
         Stem for OFLR batch glob (no ``.fits``); default ``OFLR_lines_{nnn}_RLC_{r}``.
 

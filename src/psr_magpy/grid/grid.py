@@ -889,7 +889,7 @@ def save_subset_grid(
     Examples
     --------
         >>> grid = coarse_grid.subset_grid(indices)
-        >>> grid_path = save_subset_grid(grid, "experiment_001", "/path/to/grids")
+        >>> grid_path = save_subset_grid(grid, "experiment_000001", "/path/to/grids")
     """
     grids_dir = Path(grids_dir)
     grids_dir.mkdir(parents=True, exist_ok=True)
@@ -935,7 +935,7 @@ def create_subset_grid_config(
     Examples
     --------
     >>> indices = np.array([0, 1, 4])
-    >>> config = create_subset_grid_config(grid, indices, "dipole_000", "healpix")
+    >>> config = create_subset_grid_config(grid, indices, "dipole_000000", "healpix")
     """
     from psr_magpy.experiment.grid_config import (
         GridConfig,

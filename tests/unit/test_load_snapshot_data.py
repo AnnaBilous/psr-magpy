@@ -15,19 +15,19 @@ from psr_magpy.workflow.workflow_utils import create_healpix_grid
 _TEST_PRODUCTS = {
     "skymap": DataProductSpec(
         "skymaps",
-        "skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}",
+        "skymap_{experiment_number:06d}_RLC_{r_lc:05.2f}",
         requires_r_lc=True,
     ),
-    "OFLR_map": DataProductSpec("OFLR_maps", "OFLR_map_{experiment_number:03d}"),
+    "OFLR_map": DataProductSpec("OFLR_maps", "OFLR_map_{experiment_number:06d}"),
     "PA": DataProductSpec(
         "extracted_PA",
-        "extract_PA_{experiment_number:03d}_RLC_{r_lc:05.2f}",
+        "extract_PA_{experiment_number:06d}_RLC_{r_lc:05.2f}",
         requires_r_lc=True,
     ),
     "OFLR_edges": DataProductSpec("OFLR_edges", is_directory=True),
 }
 
-_SKYMAP_PATTERN = "skymap_{experiment_number:03d}_RLC_{r_lc:05.2f}.fits"
+_SKYMAP_PATTERN = "skymap_{experiment_number:06d}_RLC_{r_lc:05.2f}.fits"
 _NSIDE = 4
 _NPIX = hp.nside2npix(_NSIDE)
 

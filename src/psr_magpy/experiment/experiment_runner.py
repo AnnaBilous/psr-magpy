@@ -218,7 +218,7 @@ def run_experiment_from_file(config_path: str) -> Optional[object]:
 
     Examples
     --------
-    >>> run_experiment_from_file("configs/dipole_series_000.yaml")
+    >>> run_experiment_from_file("configs/dipole_series_000000.yaml")
     """
     config = ExperimentConfig.load(config_path)
     return run_experiment(config)

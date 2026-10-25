@@ -61,10 +61,10 @@ class TestExperimentMetadata:
     def test_generate_experiment_name(self):
         """Test experiment name generation."""
         name = generate_experiment_name("test_series", 1)
-        assert name == "test_series_001"
+        assert name == "test_series_000001"
         
         name = generate_experiment_name("test_series", 42)
-        assert name == "test_series_042"
+        assert name == "test_series_000042"
     
     def test_create_experiment_metadata(self):
         """Test experiment metadata creation."""
@@ -177,7 +177,7 @@ class TestExperimentSeriesConfig:
 
         experiments = config.create_experiment_series()
         assert len(experiments) == 1
-        assert experiments[0].name == "test_series_000"
+        assert experiments[0].name == "test_series_000000"
         assert experiments[0].field == field_config
         assert experiments[0].grid == grid_config
         assert experiments[0].tracing == tracing_config
@@ -229,7 +229,7 @@ class TestExperimentSeriesConfig:
         
         # Check experiment names
         experiment_names = [exp.name for exp in experiments]
-        expected_names = [f"test_series_{i:03d}" for i in range(8)]
+        expected_names = [f"test_series_{i:06d}" for i in range(8)]
         assert experiment_names == expected_names
 
     def test_create_series_is_deterministic_for_same_inputs(self, test_data_dir):
@@ -608,7 +608,7 @@ class TestExperimentSeriesRunner:
         config_files = list(configs_dir.glob("*.yaml"))
         assert len(config_files) == 2
         assert any(f.name == "test_series_config.yaml" for f in config_files)
-        assert any(f.name == "test_series_000.yaml" for f in config_files)
+        assert any(f.name == "test_series_000000.yaml" for f in config_files)
 
 
 class TestIntegration:
@@ -653,7 +653,7 @@ class TestIntegration:
         assert len(experiments) == 8
 
         # Check experiment names
-        expected_names = [f"integration_test_{i:03d}" for i in range(8)]
+        expected_names = [f"integration_test_{i:06d}" for i in range(8)]
         actual_names = [exp.name for exp in experiments]
         assert actual_names == expected_names
 

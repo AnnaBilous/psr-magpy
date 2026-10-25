@@ -111,7 +111,7 @@ def resolve_data_products_oflr_directory(
     """Return ``<parent>/<series>/data_products/<subdir>`` for OFLR line batch FITS.
 
     Files use the same naming as reintegration trace output after spill/organize:
-    ``OFLR_lines_{experiment_number:03d}_RLC_{r:.2f}_batch_*_out_of_*.fits`` (glob
+    ``OFLR_lines_{experiment_number:06d}_RLC_{r:.2f}_batch_*_out_of_*.fits`` (glob
     ``OFLR_lines_{nnn}_RLC_{r}_batch_*.fits`` via skymap workflow), or a single
     ``OFLR_lines_{nnn}_RLC_{r:.2f}.fits`` if nothing was spilled.
     """
@@ -124,7 +124,7 @@ def iter_batch_paths_lines(lines_dir: Union[str, Path], experiment_name: str) ->
 
     Examples
     --------
-    >>> for path in iter_batch_paths_lines("dipole_series/lines", "dipole_series_000"):
+    >>> for path in iter_batch_paths_lines("dipole_series/lines", "dipole_series_000000"):
     ...     print(path.name)
     """
     reader = BatchDataReader(experiment_name)
